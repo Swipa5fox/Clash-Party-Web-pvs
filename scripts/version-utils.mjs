@@ -60,12 +60,30 @@ export function getProcessedVersion() {
   }
 }
 
+// 仓库 slug：从 package.json 的 repository 派生。
+// 不要硬编码上游仓库——否则本 fork 的自动更新会把客户端指向上游的 release 包。
+export function getRepoSlug() {
+  try {
+    const pkg = readFileSync('package.json', 'utf-8')
+    const { repository } = JSON.parse(pkg)
+    const url = String(
+      typeof repository === 'string' ? repository : repository?.url || ''
+    ).replace(/^git\+/, '')
+    const matched = /github\.com[/:]([^/]+\/[^/.]+)/.exec(url)
+    if (matched) return matched[1]
+  } catch {
+    // 读不到就退回默认值
+  }
+  return 'mihomo-party-org/clash-party'
+}
+
 // 生成下载URL
 export function getDownloadUrl(isDev, version) {
+  const repo = getRepoSlug()
   if (isDev) {
-    return 'https://github.com/mihomo-party-org/clash-party/releases/download/dev'
+    return `https://github.com/${repo}/releases/download/dev`
   } else {
-    return `https://github.com/mihomo-party-org/clash-party/releases/download/v${version}`
+    return `https://github.com/${repo}/releases/download/v${version}`
   }
 }
 

@@ -56,7 +56,7 @@ const UpdaterModal: React.FC<Props> = (props) => {
             size="sm"
             className="flex app-nodrag"
             onPress={() => {
-              open(`https://github.com/mihomo-party-org/mihomo-party/releases/tag/v${version}`)
+              open(`https://github.com/Swipa5fox/clash-party-gateway/releases/tag/v${version}`)
             }}
           >
             {t('common.updater.goToDownload')}

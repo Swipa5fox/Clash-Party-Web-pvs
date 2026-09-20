@@ -42,6 +42,8 @@
 
 ### 更新日志
 
+> 当前版本的变更同时维护在 [`changelog.md`](./changelog.md)——发布脚本（`scripts/updater.mjs` 生成自动更新说明、`scripts/telegram.mjs` 发送通知）读取该文件。
+
 #### v5.0
 
 **新增**
