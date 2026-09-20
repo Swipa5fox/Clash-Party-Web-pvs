@@ -1,7 +1,7 @@
 {
   "name": "mihomo-party",
-  "version": "2.0.2",
-  "description": "Clash Party",
+  "version": "6.0.0",
+  "description": "Clash Party Web PVS — LAN Direct-Access Rebuild",
   "type": "module",
   "main": "./out/main/index.js",
   "author": "mihomo-party-org",
@@ -9,10 +9,10 @@
   "homepage": "https://clashparty.org",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Swipa5fox/clash-party-gateway.git"
+    "url": "git+https://github.com/Swipa5fox/Clash-Party-Web-pvs.git"
   },
   "bugs": {
-    "url": "https://github.com/Swipa5fox/clash-party-gateway/issues"
+    "url": "https://github.com/Swipa5fox/Clash-Party-Web-pvs/issues"
   },
   "scripts": {
     "test": "vitest run",

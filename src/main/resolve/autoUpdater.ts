@@ -19,7 +19,7 @@ import * as chromeRequest from '../utils/chromeRequest'
 // 自动更新源仓库（owner/repo）。
 // 必须指向本 fork：若指向上游 mihomo-party-org，客户端检查/安装更新会拉取上游版本，
 // 直接覆盖本 fork 的改动。换仓库名时改这里（以及 renderer 的 GitHub/issues 外链）。
-const REPO_SLUG = 'Swipa5fox/clash-party-gateway'
+const REPO_SLUG = 'Swipa5fox/Clash-Party-Web-pvs'
 
 const GITHUB_PROXIES = [
   'https://gh-proxy.org',

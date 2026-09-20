@@ -6,10 +6,10 @@
 <h3 align="center">Another <a href="https://github.com/MetaCubeX/mihomo">Mihomo</a> GUI · LAN Direct-Access Rebuild</h3>
 
 <p align="center">
-  <a href="https://github.com/Swipa5fox/clash-party-gateway/releases">
-    <img src="https://img.shields.io/badge/release-v5.0-blue">
+  <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases">
+    <img src="https://img.shields.io/badge/release-v6.0-blue">
   </a>
-  <a href="https://github.com/Swipa5fox/clash-party-gateway">
+  <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs">
     <img src="https://img.shields.io/badge/fork-Clash%20Party%20v2.0.2-green">
   </a>
 </p>
@@ -34,9 +34,12 @@
 - [x] **[Rebuild v4.1]** Docker 跑完整 Clash Party Web UI（`cpx-party` 容器：Electron headless + 自带内核，订阅全在 UI 管理）
 - [x] **[Rebuild v4.1]** 一键部署双服务：`./deploy.sh` 自动构建 gateway + party，`CP_WEB_TOKEN` 自动生成，四项健康检查
 - [x] **[Rebuild v4.1]** 容器部署感知：系统代理 / TUN 等宿主机专属功能在容器内优雅降级提示（新增 `getDeploymentEnv` channel）
-- [x] **[Rebuild v5.0]** 国家双口线路：每国一对端口（通用分流口 + 全局口），AU/JP 预置，纯 YAML 覆写定义、正则自适应机场节点（`tools/mihomo-lines`）
-- [x] **[Rebuild v5.0]** `/opt` 一键构筑：`deploy/opt/bootstrap.sh` 解压源码 → 预检 → 生成 .env 与线路端口门 → 构建启动全自动
-- [x] **[Rebuild v5.0]** 移除内嵌 Sub-Store：容器/远程 Web 场景下不可用（iframe 指向 `127.0.0.1`），构建期也不再下载其前后端
+- [x] **[Rebuild v6.0]** 完整 Web 版容器化：`cpx-party`（Electron headless + 自带 mihomo 内核）+ `cpx-gateway`（机场插件网关 + 面板反代），一条 `./deploy.sh` 从源码构建双镜像
+- [x] **[Rebuild v6.0]** 国家双口线路（`tools/mihomo-lines`）：每国一对端口（通用分流口 + 全局口），AU/JP 预置，纯 YAML 覆写定义、正则自适应机场节点
+- [x] **[Rebuild v6.0]** `/opt` 一键构筑（`deploy/opt/bootstrap.sh`）：解压源码 → 预检 → 生成 .env 与线路端口门 → 构建启动全自动
+- [x] **[Rebuild v6.0]** 网页图标：随项目图标的 `favicon.png`，浏览器标签页不再空白
+- [x] **[Rebuild v6.0]** 移除内嵌 Sub-Store：容器/远程 Web 场景下不可用（iframe 指向 `127.0.0.1`），构建期也不再下载其前后端
+- [x] **[Rebuild v6.0]** 发布链路本地化：自动更新 / 更新说明 / 通知全部指向本仓库，不再被上游版本覆盖
 
 ### 安装/使用指南见 [官方文档](https://clashparty.org)
 
@@ -44,7 +47,7 @@
 
 > 当前版本的变更同时维护在 [`changelog.md`](./changelog.md)——发布脚本（`scripts/updater.mjs` 生成自动更新说明、`scripts/telegram.mjs` 发送通知）读取该文件。
 
-#### v5.0
+#### v6.0
 
 **新增**
 
@@ -56,6 +59,7 @@
 - **`/opt` 一键构筑脚本** `deploy/opt/bootstrap.sh`：源码包解压 → docker/外网预检 → 生成 `.env`（`CP_TOKEN` 未指定则随机）与线路端口门 override → 调 `deploy.sh` 构建启动 → 可选从 `party_data.tgz` 恢复数据卷
 - **移除内嵌 Sub-Store**：其前后端服务在容器/远程 Web 场景不可用（iframe 指向 `127.0.0.1`），且构建期会从 GitHub 下载 Sub-Store 资源拖慢构建；本次连同主进程 IPC、preload 白名单、共享配置与语言包键一并清理
 - **网页图标**：新增 `src/renderer/public/favicon.png`（随项目图标），浏览器标签页不再空白
+- **发布链路本地化**：自动更新源（`autoUpdater.ts`）、更新说明的下载地址（`version-utils.mjs` 改为从 `package.json` 派生）、Telegram 通知目标（改为 `TELEGRAM_CHAT_ID` 环境变量）、设置页/更新弹窗/报错页外链——全部指向本仓库；移除上游机场推广链接。此前这些硬编码在上游仓库，会导致客户端「检查更新」拉取上游安装包，**覆盖本 fork 的全部改动**
 
 **Bug 修复**
 
@@ -68,6 +72,8 @@
 - **移除 `cpx-mihomo` 容器与 `docker-compose.tun.yml`**：代理端口（7890/7891/7892）由 party 容器自带内核接管，网关 `MIHOMO_API_URL` 改指 `party:9090`；订阅从"编辑 `mihomo/config.yaml` + 重启"改为 Web UI 在线管理
 - 面板从 metacubexd 切换为 zashboard（Clash Party 默认 `external-ui-url`，随种子配置下发）
 - 部署文档 `deploy/gateway/README.md` 按新拓扑重写（拓扑图、一键部署、容器功能边界、FAQ）
+- **线路端口门（门/屋分离）**：`docker-compose.yml` 只映射 AU 通用口 `17890`，其余（AU 全局 `17891` / JP 通用 `8888` / JP 全局 `8889`）由 `docker-compose.override.yml` 补齐——端口映射（门）归 compose，端口行为（屋）归覆写，`bootstrap.sh` 自动写入
+- **线路管理迁移为纯 YAML 覆写**：从「JS 覆写 + 节点名正则排序」改为内核原生 `include-all` / `filter` 正则筛选节点，可读性与可维护性提升；订阅为空时组员退化为 `COMPATIBLE(DIRECT)`，不会拖垮内核
 - **线路端口门**：`docker-compose.yml` 只映射 AU 通用口 `17890`，其余（AU 全局 `17891` / JP 通用 `8888` / JP 全局 `8889`）由 `docker-compose.override.yml` 补齐——「门（端口映射）与屋（覆写行为）分离」，`bootstrap.sh` 自动写入
 
 #### v4.0

@@ -2,7 +2,7 @@
 # bootstrap.sh — 在 /opt 下从零构筑 cpx-gateway + Clash Party Web UI。
 #
 # 服务器端用法(解压后执行):
-#   bash /opt/clash-party-gateway/deploy/opt/bootstrap.sh 192.168.1.100
+#   bash /opt/Clash-Party-Web-pvs/deploy/opt/bootstrap.sh 192.168.1.100
 #
 # 也可只传压缩包,脚本自己解压:
 #   bash bootstrap.sh 192.168.1.100             # TARBALL 默认 /opt/cpx-src.tar.gz
@@ -24,7 +24,7 @@ fi
 HOST_IP="${1:-${HOST_IP:-}}"
 TARBALL="${TARBALL:-/opt/cpx-src.tar.gz}"
 OPT_ROOT="${OPT_ROOT:-/opt}"
-REPO_NAME="${REPO_NAME:-clash-party-gateway}"
+REPO_NAME="${REPO_NAME:-Clash-Party-Web-pvs}"
 # Web UI 令牌: 显式传入则使用;否则随机生成(仓库/源码里不留任何固定令牌)。
 CP_TOKEN="${CP_TOKEN:-$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
 FORCE="${FORCE:-false}"
