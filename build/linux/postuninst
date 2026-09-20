@@ -1,0 +1,29 @@
+#!/bin/bash
+
+case "$1" in
+  remove|purge|0)
+    if type update-alternatives >/dev/null 2>&1; then
+        update-alternatives --remove 'clash-party' '/opt/clash-party/mihomo-party' 2>/dev/null || true
+    fi
+    
+    [ -L '/usr/bin/clash-party' ] && rm -f '/usr/bin/clash-party'
+
+    if hash update-mime-database 2>/dev/null; then
+      update-mime-database /usr/share/mime || true
+    fi
+
+    if hash update-desktop-database 2>/dev/null; then
+        update-desktop-database /usr/share/applications || true
+    fi
+
+    # Update icon cache
+    if hash gtk-update-icon-cache 2>/dev/null; then
+        for dir in /usr/share/icons/hicolor /usr/share/icons/gnome; do
+            [ -d "$dir" ] && gtk-update-icon-cache -f -t "$dir" 2>/dev/null || true
+        done
+    fi
+    ;;
+  *)
+    # others
+    ;;
+esac

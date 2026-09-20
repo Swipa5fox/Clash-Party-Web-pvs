@@ -1,0 +1,17 @@
+{
+  "name": "cpx-gateway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Reference provider gateway for the clash-party airport-plugin v2 browser-login model",
+  "bin": {
+    "cpx-admin": "./admin.mjs"
+  },
+  "scripts": {
+    "start": "node --experimental-sqlite --disable-warning=ExperimentalWarning src/server.mjs",
+    "test": "node --experimental-sqlite --disable-warning=ExperimentalWarning --test"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  }
+}

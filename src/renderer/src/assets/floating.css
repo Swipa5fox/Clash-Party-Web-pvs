@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+@plugin './hero.ts';
+
+@source '../**/*.{js,ts,jsx,tsx}';
+@source '../../../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
+
+.floating-text {
+  font-family:
+    'Microsoft YaHei',
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont;
+}
+
+html {
+  background: none !important;
+  background-color: transparent !important;
+}
+
+.app-nodrag {
+  -webkit-app-region: none;
+}
+
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+* {
+  user-select: none;
+}

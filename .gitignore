@@ -1,0 +1,39 @@
+node_modules
+resources/files
+resources/sidecar
+extra
+dist
+out
+.DS_Store
+*.log*
+.idea
+*.ttf
+party.md
+CLAUDE.md
+agent.md
+tsconfig.node.tsbuildinfo
+AGENTS.md
+.codegraph
+node_modules/.temp
+deploy/gateway/.env
+deploy/gateway/.env.bak
+deploy/gateway/gateway.db
+deploy/gateway/gateway.db.backup
+deploy/gateway/mihomo/providers
+*.cpx
+*.db-*
+# local AI-assistant spec documents
+.trae
+# local AI-assistant / IDE config
+.codebuddy
+.codebelly
+.vscode
+
+# local gateway test data (SQLite db from source-code runs)
+deploy/gateway/data
+
+# mihomo-lines tool: personal host + party web token (keep the .example only)
+tools/mihomo-lines/scripts/lines.config.json
+
+# locally built source tarball for deploy/opt/bootstrap.sh
+cpx-src.tar.gz

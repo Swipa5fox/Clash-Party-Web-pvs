@@ -1,0 +1,86 @@
+# cpx-gateway v5.0 — single-port LAN build + Clash Party full Web UI.
+#
+# Two web ports:
+#   :3999  Clash Party Web UI (complete interface: subscriptions,
+#          overrides, themes — served by the party container's headless
+#          Electron web mode). Token in the URL: http://<host>:3999/?token=…
+#   :8080  cpx-gateway: subscription API for Clash Party clients + a thin
+#          reverse proxy to the party core's controller (panel + REST + WS).
+#
+# LAN proxy port 7890 (mixed: HTTP+SOCKS5 in one) is owned by the party
+# container's own mihomo sidecar core — subscriptions are managed in the Web UI.
+#
+# Both app images are BUILT FROM SOURCE by deploy.sh, which exports
+# GATEWAY_IMAGE / PARTY_IMAGE before `compose up`. Manual `docker compose up`
+# falls back to the `:latest` aliases created by the same builds.
+services:
+  gateway:
+    image: ${GATEWAY_IMAGE:-cpx-gateway:latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # 容器时区不继承主机(镜像内 /etc/localtime 是 Etc/UTC),必须显式给 TZ,
+      # 否则日志时间戳比国内慢 8 小时。glibc/Node 都认这个变量。
+      TZ: Asia/Shanghai
+      DB_PATH: /data/gateway.db
+      # mihomo external-controller over the compose network (transparent proxy).
+      # Seeded to 0.0.0.0:9090 by the party entrypoint (not host-published).
+      MIHOMO_API_URL: http://party:9090
+    # Plain HTTP on the LAN — clients connect directly by IP:port (no domain, no TLS).
+    ports:
+      - '8080:8080'
+    volumes:
+      - gateway_data:/data
+    depends_on:
+      - party
+
+  # Clash Party full Web UI + its own mihomo core (official headless web mode).
+  #   Web UI  : http://<host>:3999/?token=$CP_WEB_TOKEN  (CP_WEB_TOKEN in .env)
+  #   Proxy   : LAN clients use http://<host>:7890 (HTTP+SOCKS5 mixed)
+  #   Config  : everything persists in the party_data volume (/data)
+  # First boot seeds mihomo.yaml with allow-lan + controller 0.0.0.0:9090.
+  party:
+    image: ${PARTY_IMAGE:-cpx-party:latest}
+    build:
+      context: ../..
+      dockerfile: deploy/party/Dockerfile
+    restart: unless-stopped
+    # tini as PID 1: xvfb-run relies on SIGUSR1 from Xvfb, which shells cannot
+    # receive when they are PID 1 (docker-init forwards signals + reaps).
+    init: true
+    # 健康检查: Web UI 是否真的应答(不带 token,和 deploy.sh 探活走同一条路径)。
+    #   1) 镜像里没有 curl/wget,只有 node(v22 自带全局 fetch),所以只能用 node -e。
+    #      若写成 curl -f,探针会永久失败 → 有执行者时就是重启循环。
+    #   2) 超时必须写在 node 内部(AbortSignal),否则探针被 Docker 的 timeout 强杀,
+    #      下面的 `|| kill 1` 永远等不到执行机会。
+    #   3) `|| kill 1`: Docker 只在【进程退出】时套用 restart 策略,把容器标成
+    #      unhealthy 并不会重启它。所以这里连挂 3 次(≈90s 完全不应答)后杀掉
+    #      PID 1(tini),让上面的 unless-stopped 把它重新拉起 —— 这才是"自己会好"
+    #      的那一半。只想看状态、不想自动重启: 去掉 " || kill 1" 即可。
+    # 已核实重启是安全的: 覆写/订阅/端口门都在 party_data 卷里,重启后自动生效。
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >
+          node -e "fetch('http://127.0.0.1:3999/',{signal:AbortSignal.timeout(8000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" || kill 1
+      interval: 30s
+      timeout: 12s
+      retries: 3
+      start_period: 60s
+    environment:
+      # 同上: 容器时区需显式指定,否则 Web UI / 日志时间戳为 UTC。
+      TZ: Asia/Shanghai
+      CP_WEB_TOKEN: ${CP_WEB_TOKEN:?Set CP_WEB_TOKEN in .env (see .env.example)}
+    ports:
+      - '${PARTY_WEB_PORT:-3999}:3999'
+      - '${MIHOMO_MIXED_PORT:-7890}:7890'
+      # AU 通用口(分流)。17891 AU 全局 / 8888+8889 JP 在 docker-compose.override.yml 里映射。
+      # 端口上的行为由 tools/mihomo-lines 写的覆写提供,不是 compose 配置的。
+      # Comment out if you don't need the dedicated AU port.
+      - '${AU_PORT:-17890}:17890'
+    volumes:
+      - party_data:/data
+
+volumes:
+  gateway_data:
+  party_data:

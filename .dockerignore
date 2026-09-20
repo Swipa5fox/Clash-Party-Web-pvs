@@ -1,0 +1,31 @@
+# Build context for deploy/party/Dockerfile (docker build from the repo root).
+# Keep everything the builder needs: package.json, pnpm-lock.yaml, src/,
+# scripts/, extra/files geo + sub-store assets. Drop everything regenerable
+# or machine-local.
+
+# VCS / IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# Local toolchain state (regenerated inside the builder)
+node_modules
+out
+dist
+release
+
+# Windows binaries — prepare.mjs re-downloads platform-correct sidecars
+extra/sidecar/*.exe
+extra/sidecar/*.node
+extra/files/TrafficMonitor
+extra/files/7za.exe
+extra/files/enableLoopback.exe
+
+# Local deployment state / secrets
+deploy/gateway/.env
+deploy/gateway/.env.bak
+deploy/gateway/data
+deploy/gateway/gateway.db
+deploy/gateway/gateway.db-shm
+deploy/gateway/gateway.db-wal

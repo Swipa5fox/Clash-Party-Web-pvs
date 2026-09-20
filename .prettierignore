@@ -1,0 +1,11 @@
+out
+dist
+.claude
+pnpm-lock.yaml
+LICENSE.md
+tsconfig.json
+tsconfig.*.json
+# not a formatable source file (prettier has no parser for it)
+.gitattributes
+.gitignore
+*.sh

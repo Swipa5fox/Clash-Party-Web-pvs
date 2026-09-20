@@ -1,0 +1,14 @@
+# Shell scripts and Docker files MUST keep LF line endings: a CRLF deploy.sh
+# fails on Linux with "'bash\r': No such file or directory".
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.mjs text eol=lf
+*.yml text
+*.yaml text
+*.json text
+*.md text
+*.ts text
+*.tsx text
+*.js text
+*.css text
+*.html text

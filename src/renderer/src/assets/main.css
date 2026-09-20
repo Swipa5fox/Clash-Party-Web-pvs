@@ -1,0 +1,197 @@
+@import 'tailwindcss';
+@plugin './hero.ts';
+
+@source '../**/*.{js,ts,jsx,tsx}';
+@source '../../../../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
+
+@theme {
+  --default-font-family:
+    system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell,
+    'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+@font-face {
+  font-family: 'Noto Color Emoji';
+  src: url('./NotoColorEmoji.ttf');
+}
+
+.driver-popover {
+  background-color: hsl(var(--heroui-content2)) !important;
+  border-radius: 8px !important;
+  color: hsl(var(--heroui-foreground)) !important;
+}
+
+.driver-popover a {
+  color: hsl(var(--heroui-primary)) !important;
+  text-decoration: underline !important;
+}
+
+.driver-popover-close-btn {
+  color: hsl(var(--heroui-foreground)) !important;
+}
+
+.driver-popover-progress-text {
+  color: hsl(var(--heroui-default-500)) !important;
+}
+
+.driver-popover-prev-btn {
+  color: white !important;
+  text-shadow: none !important;
+  border: none !important;
+  padding: 8px !important;
+  border-radius: 5px !important;
+  font-size: 12px !important;
+  background-color: hsl(var(--heroui-primary)) !important;
+}
+
+.driver-popover-next-btn {
+  color: white !important;
+  text-shadow: none !important;
+  border: none !important;
+  padding: 8px !important;
+  border-radius: 5px !important;
+  font-size: 12px !important;
+  background-color: hsl(var(--heroui-primary)) !important;
+}
+
+.driver-popover-arrow-side-bottom {
+  border-bottom-color: hsl(var(--heroui-content2)) !important;
+}
+
+.driver-popover-arrow-side-top {
+  border-top-color: hsl(var(--heroui-content2)) !important;
+}
+
+.driver-popover-arrow-side-left {
+  border-left-color: hsl(var(--heroui-content2)) !important;
+}
+
+.driver-popover-arrow-side-right {
+  border-right-color: hsl(var(--heroui-content2)) !important;
+}
+
+.app-nodrag {
+  -webkit-app-region: none;
+}
+.app-drag {
+  -webkit-app-region: drag;
+}
+
+* {
+  user-select: none;
+}
+
+.select-text {
+  user-select: text !important;
+}
+
+*:focus {
+  outline: none;
+  outline-color: transparent;
+  outline-width: 0;
+}
+
+.flag-emoji {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    'Open Sans',
+    'Helvetica Neue',
+    sans-serif,
+    'Apple Color Emoji',
+    'Noto Color Emoji';
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
+/* Light mode */
+@media (prefers-color-scheme: light) {
+  *::-webkit-scrollbar-thumb {
+    background: #c0c1c58f;
+    border-radius: 5px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: #c0c1c550;
+  }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  *::-webkit-scrollbar-thumb {
+    background: #c0c1c550;
+    border-radius: 5px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: #c0c1c58f;
+  }
+}
+
+.sider-card-title {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Toast */
+.toast-enter {
+  animation: toast-in 0.2s ease-out forwards;
+}
+
+.toast-exit {
+  animation: toast-out 0.15s ease-in forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+}
+
+.toast-progress {
+  animation: progress-shrink linear forwards;
+  width: 100%;
+}
+
+@keyframes progress-shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}

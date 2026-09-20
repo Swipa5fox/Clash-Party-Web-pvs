@@ -1,0 +1,9 @@
+{
+  "name": "sysproxy-rs",
+  "version": "0.4.0",
+  "description": "System proxy library for Node.js",
+  "type": "commonjs",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT"
+}

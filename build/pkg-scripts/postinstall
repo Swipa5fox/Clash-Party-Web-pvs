@@ -1,0 +1,170 @@
+#!/bin/bash
+set -e
+
+# 设置日志文件
+LOG_FILE="/tmp/mihomo-party-install.log"
+exec > "$LOG_FILE" 2>&1
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
+}
+
+# 检查 root 权限
+if [ "$EUID" -ne 0 ]; then
+    log "Error: Please run as root"
+    exit 1
+fi
+
+# 判断 $2 是否以 .app 结尾
+if [[ $2 == *".app" ]]; then
+    APP_PATH="$2"
+else
+    APP_PATH="$2/Clash Party.app"
+fi
+
+HELPER_PATH="/Library/PrivilegedHelperTools/party.mihomo.helper"
+LAUNCH_DAEMON="/Library/LaunchDaemons/party.mihomo.helper.plist"
+LAUNCH_DAEMON_SOURCE="$APP_PATH/Contents/Resources/files/party.mihomo.helper.plist"
+
+log "Starting installation..."
+
+# 创建目录并设置权限
+log "Creating directories and setting permissions..."
+mkdir -p "/Library/PrivilegedHelperTools"
+chmod 755 "/Library/PrivilegedHelperTools"
+chown root:wheel "/Library/PrivilegedHelperTools"
+
+# 设置核心文件权限
+log "Setting core file permissions..."
+if [ -f "$APP_PATH/Contents/Resources/sidecar/mihomo" ]; then
+    chown root:admin "$APP_PATH/Contents/Resources/sidecar/mihomo"
+    chmod +s "$APP_PATH/Contents/Resources/sidecar/mihomo"
+    log "Set permissions for mihomo"
+else
+    log "Warning: mihomo binary not found at $APP_PATH/Contents/Resources/sidecar/mihomo"
+fi
+
+if [ -f "$APP_PATH/Contents/Resources/sidecar/mihomo-alpha" ]; then
+    chown root:admin "$APP_PATH/Contents/Resources/sidecar/mihomo-alpha"
+    chmod +s "$APP_PATH/Contents/Resources/sidecar/mihomo-alpha"
+    log "Set permissions for mihomo-alpha"
+else
+    log "Warning: mihomo-alpha binary not found at $APP_PATH/Contents/Resources/sidecar/mihomo-alpha"
+fi
+
+if [ -f "$APP_PATH/Contents/Resources/sidecar/mihomo-smart" ]; then
+    chown root:admin "$APP_PATH/Contents/Resources/sidecar/mihomo-smart"
+    chmod +s "$APP_PATH/Contents/Resources/sidecar/mihomo-smart"
+    log "Set permissions for mihomo-smart"
+else
+    log "Warning: mihomo-smart binary not found at $APP_PATH/Contents/Resources/sidecar/mihomo-smart"
+fi
+
+# 复制 helper 工具
+log "Installing helper tool..."
+if [ -f "$APP_PATH/Contents/Resources/files/party.mihomo.helper" ]; then
+    cp -f "$APP_PATH/Contents/Resources/files/party.mihomo.helper" "$HELPER_PATH"
+    chown root:wheel "$HELPER_PATH"
+    chmod 544 "$HELPER_PATH"
+    log "Helper tool installed successfully"
+else
+    log "Error: Helper file not found at $APP_PATH/Contents/Resources/files/party.mihomo.helper"
+    exit 1
+fi
+
+# 创建并配置 LaunchDaemon
+log "Configuring LaunchDaemon..."
+mkdir -p "/Library/LaunchDaemons"
+if [ -f "$LAUNCH_DAEMON_SOURCE" ]; then
+    /usr/bin/install -o root -g wheel -m 644 "$LAUNCH_DAEMON_SOURCE" "$LAUNCH_DAEMON"
+    log "LaunchDaemon configured"
+else
+    log "Error: LaunchDaemon file not found at $LAUNCH_DAEMON_SOURCE"
+    exit 1
+fi
+
+# 验证关键文件
+log "Verifying installation..."
+if [ ! -x "$HELPER_PATH" ]; then
+    log "Error: Helper tool is not executable: $HELPER_PATH"
+    exit 1
+fi
+
+# 检查二进制文件有效性
+if ! file "$HELPER_PATH" | grep -q "Mach-O"; then
+    log "Error: Helper tool is not a valid Mach-O binary"
+    exit 1
+fi
+
+# 验证 plist 格式
+if ! plutil -lint "$LAUNCH_DAEMON" >/dev/null 2>&1; then
+    log "Error: Invalid plist format"
+    exit 1
+fi
+
+# 获取 macOS 版本
+macos_version=$(sw_vers -productVersion)
+macos_major=$(echo "$macos_version" | cut -d. -f1)
+log "macOS version: $macos_version"
+
+# 启用服务（防止安全软件禁用）
+if ! launchctl enable system/party.mihomo.helper 2>/dev/null; then
+    log "Warning: Failed to enable service, continuing installation..."
+else
+    log "Service enabled successfully"
+fi
+
+# 清理现有服务
+log "Cleaning up existing services..."
+launchctl bootout system "$LAUNCH_DAEMON" 2>/dev/null || true
+launchctl unload "$LAUNCH_DAEMON" 2>/dev/null || true
+
+# 加载服务
+log "Loading service..."
+if [ "$macos_major" -ge 11 ]; then
+    # macOS Big Sur 及更新版本使用 bootstrap
+    if ! launchctl bootstrap system "$LAUNCH_DAEMON"; then
+        log "Bootstrap failed, trying legacy load..."
+        if ! launchctl load "$LAUNCH_DAEMON"; then
+            log "Error: Failed to load service with both methods"
+            exit 1
+        fi
+    fi
+else
+    # 旧版本使用 load
+    if ! launchctl load "$LAUNCH_DAEMON"; then
+        log "Error: Failed to load service"
+        exit 1
+    fi
+fi
+
+# 验证服务状态
+log "Verifying service status..."
+sleep 2
+if launchctl list | grep -q "party.mihomo.helper"; then
+    log "Service loaded successfully"
+else
+    log "Warning: Service may not be running properly"
+fi
+
+log "Installation completed successfully"
+
+# Fix user data directory permissions
+log "Fixing user data directory permissions..."
+for user_home in /Users/*; do
+    if [ -d "$user_home" ] && [ "$(basename "$user_home")" != "Shared" ] && [ "$(basename "$user_home")" != ".localized" ]; then
+        username=$(basename "$user_home")
+        user_data_dir="$user_home/Library/Application Support/mihomo-party"
+
+        if [ -d "$user_data_dir" ]; then
+            current_owner=$(stat -f "%Su" "$user_data_dir" 2>/dev/null || echo "unknown")
+            if [ "$current_owner" = "root" ]; then
+                log "Fixing ownership for user: $username"
+                chown -R "$username:staff" "$user_data_dir" 2>/dev/null || true
+                chmod -R u+rwX "$user_data_dir" 2>/dev/null || true
+            fi
+        fi
+    fi
+done
+
+exit 0
