@@ -172,8 +172,21 @@ node scripts/plugin/gen-cpx.mjs http://<ip:8080>/oauth/authorize "Your Airport" 
 ```bash
 ./deploy.sh                    # 源码更新后重建部署（数据卷保留）
 docker compose logs -f party   # 看日志（party / gateway）
-docker compose restart party   # 改 .env 后重启
+docker compose up -d party     # 改 .env 后生效（compose 会重建容器）
 ```
+
+### 轮换 Web UI 令牌
+
+`CP_WEB_TOKEN` 由 compose 在**创建容器时**从 `.env` 插值进容器（`docker-compose.yml` 的 `environment`），所以 `restart` 不会换值，必须 `up -d` 重建：
+
+```bash
+cd deploy/gateway
+sed -i 's|^CP_WEB_TOKEN=.*|CP_WEB_TOKEN=<新令牌>|' .env && chmod 600 .env
+docker compose up -d party          # 重建；party_data 卷保留，订阅/覆写不丢
+docker compose exec party printenv CP_WEB_TOKEN   # 确认已是新值
+```
+
+旧令牌即刻失效。别忘了同步更新本地 `tools/mihomo-lines/scripts/lines.config.json`（或 `LINES_TOKEN`）和浏览器书签。新令牌可用 `head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n'` 生成。
 
 数据全部持久化在命名卷，重建容器不丢：
 

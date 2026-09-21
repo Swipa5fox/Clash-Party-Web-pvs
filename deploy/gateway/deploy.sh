@@ -94,10 +94,13 @@ else
 fi
 # CP_WEB_TOKEN gates the Clash Party Web UI (:3999). Generate a random one when
 # missing (first run or upgrade from an older .env) so compose can start.
+# The value itself stays out of this log — it is shown once in the final summary,
+# and only when stdout is a terminal.
 if ! grep -q '^CP_WEB_TOKEN=' .env; then
   TOKEN="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   printf '\nCP_WEB_TOKEN=%s\n' "$TOKEN" >> .env
-  log "Generated CP_WEB_TOKEN (Web UI auth): ${TOKEN}"
+  chmod 600 .env 2>/dev/null || true
+  log "Generated CP_WEB_TOKEN (Web UI auth) — stored in .env, shown in the final summary."
 fi
 # shellcheck disable=SC1091
 . ./.env   # pulls in MIHOMO_*_PORT overrides for the verify stage
@@ -266,6 +269,14 @@ verify_panel   || RC=1
 ORIGIN="$(grep -E '^PUBLIC_ORIGIN=' .env | cut -d= -f2-)"
 TOKEN="$(grep -E '^CP_WEB_TOKEN=' .env | cut -d= -f2-)"
 HOST_IP="${ORIGIN#http://}"; HOST_IP="${HOST_IP%%:*}"
+# CP_WEB_TOKEN grants full control of the Clash Party instance, so never let it
+# land in captured output (CI logs, `./deploy.sh > deploy.log`). An interactive
+# operator gets the ready-to-click URL; a non-TTY run gets a pointer to .env.
+if [ -t 1 ]; then
+  WEB_URL="http://${HOST_IP}:${PARTY_WEB_PORT:-3999}/?token=${TOKEN}"
+else
+  WEB_URL="http://${HOST_IP}:${PARTY_WEB_PORT:-3999}/?token=<CP_WEB_TOKEN, see .env>"
+fi
 cat <<EOF
 
 ✅ Deployed ${GATEWAY_IMAGE_NAME}:${IMAGE_TAG} + ${PARTY_IMAGE_NAME}:${IMAGE_TAG}
@@ -273,7 +284,7 @@ cat <<EOF
 
 Next steps:
   1) Clash Party Web UI (full interface): open
-       http://${HOST_IP}:${PARTY_WEB_PORT:-3999}/?token=${TOKEN}
+       ${WEB_URL}
      Add your subscription under 订阅 (Profiles) — the party container's mihomo
      core picks it up automatically (no file editing, no restart).
   2) LAN clients use http://${HOST_IP}:${MIHOMO_MIXED_PORT:-7890} (HTTP+SOCKS5 mixed)
