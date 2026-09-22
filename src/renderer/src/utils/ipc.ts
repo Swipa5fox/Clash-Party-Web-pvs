@@ -69,6 +69,9 @@ interface IpcApi {
   updateOverrideItem: (item: IOverrideItem) => Promise<void>
   getOverride: (id: string, ext: 'js' | 'yaml' | 'log') => Promise<string>
   setOverride: (id: string, ext: 'js' | 'yaml', str: string) => Promise<void>
+  // Custom Line Groups
+  getCustomLineGroupsConfig: (force?: boolean) => Promise<ICustomLineGroupsConfig>
+  setCustomLineGroupsConfig: (config: ICustomLineGroupsConfig) => Promise<void>
   // File
   getFileStr: (path: string) => Promise<string>
   setFileStr: (path: string, str: string) => Promise<void>
@@ -233,6 +236,9 @@ export const {
   updateOverrideItem,
   getOverride,
   setOverride,
+  // Custom Line Groups
+  getCustomLineGroupsConfig,
+  setCustomLineGroupsConfig,
   // File
   getFileStr,
   setFileStr,

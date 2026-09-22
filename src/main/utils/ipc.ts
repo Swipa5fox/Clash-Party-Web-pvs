@@ -56,6 +56,10 @@ import {
   convertMrsRuleset
 } from '../config'
 import {
+  getCustomLineGroupsConfig,
+  setCustomLineGroupsConfig
+} from '../config/customLineGroups'
+import {
   quitWithoutCore,
   restartCore,
   checkTunPermissions,
@@ -190,6 +194,17 @@ async function getRuleStr(id: string): Promise<string> {
   return await readFile(rulePath(id), 'utf-8')
 }
 
+// 保存自定义线路组后重新生成配置并热重载内核,使新代理组/端口立即生效
+async function saveCustomLineGroups(config: ICustomLineGroupsConfig): Promise<void> {
+  await setCustomLineGroupsConfig(config)
+  try {
+    await mihomoHotReloadConfig()
+    mainWindow?.webContents.send('groupsUpdated')
+  } catch {
+    // 热重载失败时保留配置,下次内核重启生效
+  }
+}
+
 async function setRuleStr(id: string, str: string): Promise<void> {
   await atomicWriteFile(rulePath(id), str, { encoding: 'utf8' })
 }
@@ -305,6 +320,9 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   updateOverrideItem,
   getOverride,
   setOverride,
+  // Custom Line Groups
+  getCustomLineGroupsConfig,
+  setCustomLineGroupsConfig: saveCustomLineGroups,
   // File
   getFileStr: getFileStrChecked,
   setFileStr: setFileStrChecked,

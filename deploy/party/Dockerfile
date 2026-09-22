@@ -40,9 +40,19 @@ RUN sed -i -e 's|file:src..native..sysproxy|file:src/native/sysproxy|' \
 
 COPY . .
 
-# mihomo sidecar (linux) + sysproxy linux .node + geo files.
-# Always refreshes the sidecar binaries (deletes + re-downloads per platform).
-RUN node scripts/prepare.mjs \
+# Core assets: mihomo sidecar x3 + sysproxy .node + geo data. Two sources:
+#   1. Pre-synced by deploy.sh from /opt/cpx-core-assets (extracted from an
+#      already-built image) — the build then never touches github.com.
+#   2. Fallback: scripts/prepare.mjs downloads them (requires github.com).
+# Vendored files may arrive without exec bits (Windows checkout / tar), so the
+# chmod is not optional.
+RUN if [ -f extra/sidecar/mihomo ] && [ -f extra/files/geoip.metadb ]; then \
+      echo '[build] using pre-synced core assets (skip prepare.mjs)'; \
+    else \
+      echo '[build] core assets missing, downloading via prepare.mjs'; \
+      node scripts/prepare.mjs; \
+    fi \
+    && chmod 755 extra/sidecar/mihomo extra/sidecar/mihomo-alpha extra/sidecar/mihomo-smart \
     && pnpm exec electron-vite build \
     && node -e "const e=require('./package.json');console.log('built', e.version)"
 

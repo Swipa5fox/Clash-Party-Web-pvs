@@ -140,6 +140,16 @@ else
 fi
 if want party; then
   log "Stage 3/6: build ${PARTY_IMAGE_NAME}:${IMAGE_TAG} from repo root"
+  # 内核/geo 资源离线化: /opt/cpx-core-assets 是从已构建镜像提取出的 linux 产物
+  # (mihomo x3 + sysproxy .node + geo)。同步进构建上下文后, Dockerfile 会跳过
+  # scripts/prepare.mjs 的联网下载 —— 构建不再依赖 github.com 是否可达。
+  # 目录不存在时静默跳过, Dockerfile 自动回退联网下载(旧行为)。
+  CORE_ASSETS_DIR="${CORE_ASSETS_DIR:-/opt/cpx-core-assets}"
+  if [ -d "$CORE_ASSETS_DIR/extra" ]; then
+    log "sync core assets from ${CORE_ASSETS_DIR} (offline build)"
+    mkdir -p "$REPO_ROOT/extra"
+    cp -au "$CORE_ASSETS_DIR/extra/." "$REPO_ROOT/extra/"
+  fi
   # Context is the REPOSITORY ROOT (the app needs src/, scripts/, package.json).
   # -f must be absolute: BuildKit resolves a relative -f against the context,
   # not the CWD ("lstat deploy: no such file or directory").
@@ -159,7 +169,6 @@ fi
 # ----------------------------------------------------------- 4. publish ---
 if [ -n "$REGISTRY" ]; then
   log "Stage 4/6: publish to ${REGISTRY}"
-  for name in ""; do :; done
   for image in "$GATEWAY_IMAGE_NAME" "$PARTY_IMAGE_NAME"; do
     docker tag "${image}:${IMAGE_TAG}" "${REGISTRY}/${image}:${IMAGE_TAG}"
     if [ "$PUSH" = "true" ]; then

@@ -381,7 +381,7 @@ interface IAppConfig {
   restartAppShortcut?: string
   quitWithoutCoreShortcut?: string
   copyEnvShortcut?: string
-  language?: 'zh-CN' | 'zh-TW' | 'en-US' | 'ru-RU' | 'fa-IR'
+  language?: 'zh-CN' | 'zh-TW' | 'en-US'
   triggerMainWindowBehavior?: 'show' | 'toggle'
   showMixedPort?: number
   enableMixedPort?: boolean
@@ -510,6 +510,7 @@ interface IMihomoConfig {
   port?: number
   proxies?: []
   'proxy-groups'?: []
+  listeners?: IMihomoListenerConfig[]
   rules?: []
   hosts?: { [key: string]: string | string[] }
   'geodata-mode'?: boolean
@@ -530,6 +531,32 @@ interface IMihomoConfig {
 interface IProfileConfig {
   current?: string
   items: IProfileItem[]
+}
+
+// 自定义线路组: 入口组(自动/故障/手动子组) + 专属端口
+interface ICustomLineGroup {
+  id: string
+  name: string
+  port: number
+  proxies: string[]
+  testUrl?: string
+  interval?: number
+  auto: boolean
+  fallback: boolean
+  manual: boolean
+}
+
+interface ICustomLineGroupsConfig {
+  items: ICustomLineGroup[]
+}
+
+interface IMihomoListenerConfig {
+  name: string
+  type: string
+  port: number
+  listen?: string
+  proxy?: string
+  [key: string]: unknown
 }
 
 interface IOverrideItem {

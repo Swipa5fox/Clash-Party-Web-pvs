@@ -130,6 +130,10 @@ export function overrideConfigPath(): string {
   return path.join(dataDir(), 'override.yaml')
 }
 
+export function customLineGroupsConfigPath(): string {
+  return path.join(dataDir(), 'custom-line-groups.yaml')
+}
+
 export function overridePath(id: string, ext: 'js' | 'yaml' | 'log'): string {
   return path.join(overrideDir(), `${id}.${ext}`)
 }

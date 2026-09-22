@@ -13,6 +13,7 @@ import {
   getOverrideConfig,
   getAppConfig
 } from '../config'
+import { getCustomLineGroupsConfig } from '../config/customLineGroups'
 import {
   mihomoProfileWorkDir,
   mihomoWorkConfigPath,
@@ -116,6 +117,73 @@ function ensureSmartProxyServerTunExclude(profile: IMihomoConfig, enabled: boole
   return added
 }
 
+/**
+ * 注入自定义线路组: 每组生成 入口组(自动/故障/手动子组) 与专属端口 listener。
+ * 入口组名即线路组名, 子组名为 `${name}·自动|故障|手动`, listener 名为 `${name}·入口`。
+ */
+function applyCustomLineGroups(
+  profile: IMihomoConfig,
+  groups: ICustomLineGroup[]
+): void {
+  if (groups.length === 0) return
+  const proxyGroups =
+    (profile['proxy-groups'] as Record<string, unknown>[] | undefined) ?? []
+  const listeners = (profile.listeners as IMihomoListenerConfig[] | undefined) ?? []
+  const groupNames = new Set(proxyGroups.map((g) => g?.name))
+
+  groups.forEach((g) => {
+    if (!g.name || !g.port || !Array.isArray(g.proxies)) return
+    const proxies = g.proxies.filter(Boolean)
+    if (proxies.length === 0) return
+
+    const subNames: string[] = []
+    const subDefs: { suffix: string; type: string; enable: boolean }[] = [
+      { suffix: '自动', type: 'url-test', enable: g.auto !== false },
+      { suffix: '故障', type: 'fallback', enable: g.fallback !== false },
+      { suffix: '手动', type: 'select', enable: g.manual !== false }
+    ]
+    subDefs.forEach((def) => {
+      if (!def.enable) return
+      const subName = `${g.name}·${def.suffix}`
+      if (groupNames.has(subName)) return
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sub: Record<string, any> = {
+        name: subName,
+        type: def.type,
+        proxies: [...proxies],
+        url: g.testUrl || 'https://www.gstatic.com/generate_204',
+        interval: g.interval && g.interval > 0 ? g.interval : 300
+      }
+      proxyGroups.push(sub)
+      groupNames.add(subName)
+      subNames.push(subName)
+    })
+    if (subNames.length === 0) subNames.push(...proxies)
+
+    if (!groupNames.has(g.name)) {
+      proxyGroups.push({ name: g.name, type: 'select', proxies: [...subNames] })
+      groupNames.add(g.name)
+    }
+
+    const listenerName = `${g.name}·入口`
+    const listener = {
+      name: listenerName,
+      type: 'mixed',
+      port: g.port,
+      proxy: g.name
+    }
+    const existingIdx = listeners.findIndex((l) => l?.name === listenerName)
+    if (existingIdx >= 0) {
+      listeners[existingIdx] = listener
+    } else {
+      listeners.push(listener)
+    }
+  })
+
+  profile['proxy-groups'] = proxyGroups as []
+  profile.listeners = listeners
+}
+
 export async function generateProfile(
   pendingControledMihomoConfig?: Partial<IMihomoConfig>,
   options: GenerateProfileOptions = {}
@@ -160,6 +228,9 @@ export async function generateProfile(
   }
 
   const profile = deepMerge(currentProfile, controledMihomoConfig)
+  // 注入自定义线路组(代理组 + 专属端口 listener)
+  const { items: customGroups = [] } = await getCustomLineGroupsConfig()
+  applyCustomLineGroups(profile, customGroups)
   // 关闭 DNS 覆写时，如果最终配置没有启用的 DNS 配置，清空 dns-hijack 避免请求被劫持但无法处理
   if (!controlDns && profile.tun && !profile.dns?.enable) {
     profile.tun = { ...profile.tun, 'dns-hijack': [] }

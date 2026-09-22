@@ -40,6 +40,9 @@ import { includesIgnoreCase } from '@renderer/utils/includes'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useTranslation } from 'react-i18next'
 import { HiOutlineAdjustmentsHorizontal } from 'react-icons/hi2'
+import { LuNetwork } from 'react-icons/lu'
+import { useCustomLineGroups } from '@renderer/hooks/use-custom-line-groups'
+import CustomLineGroupsModal from '@renderer/components/proxies/custom-line-groups-modal'
 
 const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
 const EMPTY_GROUPS: IMihomoMixedGroup[] = []
@@ -161,6 +164,8 @@ const Proxies: React.FC = () => {
   } = appConfig || {}
 
   const [cols, setCols] = useState(1)
+  const [showLineGroups, setShowLineGroups] = useState(false)
+  const { groups: customGroups, saveGroups } = useCustomLineGroups()
   const { virtuosoRef, isOpen, setIsOpen } = useProxyState(groupData)
   const [delaying, setDelaying] = useState<Set<string>[]>(() =>
     Array.from({ length: groups.length }, () => new Set<string>())
@@ -670,7 +675,18 @@ const Proxies: React.FC = () => {
     <BasePage
       title={t('proxies.title')}
       header={
-        <Dropdown placement="bottom-end">
+        <>
+          <Button
+            size="sm"
+            isIconOnly
+            variant="light"
+            className="app-nodrag"
+            title={t('customLines.title')}
+            onPress={() => setShowLineGroups(true)}
+          >
+            <LuNetwork className="text-lg" />
+          </Button>
+          <Dropdown placement="bottom-end">
           <DropdownTrigger>
             <Button
               size="sm"
@@ -794,6 +810,7 @@ const Proxies: React.FC = () => {
             </DropdownSection>
           </DropdownMenu>
         </Dropdown>
+        </>
       }
     >
       {mode === 'direct' ? (
@@ -817,6 +834,12 @@ const Proxies: React.FC = () => {
           />
         </div>
       )}
+      <CustomLineGroupsModal
+        isOpen={showLineGroups}
+        onClose={() => setShowLineGroups(false)}
+        groups={customGroups ?? []}
+        onSave={saveGroups}
+      />
     </BasePage>
   )
 }

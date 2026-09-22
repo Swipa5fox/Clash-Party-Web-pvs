@@ -88,12 +88,16 @@ else
   warn "✗ Docker Hub 不可达 → 在 /etc/docker/daemon.json 加 registry-mirrors 后 systemctl restart docker"
   NET_BAD=1
 fi
-# 探真正的资源地址(release 资产可能走独立 CDN);首页通但资产不通也会白等一场构建。
-if http_alive https://github.com/ \
+# 内核/geo 资源: 已固化在 $CORE_ASSETS_DIR(deploy.sh 会同步进构建上下文)时,构建完全不碰
+# GitHub;否则回退 scripts/prepare.mjs 联网下载 —— 那时 github 不通会拖垮整个构建,提前拦截。
+CORE_ASSETS_DIR="${CORE_ASSETS_DIR:-/opt/cpx-core-assets}"
+if [ -f "$CORE_ASSETS_DIR/extra/sidecar/mihomo" ]; then
+  log "  ✓ 预置内核资源就绪 (${CORE_ASSETS_DIR}),构建不依赖 GitHub"
+elif http_alive https://github.com/ \
   || http_alive https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt; then
   log "  ✓ github.com 可达(mihomo 内核/geo 下载)"
 else
-  warn "✗ github.com 不可达 → scripts/prepare.mjs 无镜像开关,构建必失败;改走「镜像搬运」方案(见末尾)"
+  warn "✗ 无预置内核资源且 github.com 不可达 → 把旧机的 /opt/cpx-core-assets 拷来即可离线构建"
   NET_BAD=1
 fi
 http_alive https://registry.npmmirror.com/ \

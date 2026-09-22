@@ -1,2 +1,4 @@
 import { heroui } from '@heroui/react'
-export default heroui()
+import plugin from 'tailwindcss/plugin.js'
+
+export default heroui() as ReturnType<typeof plugin>

@@ -15,9 +15,11 @@ out
 dist
 release
 
-# Windows binaries — prepare.mjs re-downloads platform-correct sidecars
+# Windows / darwin binaries — the linux container never uses them.
+# (*.node must NOT be excluded wholesale: sysproxy.linux-x64-gnu.node is needed.)
 extra/sidecar/*.exe
-extra/sidecar/*.node
+extra/sidecar/*win32*.node
+extra/sidecar/*darwin*.node
 extra/files/TrafficMonitor
 extra/files/7za.exe
 extra/files/enableLoopback.exe

@@ -56,6 +56,9 @@ const validInvokeChannels = [
   'updateOverrideItem',
   'getOverride',
   'setOverride',
+  // Custom Line Groups
+  'getCustomLineGroupsConfig',
+  'setCustomLineGroupsConfig',
   // File
   'getFileStr',
   'setFileStr',
