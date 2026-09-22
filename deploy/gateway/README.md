@@ -23,7 +23,7 @@ LAN 设备 ────:7890───► party 的 mihomo 内核（HTTP + SOCKS5
 
 - **Clash Party Web UI**（`:3999`）：与桌面端完全一致的界面，token 鉴权
 - **机场插件网关**（`:8080`）：`/.well-known/cpx-gateway` 发现、`/oauth/authorize` 登录页、`/enroll` `/challenge` `/config` `/revoke` 四个网关接口、SQLite 账号/设备管理
-- **控制面板**（`:8080/`）：zashboard 面板 + mihomo REST/WebSocket，经网关反代 party 内核，单端口访问
+- **控制面板**（`:8080/`）：zashboard 面板 + mihomo REST/WebSocket，经网关反代 party 内核，单端口访问；由 `PANEL_TOKEN` 门控，每个浏览器验证一次（会话 cookie，默认 8 小时）
 - **局域网共享代理**（`:7890`，HTTP+SOCKS5 混合口）：全部设备可用，订阅在 Web UI 里统一管理
 
 ---
@@ -73,12 +73,12 @@ NPM_REGISTRY=https://registry.npmjs.org ./deploy.sh  # 覆盖默认 npm 镜像�
 
 ### 部署完成后
 
-| 访问项                   | 地址                                                                          |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| Clash Party Web UI       | `http://<IP>:3999/?token=<CP_WEB_TOKEN>`（token 首开后自动存 sessionStorage） |
-| 控制面板（zashboard）    | `http://<IP>:8080/`（自动配置后端，无需密钥）                                 |
-| 网关发现文件             | `curl http://<IP>:8080/.well-known/cpx-gateway`                               |
-| LAN 代理（设备手动配置） | `http://<IP>:7890`（HTTP+SOCKS5 混合口）                                      |
+| 访问项                   | 地址                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Clash Party Web UI       | `http://<IP>:3999/?token=<CP_WEB_TOKEN>`（token 首开后自动存 sessionStorage）                                                   |
+| 控制面板（zashboard）    | `http://<IP>:8080/`（首次输入 `PANEL_TOKEN` 验证，之后自动配置后端）                                                            |
+| 网关发现文件             | `curl http://<IP>:8080/.well-known/cpx-gateway`                                                                                 |
+| LAN 代理（设备手动配置） | `http://<IP>:7890`（HTTP+SOCKS5 混合口）                                                                                        |
 | 国家专线（可选）         | `:17890` AU 通用 / `:17891` AU 全局 / `:8888` JP 通用 / `:8889` JP 全局（先在 Web UI 加订阅，再用 `mihomo-lines` skill 写覆写） |
 
 忘记 token 时：`grep CP_WEB_TOKEN .env` 或 `docker compose logs party | grep 'Web UI'`。
@@ -224,16 +224,17 @@ docker compose up -d
 
 完整模板见 [`.env.example`](.env.example)。常用项：
 
-| 变量                               | 默认值               | 说明                                                            |
-| ---------------------------------- | -------------------- | --------------------------------------------------------------- |
-| `PUBLIC_ORIGIN`                    | 无（必填）           | 网关 origin `http://IP:port`，写入发现文件                      |
-| `CP_WEB_TOKEN`                     | 首次自动生成         | Web UI 访问令牌，改后 `docker compose up -d party` 生效         |
-| `PARTY_WEB_PORT`                   | `3999`               | Web UI 宿主机端口                                               |
-| `MIHOMO_MIXED_PORT`                | `7890`               | LAN 混合代理端口（HTTP+SOCKS5）                                 |
-| `DEVICE_LIMIT_DEFAULT`             | `3`                  | 新用户默认设备数上限                                            |
-| `MIHOMO_API_SECRET`                | 空                   | party 内核若在 UI 设置了控制器密钥，此处镜像一份供反代注入      |
-| `RETIRED`                          | `false`              | 网关退役信号                                                    |
-| `SUB_TIMEOUT_MS` / `SUB_MAX_BYTES` | `30000` / `10485760` | 拉取隐藏订阅的超时与大小上限                                    |
+| 变量                               | 默认值                            | 说明                                                          |
+| ---------------------------------- | --------------------------------- | ------------------------------------------------------------- |
+| `PUBLIC_ORIGIN`                    | 无（必填）                        | 网关 origin `http://IP:port`，写入发现文件                    |
+| `CP_WEB_TOKEN`                     | 首次自动生成                      | Web UI 访问令牌，改后 `docker compose up -d party` 生效       |
+| `PARTY_WEB_PORT`                   | `3999`                            | Web UI 宿主机端口                                             |
+| `MIHOMO_MIXED_PORT`                | `7890`                            | LAN 混合代理端口（HTTP+SOCKS5）                               |
+| `DEVICE_LIMIT_DEFAULT`             | `3`                               | 新用户默认设备数上限                                          |
+| `MIHOMO_API_SECRET`                | 空                                | party 内核若在 UI 设置了控制器密钥，此处镜像一份供反代注入    |
+| `PANEL_TOKEN`                      | 首次自动生成（同 `CP_WEB_TOKEN`） | `:8080` 面板与 mihomo API 的访问令牌；留空=关闭门控（不推荐） |
+| `RETIRED`                          | `false`                           | 网关退役信号                                                  |
+| `SUB_TIMEOUT_MS` / `SUB_MAX_BYTES` | `30000` / `10485760`              | 拉取隐藏订阅的超时与大小上限                                  |
 
 ---
 
@@ -246,6 +247,7 @@ docker compose up -d
 
 - 隐藏订阅 URL 是管理员配置项；网关只要求 HTTPS，设超时与响应体上限，不拦截私网地址（便于 origin 放内网）。
 - 密码 scrypt hash 保存；code 与 nonce 均一次性短 TTL；登录按 IP 限流。
-- mihomo 控制器 `:9090` 不发布宿主机，面板经网关反代访问（compose 网络隔离）。
+- mihomo 控制器 `:9090` 不发布宿主机，只在 compose 网络内可达。但网关把它反代到了唯一发布端口 `:8080` 上，所以**这道网络隔离本身不构成防线**——`:8080` 上的 REST/WebSocket 就是完整的管理面（切节点、改配置、掐连接）。真正的门是 `PANEL_TOKEN`：未通过验证的请求在网关处被 401/302 拦下，不会转发到内核，也不会注入 `MIHOMO_API_SECRET`。留空即退回无门状态，启动日志会告警。
+- 面板门用签名会话 cookie（`expiry.HMAC`，无服务端存储），`HttpOnly` + `SameSite=Lax` 兼顾 CSRF 防护；纯 HTTP 下不带 `Secure`，这是可信内网前提下的有意取舍。
 - Web UI 由 `CP_WEB_TOKEN` 鉴权；22 个桌面危险 channel（杀进程/宿主弹窗/路径暴露类）在 web 模式统一拒绝；`getFileStr`/`setFileStr` 限定 dataDir 内。
 - 日志不记录密码、完整订阅 URL、code、nonce 或完整 Clash YAML。

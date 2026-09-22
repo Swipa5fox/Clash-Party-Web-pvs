@@ -8,10 +8,11 @@ import { createCodeStore } from './codes.mjs'
 import { createNonceStore } from './nonces.mjs'
 import { createRateLimiter } from './ratelimit.mjs'
 import { fetchSubscription } from './origin.mjs'
-import { readBody, parseForm, parseJson, clientIp, sendJson, redirect } from './http.mjs'
+import { readBody, parseForm, parseJson, clientIp, sendJson, sendHtml, redirect } from './http.mjs'
 import { authorizeGet, authorizePost } from './auth.mjs'
 import { enroll, challenge, config as configHandler, revoke } from './gateway.mjs'
 import { createProxy, isGatewayPath } from './proxy.mjs'
+import { createPanelGate } from './panel-auth.mjs'
 
 const BODY_MAX = 64 * 1024
 const ENDPOINTS = {
@@ -52,12 +53,63 @@ export function createHandler(deps) {
         if (path === ENDPOINTS.revoke) return revoke(body, res, deps)
       }
 
+      // Panel gate sign-in. The browser proves it holds the deploy token once; the
+      // session cookie then authorises its panel REST + WebSocket traffic.
+      if (path === '/panel/login') {
+        const gate = deps.gate
+        if (!gate?.enabled) return redirect(res, panelSetupUrl(req))
+        if (method === 'GET') {
+          if (gate.isAuthed(req)) return redirect(res, panelSetupUrl(req))
+          return sendHtml(res, 200, gate.loginPage())
+        }
+        if (method === 'POST') {
+          const form = parseForm(await readBody(req, BODY_MAX))
+          if (!deps.rateLimiter.hit(`panel:${clientIp(req)}`)) {
+            return sendHtml(
+              res,
+              429,
+              gate.loginPage({ error: '尝试过多 / Too many attempts, wait a minute' })
+            )
+          }
+          if (!gate.checkToken(form.token)) {
+            return sendHtml(res, 401, gate.loginPage({ error: '令牌不正确 / Wrong token' }))
+          }
+          res
+            .writeHead(302, {
+              'set-cookie': gate.cookieHeaders().set,
+              location: panelSetupUrl(req)
+            })
+            .end()
+          return
+        }
+      }
+
+      if (path === '/panel/logout' && method === 'POST') {
+        res
+          .writeHead(302, {
+            ...(deps.gate ? { 'set-cookie': deps.gate.cookieHeaders().clear } : {}),
+            location: '/panel/login'
+          })
+          .end()
+        return
+      }
+
       // Everything the gateway does not own is either the panel entry point or
       // transparently proxied to the mihomo external-controller (single port).
       // ONLY '/' redirects: the target is /ui/#/setup?… whose fragment the
       // browser strips before requesting /ui/ — redirecting /ui or /ui/ again
       // would loop forever (ERR_TOO_MANY_REDIRECTS). mihomo serves /ui/ itself.
       if (!isGatewayPath(path) && deps.proxy) {
+        // The mihomo API is a full admin surface (switch groups, rewrite configs,
+        // drop connections), so it is never reachable without the session cookie.
+        if (deps.gate?.enabled && !deps.gate.isAuthed(req)) {
+          if (
+            (method === 'GET' || method === 'HEAD') &&
+            /text\/html/.test(req.headers.accept || '')
+          )
+            return redirect(res, '/panel/login')
+          return sendJson(res, 401, { error: 'panel_unauthorized' })
+        }
         if ((method === 'GET' || method === 'HEAD') && path === '/') {
           return redirect(res, panelSetupUrl(req))
         }
@@ -82,6 +134,7 @@ export function buildDeps(config) {
     rateLimiter: createRateLimiter({ max: config.loginMax, windowMs: config.loginWindowMs }),
     fetchSubscription,
     config: { ...config, originCa },
+    gate: createPanelGate({ token: config.panelToken, ttlMs: config.panelSessionTtlMs }),
     proxy: config.mihomoApiUrl
       ? createProxy({ apiUrl: config.mihomoApiUrl, apiSecret: config.mihomoApiSecret })
       : undefined
@@ -91,7 +144,17 @@ export function buildDeps(config) {
 export function createServer(deps) {
   const server = http.createServer(createHandler(deps))
   // WebSocket streams (/traffic, /connections, /logs …) are tunneled to mihomo.
-  if (deps.proxy) server.on('upgrade', (req, socket, head) => deps.proxy.upgrade(req, socket, head))
+  // They carry real data and admin capability, so the gate applies here too — the
+  // browser sends the session cookie on the upgrade handshake automatically.
+  if (deps.proxy)
+    server.on('upgrade', (req, socket, head) => {
+      if (deps.gate?.enabled && !deps.gate.isAuthed(req)) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+        socket.destroy()
+        return
+      }
+      deps.proxy.upgrade(req, socket, head)
+    })
   return server
 }
 
@@ -117,6 +180,13 @@ function main() {
     process.exit(1)
   }
   const deps = buildDeps(config)
+  if (deps.proxy && !deps.gate.enabled) {
+    console.warn(
+      'WARNING: PANEL_TOKEN is empty — the mihomo control API is proxied on :' +
+        `${config.port} with no authentication. Any host that can reach that port can ` +
+        'switch groups, rewrite configs and drop connections. Set PANEL_TOKEN in .env.'
+    )
+  }
   createServer(deps).listen(config.port, '0.0.0.0', () => {
     console.log(`cpx-gateway listening on :${config.port} (public origin ${config.publicOrigin})`)
   })

@@ -23,6 +23,9 @@ export function loadConfig(env = process.env) {
     // mihomo external-controller, reached over the compose network and proxied
     // through this gateway (single published web port). Set to '' to disable proxying.
     mihomoApiUrl: env.MIHOMO_API_URL ?? 'http://mihomo:9090',
-    mihomoApiSecret: env.MIHOMO_API_SECRET || ''
+    mihomoApiSecret: env.MIHOMO_API_SECRET || '',
+    // Cookie gate for the proxied mihomo API/panel. Empty disables it (open proxy).
+    panelToken: env.PANEL_TOKEN || '',
+    panelSessionTtlMs: num(env.PANEL_SESSION_TTL_MS, 8 * 60 * 60 * 1000)
   })
 }

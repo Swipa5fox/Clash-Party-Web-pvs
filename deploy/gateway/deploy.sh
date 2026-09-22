@@ -102,6 +102,13 @@ if ! grep -q '^CP_WEB_TOKEN=' .env; then
   chmod 600 .env 2>/dev/null || true
   log "Generated CP_WEB_TOKEN (Web UI auth) — stored in .env, shown in the final summary."
 fi
+# PANEL_TOKEN gates the proxied mihomo control API on :8080 (single-port panel).
+# Without it any LAN host controls the core, so fresh deploys get one too.
+# An existing .env is left alone: set PANEL_TOKEN= there to disable, or a value to enable.
+if ! grep -q '^PANEL_TOKEN=' .env; then
+  printf '\nPANEL_TOKEN=%s\n' "$TOKEN" >> .env
+  log "Generated PANEL_TOKEN (panel/API auth on :8080) — same value as CP_WEB_TOKEN."
+fi
 # shellcheck disable=SC1091
 . ./.env   # pulls in MIHOMO_*_PORT overrides for the verify stage
 if [ "$ENV_ONLY" = "true" ]; then
@@ -288,12 +295,13 @@ Next steps:
      Add your subscription under 订阅 (Profiles) — the party container's mihomo
      core picks it up automatically (no file editing, no restart).
   2) LAN clients use http://${HOST_IP}:${MIHOMO_MIXED_PORT:-7890} (HTTP+SOCKS5 mixed)
-  3) Control panel via the gateway: open ${ORIGIN}/
+  3) Control panel via the gateway: open ${ORIGIN}/ — it asks for PANEL_TOKEN once
+     per browser (same value as the Web UI token above; see .env)
   4) Verify discovery:      curl ${ORIGIN}/.well-known/cpx-gateway
   5) Add a gateway account (prompts for a password):
        docker compose exec gateway cpx-admin add-user <name> '<hidden-subscription-url>' --limit 3
   6) 国家双口线路(AU/JP,可选;先完成第 1 步的订阅): 用 skill,不在本目录跑脚本 ——
-       cd <repo>/.codebuddy/skills/mihomo-lines/scripts
+       cd <repo>/tools/mihomo-lines/scripts
        node lines.mjs add AU 17890 '澳洲|Australia|Sydney|悉尼|🇦🇺'
        node lines.mjs add JP 8888  '日本|Japan|Tokyo|东京|大阪|🇯🇵'
        node lines.mjs verify

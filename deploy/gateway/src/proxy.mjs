@@ -11,7 +11,10 @@ const GATEWAY_PATHS = new Set([
   '/enroll',
   '/challenge',
   '/config',
-  '/revoke'
+  '/revoke',
+  // Panel gate endpoints — must never reach mihomo, or the gate could not guard itself.
+  '/panel/login',
+  '/panel/logout'
 ])
 
 // True when the gateway itself owns this exact path (never proxied).
