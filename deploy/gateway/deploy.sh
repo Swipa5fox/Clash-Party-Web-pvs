@@ -55,6 +55,14 @@ done
 
 log()  { printf '\033[1;34m[deploy]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[deploy][FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
+# Detect CR bytes portably — and do NOT do it by text-matching "\r":
+#  * `grep -q $'\r'` fails on MSYS/Git Bash (CRLF is treated as a line terminator),
+#    which silently disables the check.
+#  * `od -c | grep '\\r'` goes the other way and false-positives, because this very
+#    script contains the two characters \r inside its own sed hints — that would
+#    make a clean checkout abort itself.
+# Counting CR bytes with tr is exact on both GNU and busybox.
+has_cr() { [ "$(tr -d -c '\r' < "$1" | wc -c | tr -d '[:space:]')" -gt 0 ]; }
 
 # --------------------------------------------------------- 1. preflight ---
 log "Stage 1/6: preflight"
@@ -65,15 +73,27 @@ docker info >/dev/null 2>&1 || fail "Docker daemon is not reachable (is it start
 # CRLF line endings break the shebang on Linux ("'bash\r': No such file or directory").
 # The repo ships .gitattributes (*.sh eol=lf); this guards against a checkout that
 # predates it or an editor that re-saved with CRLF.
-if grep -q $'\r' "$0"; then
+if has_cr "$0"; then
   fail "This script has CRLF line endings and cannot run on Linux. Fix with: sed -i 's/\r$//' deploy.sh (or re-checkout after the .gitattributes rule)."
 fi
 log "docker $(docker --version | cut -d, -f1) OK"
 
 # -------------------------------------------------------- 2. configure ---
 log "Stage 2/6: configure .env"
+# .env is `source`d further down, so a CR would silently become part of a value
+# (e.g. PUBLIC_ORIGIN=http://ip:8080\r -> the discovery doc carries the \r and the
+# client's origin comparison fails in a way that looks like a network bug).
+if [ -f .env ] && has_cr .env; then
+  fail ".env has CRLF line endings, which corrupts values when it is sourced. Fix with: sed -i 's/\\r\$//' .env"
+fi
 if [ ! -f .env ]; then
   cp .env.example .env
+  # Defensive: .env.example is LF by .gitattributes, but a tarball built from a
+  # CRLF working copy can still carry CRs. Only touch the copy we just made.
+  if has_cr .env; then
+    tr -d '\r' < .env > .env.tmp && mv .env.tmp .env
+    log "Stripped CRLF from the generated .env."
+  fi
   ADDR="${GATEWAY_ADDR:-}"
   if [ -z "$ADDR" ]; then
     read -rp "Gateway address (IP:port reachable by LAN clients), e.g. 192.168.1.100:8080: " ADDR

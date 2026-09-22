@@ -3,6 +3,11 @@
 *.sh text eol=lf
 Dockerfile text eol=lf
 *.mjs text eol=lf
+# .env.example is copied to .env and then `source`d by deploy.sh — a CR would end up
+# inside values (PUBLIC_ORIGIN gains a trailing \r that silently breaks the client's
+# origin comparison), and `text` alone would hand Windows checkouts CRLF here.
+.env.example text eol=lf
+.env text eol=lf
 *.yml text
 *.yaml text
 *.json text
