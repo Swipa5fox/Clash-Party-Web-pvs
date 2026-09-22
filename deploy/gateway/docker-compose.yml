@@ -39,11 +39,12 @@ services:
   #   Proxy   : LAN clients use http://<host>:7890 (HTTP+SOCKS5 mixed)
   #   Config  : everything persists in the party_data volume (/data)
   # First boot seeds mihomo.yaml with allow-lan + controller 0.0.0.0:9090.
+  # No `build:` section on purpose: builds are owned by deploy.sh (with the
+  # NPM_REGISTRY / ELECTRON_MIRROR args). A missing image should fail loudly
+  # here instead of triggering a silent no-args build that pulls from
+  # registry.npmjs.org + github.com.
   party:
     image: ${PARTY_IMAGE:-cpx-party:latest}
-    build:
-      context: ../..
-      dockerfile: deploy/party/Dockerfile
     restart: unless-stopped
     # tini as PID 1: xvfb-run relies on SIGUSR1 from Xvfb, which shells cannot
     # receive when they are PID 1 (docker-init forwards signals + reaps).

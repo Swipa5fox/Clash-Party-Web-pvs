@@ -450,6 +450,8 @@
   "customLines.manualTip": "select 手動選擇節點",
   "customLines.noSubGroup": "至少啟用一個子組類型",
   "customLines.portConflict": "連接埠衝突或佔用系統保留連接埠",
+  "customLines.portOccupiedLocal": "該連接埠已被核心或本機其它服務佔用",
+  "customLines.portOccupiedRemote": "該連接埠已被其它服務佔用（{{host}} 有回應）",
   "customLines.testUrl": "測速 URL",
   "customLines.interval": "間隔(秒)",
   "customLines.saveFailed": "儲存失敗: {{error}}",

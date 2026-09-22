@@ -8,6 +8,9 @@ out
 *.log*
 .idea
 *.ttf
+# The emoji font IS shipped in-repo (main.css hard-references it; the CDN
+# fallbacks in prepare.mjs are unreliable). Un-ignore it explicitly.
+!src/renderer/src/assets/NotoColorEmoji.ttf
 party.md
 CLAUDE.md
 agent.md

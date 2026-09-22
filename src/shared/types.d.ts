@@ -550,6 +550,14 @@ interface ICustomLineGroupsConfig {
   items: ICustomLineGroup[]
 }
 
+// 端口占用探测结果
+interface IPortCheckResult {
+  occupied: boolean
+  // local = 内核所在命名空间(内核自身端口/本机服务)占用; remote = 探测地址上的其它服务
+  source?: 'local' | 'remote'
+  detail?: string
+}
+
 interface IMihomoListenerConfig {
   name: string
   type: string

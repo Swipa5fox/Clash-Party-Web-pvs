@@ -14,7 +14,7 @@ import {
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FaPlus, FaTrash } from 'react-icons/fa6'
-import { mihomoProxies } from '@renderer/utils/ipc'
+import { checkPortOccupied, mihomoProxies } from '@renderer/utils/ipc'
 
 interface Props {
   isOpen: boolean
@@ -26,6 +26,16 @@ interface Props {
 type Draft = ICustomLineGroup
 
 const DEFAULT_TEST_URL = 'https://www.gstatic.com/generate_204'
+
+// 内核/面板固定占用的端口，直接判冲突
+const RESERVED_PORTS = [7890, 7891, 7892, 7893, 9090]
+
+// 宿主机地址提示：web 模式下 location.hostname 即网关宿主机 IP，
+// 用于探测 bridge 网络下宿主机(容器外)的端口占用
+const hostHints = (): string[] => {
+  const hostname = typeof window === 'undefined' ? '' : window.location?.hostname
+  return hostname ? [hostname] : []
+}
 
 // 生成默认草稿
 const newDraft = (): Draft => ({
@@ -128,6 +138,7 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
   const [proxies, setProxies] = useState<IMihomoProxy[]>([])
   const [saving, setSaving] = useState(false)
   const [pickerTarget, setPickerTarget] = useState<string | null>(null)
+  const [portIssues, setPortIssues] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (isOpen) {
@@ -150,9 +161,55 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
   const portConflict = useCallback(
     (draft: Draft): boolean =>
       drafts.some((d) => d.id !== draft.id && d.port === draft.port) ||
-      [7890, 7891, 7892, 7893, 9090].includes(draft.port),
+      RESERVED_PORTS.includes(draft.port),
     [drafts]
   )
+
+  // 端口占用探测：内核所在本机 + 宿主机地址，命中即返回该草稿的错误文案
+  const probePorts = useCallback(async (): Promise<Record<string, string>> => {
+    const issues: Record<string, string> = {}
+    const hosts = hostHints()
+    await Promise.all(
+      drafts.map(async (draft) => {
+        if (!draft.port || draft.port < 1024 || draft.port > 65535) return
+        if (RESERVED_PORTS.includes(draft.port)) return
+        // 组间重复由静态校验提示，不必探测
+        if (drafts.some((d) => d.id !== draft.id && d.port === draft.port)) return
+        // 该组已生效的端口会被它自己的 listener 占着，跳过以免误报
+        if (groups.find((g) => g.id === draft.id)?.port === draft.port) return
+        try {
+          const result = await checkPortOccupied(draft.port, hosts)
+          if (result?.occupied) {
+            issues[draft.id] =
+              result.source === 'remote'
+                ? t('customLines.portOccupiedRemote', { host: result.detail ?? '' })
+                : t('customLines.portOccupiedLocal')
+          }
+        } catch {
+          // 探测失败不阻塞保存
+        }
+      })
+    )
+    return issues
+  }, [drafts, groups, t])
+
+  // 端口改动后防抖探测一次，实时给出冲突提示
+  useEffect(() => {
+    if (!isOpen) {
+      setPortIssues({})
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(() => {
+      void probePorts().then((issues) => {
+        if (!cancelled) setPortIssues(issues)
+      })
+    }, 500)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [isOpen, probePorts])
 
   const invalid = useMemo(
     () =>
@@ -164,13 +221,20 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
           d.port > 65535 ||
           portConflict(d) ||
           d.proxies.length === 0
-      ),
-    [drafts, portConflict]
+      ) || Object.keys(portIssues).length > 0,
+    [drafts, portConflict, portIssues]
   )
 
   const doSave = async (): Promise<void> => {
     if (invalid) return
     setSaving(true)
+    // 防抖探测可能尚未返回，保存前再确认一次
+    const issues = await probePorts()
+    setPortIssues(issues)
+    if (Object.keys(issues).length > 0) {
+      setSaving(false)
+      return
+    }
     const ok = await onSave(
       drafts.map(({ id, name, port, proxies, testUrl, interval, auto, fallback, manual }) => ({
         id,
@@ -224,7 +288,13 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
                     label={t('customLines.port')}
                     value={String(d.port)}
                     onValueChange={(v) => updateDraft(d.id, { port: parseInt(v) || 0 })}
-                    isInvalid={!d.port || d.port < 1024 || d.port > 65535 || portConflict(d)}
+                    isInvalid={
+                      !d.port ||
+                      d.port < 1024 ||
+                      d.port > 65535 ||
+                      portConflict(d) ||
+                      Boolean(portIssues[d.id])
+                    }
                   />
                   <Button
                     isIconOnly
@@ -239,6 +309,7 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
                 {portConflict(d) && (
                   <div className="text-danger text-xs">{t('customLines.portConflict')}</div>
                 )}
+                {portIssues[d.id] && <div className="text-danger text-xs">{portIssues[d.id]}</div>}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm shrink-0">{t('customLines.lines')}</span>
                   <Button
@@ -313,9 +384,7 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
                     className="w-28"
                     label={t('customLines.interval')}
                     value={String(d.interval ?? 300)}
-                    onValueChange={(v) =>
-                      updateDraft(d.id, { interval: parseInt(v) || 300 })
-                    }
+                    onValueChange={(v) => updateDraft(d.id, { interval: parseInt(v) || 300 })}
                   />
                 </div>
               </div>

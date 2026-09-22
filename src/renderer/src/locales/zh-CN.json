@@ -450,6 +450,8 @@
   "customLines.manualTip": "select 手动选择节点",
   "customLines.noSubGroup": "至少启用一个子组类型",
   "customLines.portConflict": "端口冲突或占用系统保留端口",
+  "customLines.portOccupiedLocal": "该端口已被内核或本机其它服务占用",
+  "customLines.portOccupiedRemote": "该端口已被其它服务占用（{{host}} 有响应）",
   "customLines.testUrl": "测速 URL",
   "customLines.interval": "间隔(秒)",
   "customLines.saveFailed": "保存失败: {{error}}",

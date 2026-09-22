@@ -55,10 +55,7 @@ import {
   updateOverrideItem,
   convertMrsRuleset
 } from '../config'
-import {
-  getCustomLineGroupsConfig,
-  setCustomLineGroupsConfig
-} from '../config/customLineGroups'
+import { getCustomLineGroupsConfig, setCustomLineGroupsConfig } from '../config/customLineGroups'
 import {
   quitWithoutCore,
   restartCore,
@@ -144,6 +141,7 @@ import { getDeploymentEnv } from './deployment'
 import { dataDir, logDir, rulePath } from './dirs'
 import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
 import { atomicWriteFile } from './safeFile'
+import { checkPortOccupied } from './portCheck'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AsyncFn = (...args: any[]) => Promise<any>
@@ -323,6 +321,7 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   // Custom Line Groups
   getCustomLineGroupsConfig,
   setCustomLineGroupsConfig: saveCustomLineGroups,
+  checkPortOccupied,
   // File
   getFileStr: getFileStrChecked,
   setFileStr: setFileStrChecked,

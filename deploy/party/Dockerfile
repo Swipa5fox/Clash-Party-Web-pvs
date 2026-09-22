@@ -16,8 +16,21 @@ FROM node:22-slim AS builder
 
 # npm registry override (deploy.sh defaults to a mirror for CN networks);
 # also used by corepack to fetch the pnpm binary itself.
+# ELECTRON_MIRROR / ELECTRON_BUILDER_BINARIES_MIRROR: postinstall (electron
+# install.js + electron-builder install-app-deps) pulls the ~100MB Electron
+# zip from github.com — the one remaining GitHub dependency of the build,
+# which defeats the offline core-assets flow. Default mirrors track CN
+# networks; override per-build if you use another registry ecosystem.
 ARG NPM_REGISTRY=https://registry.npmjs.org
-ENV COREPACK_NPM_REGISTRY=${NPM_REGISTRY}
+ARG ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
+ARG ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
+# GitHub 加速前缀(留空=直连 github.com)。云服务器/受限网络里 github.com 常不可达:
+# 那样 prepare.mjs 回退下载内核/geo 会卡死, 设为 https://gh-proxy.com/ 即可走镜像。
+ARG GITHUB_MIRROR=
+ENV COREPACK_NPM_REGISTRY=${NPM_REGISTRY} \
+    ELECTRON_MIRROR=${ELECTRON_MIRROR} \
+    ELECTRON_BUILDER_BINARIES_MIRROR=${ELECTRON_BUILDER_BINARIES_MIRROR} \
+    GITHUB_MIRROR=${GITHUB_MIRROR}
 
 WORKDIR /src
 
@@ -73,6 +86,15 @@ WORKDIR /app
 
 COPY --from=builder /src/out ./out
 COPY --from=builder /src/extra ./extra
+# Offline panel UI (zashboard dist). extra/panel-ui is part of the core-assets
+# sync (deploy.sh /opt/cpx-core-assets); when absent the COPY below would fail,
+# hence the guard. Runtime behavior: entrypoint seeds it into work/ui so mihomo
+# never downloads external-ui from github.com at first boot.
+RUN if [ -d extra/panel-ui ] && [ -n "$(ls -A extra/panel-ui 2>/dev/null)" ]; then \
+      echo '[build] offline panel UI present (extra/panel-ui)'; \
+    else \
+      mkdir -p extra/panel-ui && echo '[build] no offline panel UI — panel falls back to runtime download'; \
+    fi
 # pnpm links the file: dep node_modules/sysproxy-rs -> ../../src/native/sysproxy,
 # so the symlink target must exist in the image too.
 COPY --from=builder /src/src/native/sysproxy ./src/native/sysproxy

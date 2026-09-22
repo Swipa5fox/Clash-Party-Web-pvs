@@ -9,6 +9,14 @@ const cwd = process.cwd()
 const TEMP_DIR = path.join(cwd, 'node_modules/.temp')
 const platform = process.platform
 
+// GitHub 加速前缀: 云服务器/境内网络常常直连 github.com 不通(构建会卡死或重试后失败),
+// 设 GITHUB_MIRROR 即把本脚本所有 github 下载改走镜像, 例如:
+//   GITHUB_MIRROR=https://gh-proxy.com/  ->  https://gh-proxy.com/https://github.com/...
+// 留空 = 直连 github.com(旧行为)。只影响本脚本, 不动依赖自身的网络行为。
+const GITHUB_MIRROR = (process.env.GITHUB_MIRROR || '').replace(/\/+$/, '')
+const ghUrl = (url) =>
+  GITHUB_MIRROR && url.startsWith('https://github.com/') ? `${GITHUB_MIRROR}/${url}` : url
+
 // 目标架构解析优先级：命令行参数 > npm_config_arch 环境变量 > 当前进程架构
 // CI 交叉编译（如 ubuntu x64 宿主构建 arm64 包）时，若参数未传递到位，
 // 会误用宿主机的 x64 架构下载 sidecar，导致 arm64 包内混入 x64 二进制
@@ -46,9 +54,10 @@ const MIHOMO_ALPHA_MAP = {
 // 网络抖动会让裸 fetch 直接挂掉整个构建(容器里无代理可用),加超时+重试:
 // 服务器在境内,直连 GitHub 经常超时/被重置,已连续三次在部署时撞上。
 async function fetchWithRetry(url, { retries = 3, timeoutMs = 20000, label = url } = {}) {
+  const target = ghUrl(url)
   for (let i = 1; i <= retries; i++) {
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) })
+      const response = await fetch(target, { signal: AbortSignal.timeout(timeoutMs) })
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
       return response
     } catch (error) {
@@ -120,7 +129,7 @@ const MIHOMO_MAP = {
 // Fetch the latest release version from the version.txt file
 async function getLatestReleaseVersion() {
   try {
-    const response = await fetch(MIHOMO_VERSION_URL, {
+    const response = await fetch(ghUrl(MIHOMO_VERSION_URL), {
       method: 'GET'
     })
     let v = await response.text()
@@ -303,17 +312,18 @@ async function resolveResource(binInfo) {
  * download file and save to `path`
  */
 async function downloadFile(url, path) {
-  const response = await fetch(url, {
+  const target = ghUrl(url)
+  const response = await fetch(target, {
     method: 'GET',
     headers: { 'Content-Type': 'application/octet-stream' }
   })
   if (!response.ok) {
-    throw new Error(`download failed: ${response.status} ${response.statusText} for "${url}"`)
+    throw new Error(`download failed: ${response.status} ${response.statusText} for "${target}"`)
   }
   const buffer = await response.arrayBuffer()
   fs.writeFileSync(path, new Uint8Array(buffer))
 
-  console.log(`[INFO]: download finished "${url}"`)
+  console.log(`[INFO]: download finished "${target}"`)
 }
 
 const resolveMmdb = () =>

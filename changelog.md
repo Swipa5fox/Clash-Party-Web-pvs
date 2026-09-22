@@ -44,6 +44,8 @@
 - 修复 party 容器 electron 无法启动：shell 作为 PID 1 收不到 Xvfb 的 SIGUSR1 就绪信号导致 `xvfb-run` 永久挂起——compose 增加 `init: true`（tini 接管 PID 1）
 - 修复 party 镜像构建三坑：`file:src\native\sysproxy` 反斜杠路径 Linux 不可装（构建期 sed 归一）；`prepare` 生命周期脚本在依赖未拷贝时自触发（剔除后显式执行）；pnpm 11 构建脚本审批需要 `pnpm-workspace.yaml` 的 `allowBuilds`（提前 COPY）
 - 修复 Web 端页面标题竖排显示（`windowControlsOverlay` 在普通浏览器中返回零宽矩形导致标题栏溢出）
+- **部署全链路去 GitHub 依赖（一体化）**：Electron 二进制/electron-builder 工具链改走 `ELECTRON_MIRROR`（默认 npmmirror 镜像，此前 postinstall 仍从 github.com 拉 ~100MB zip，core-assets 离线流程形同虚设）；zashboard 面板随 core-assets 固化（`extra/panel-ui` → entrypoint 首启落位 `work/ui`），运行期不再按 `external-ui-url` 联网下载；`deploy.sh` 修复 `set -u` 下 `.env` 含 `CP_WEB_TOKEN` 缺 `PANEL_TOKEN` 时 `$TOKEN` 未定义即崩溃；compose 删除 party 隐式 `build:` 段（镜像缺失时静默无 build-arg 构建会绕过镜像源配置）；`.gitignore` 放行 `NotoColorEmoji.ttf`（字体随仓库提供，git clone 后不再依赖不可靠 CDN 兜底）；`bootstrap.sh` 外网自检同步（npmmirror 探测覆盖 Electron 镜像、panel-ui 就绪检查）
+- **`GITHUB_MIRROR` 支持（云主机构建必需）+ 云环境实测**：`scripts/prepare.mjs` 的全部下载入口（`fetchWithRetry` / `downloadFile` / 稳定版版本探测）支持 `GITHUB_MIRROR` 前缀（如 `https://gh-proxy.com/`）——实测云沙箱**直连 github.com 返回 000**，此前内核/geo 下载会卡死；`deploy/party/Dockerfile`、`deploy/gateway/deploy.sh`、`deploy/opt/bootstrap.sh` 全链路透传该参数，预检在 GitHub 不通时给出镜像与 core-assets 两条出路。实测一条龙跑通：`pnpm install`（npmmirror，1138 包）→ Electron 二进制（`ELECTRON_MIRROR`）→ mihomo×3 + geo×6 + sysproxy（`GITHUB_MIRROR`）→ `electron-vite build`（`out/` 47MB，23s）
 
 ### 变更
 

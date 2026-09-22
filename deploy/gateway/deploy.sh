@@ -112,21 +112,20 @@ if [ ! -f .env ]; then
 else
   log ".env exists — keeping it (delete the file to reconfigure)."
 fi
-# CP_WEB_TOKEN gates the Clash Party Web UI (:3999). Generate a random one when
-# missing (first run or upgrade from an older .env) so compose can start.
-# The value itself stays out of this log — it is shown once in the final summary,
-# and only when stdout is a terminal.
+# CP_WEB_TOKEN gates the Clash Party Web UI (:3999); PANEL_TOKEN gates the
+# proxied mihomo control API on :8080 (single-port panel). Missing ones are
+# generated ONCE here and reused for both — .env keys that already exist are
+# left alone (set PANEL_TOKEN= there to disable, or a value to enable).
+# The value itself stays out of this log — it is shown once in the final
+# summary, and only when stdout is a terminal.
+GEN_TOKEN="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
 if ! grep -q '^CP_WEB_TOKEN=' .env; then
-  TOKEN="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-  printf '\nCP_WEB_TOKEN=%s\n' "$TOKEN" >> .env
+  printf '\nCP_WEB_TOKEN=%s\n' "$GEN_TOKEN" >> .env
   chmod 600 .env 2>/dev/null || true
   log "Generated CP_WEB_TOKEN (Web UI auth) — stored in .env, shown in the final summary."
 fi
-# PANEL_TOKEN gates the proxied mihomo control API on :8080 (single-port panel).
-# Without it any LAN host controls the core, so fresh deploys get one too.
-# An existing .env is left alone: set PANEL_TOKEN= there to disable, or a value to enable.
 if ! grep -q '^PANEL_TOKEN=' .env; then
-  printf '\nPANEL_TOKEN=%s\n' "$TOKEN" >> .env
+  printf '\nPANEL_TOKEN=%s\n' "$GEN_TOKEN" >> .env
   log "Generated PANEL_TOKEN (panel/API auth on :8080) — same value as CP_WEB_TOKEN."
 fi
 # shellcheck disable=SC1091
@@ -161,8 +160,8 @@ fi
 if want party; then
   log "Stage 3/6: build ${PARTY_IMAGE_NAME}:${IMAGE_TAG} from repo root"
   # 内核/geo 资源离线化: /opt/cpx-core-assets 是从已构建镜像提取出的 linux 产物
-  # (mihomo x3 + sysproxy .node + geo)。同步进构建上下文后, Dockerfile 会跳过
-  # scripts/prepare.mjs 的联网下载 —— 构建不再依赖 github.com 是否可达。
+  # (mihomo x3 + sysproxy .node + geo + panel-ui 面板)。同步进构建上下文后,
+  # Dockerfile 会跳过 scripts/prepare.mjs 的联网下载 —— 构建不再依赖 github.com。
   # 目录不存在时静默跳过, Dockerfile 自动回退联网下载(旧行为)。
   CORE_ASSETS_DIR="${CORE_ASSETS_DIR:-/opt/cpx-core-assets}"
   if [ -d "$CORE_ASSETS_DIR/extra" ]; then
@@ -175,9 +174,18 @@ if want party; then
   # not the CWD ("lstat deploy: no such file or directory").
   # NPM_REGISTRY defaults to a mirror — registry.npmjs.org is unreachable at
   # usable speeds from CN networks (override with the env var if needed).
+  # ELECTRON_MIRROR keeps the ~100MB Electron zip download off github.com too.
+  # GITHUB_MIRROR is passed through for the prepare.mjs fallback (only used when
+  # /opt/cpx-core-assets is absent): many cloud hosts cannot reach github.com at
+  # all, in which case the core/geo download would hang — set it to
+  # https://gh-proxy.com/ (or your own) to build anyway.
   NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"
+  ELECTRON_MIRROR="${ELECTRON_MIRROR:-https://npmmirror.com/mirrors/electron/}"
   docker build $NO_CACHE \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY}" \
+    --build-arg ELECTRON_MIRROR="${ELECTRON_MIRROR}" \
+    --build-arg ELECTRON_BUILDER_BINARIES_MIRROR="${ELECTRON_BUILDER_BINARIES_MIRROR:-https://npmmirror.com/mirrors/electron-builder-binaries/}" \
+    --build-arg GITHUB_MIRROR="${GITHUB_MIRROR:-}" \
     -t "${PARTY_IMAGE_NAME}:${IMAGE_TAG}" \
     -t "${PARTY_IMAGE_NAME}:latest" \
     -f "$REPO_ROOT/deploy/party/Dockerfile" "$REPO_ROOT"

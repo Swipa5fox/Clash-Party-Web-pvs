@@ -341,7 +341,9 @@ app
         platform: process.platform,
         version: app.getVersion(),
         staticRoot: join(__dirname, '../renderer'),
-        devServerUrl: process.env.VITE_DEV_SERVER_URL,
+        // electron-vite dev 注入的是 ELECTRON_RENDERER_URL（与 window.ts / floatingWindow.ts 一致）；
+        // 容器/生产下为空，web 桥接走静态产物。
+        devServerUrl: process.env['ELECTRON_RENDERER_URL'],
         rpc: createRpcRouter(asyncHandlers, syncHandlers, WEB_BLOCKED_CHANNELS),
         onSend: (channel, args) => ipcMain.emit(channel, ...args)
       })

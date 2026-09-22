@@ -450,6 +450,8 @@
   "customLines.manualTip": "select node manually",
   "customLines.noSubGroup": "Enable at least one sub-group type",
   "customLines.portConflict": "Port conflict or system reserved port",
+  "customLines.portOccupiedLocal": "Port is already in use by the core or another local service",
+  "customLines.portOccupiedRemote": "Port is already in use by another service ({{host}} responded)",
   "customLines.testUrl": "Test URL",
   "customLines.interval": "Interval (s)",
   "customLines.saveFailed": "Save failed: {{error}}",

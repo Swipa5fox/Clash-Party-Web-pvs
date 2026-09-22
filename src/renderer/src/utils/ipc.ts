@@ -72,6 +72,7 @@ interface IpcApi {
   // Custom Line Groups
   getCustomLineGroupsConfig: (force?: boolean) => Promise<ICustomLineGroupsConfig>
   setCustomLineGroupsConfig: (config: ICustomLineGroupsConfig) => Promise<void>
+  checkPortOccupied: (port: number, extraHosts?: string[]) => Promise<IPortCheckResult>
   // File
   getFileStr: (path: string) => Promise<string>
   setFileStr: (path: string, str: string) => Promise<void>
@@ -239,6 +240,7 @@ export const {
   // Custom Line Groups
   getCustomLineGroupsConfig,
   setCustomLineGroupsConfig,
+  checkPortOccupied,
   // File
   getFileStr,
   setFileStr,

@@ -63,6 +63,7 @@ const validInvokeChannels: readonly string[] = [
   // Custom Line Groups
   'getCustomLineGroupsConfig',
   'setCustomLineGroupsConfig',
+  'checkPortOccupied',
   // File
   'getFileStr',
   'setFileStr',

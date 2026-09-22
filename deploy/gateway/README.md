@@ -175,6 +175,39 @@ docker compose logs -f party   # 看日志（party / gateway）
 docker compose up -d party     # 改 .env 后生效（compose 会重建容器）
 ```
 
+### 全链路离线构建（无 GitHub 依赖）
+
+构建与运行对 github.com 的全部依赖已消除或可选化：
+
+| 依赖             | 来源                                                                                 | 兜底                             |
+| ---------------- | ------------------------------------------------------------------------------------ | -------------------------------- |
+| npm 依赖         | `NPM_REGISTRY`（默认 npmmirror）                                                      | 换源重跑                         |
+| Electron 二进制  | `ELECTRON_MIRROR`（默认 npmmirror 镜像）                                              | 换镜像重跑                       |
+| mihomo/geo 资源  | `/opt/cpx-core-assets/extra`（从已构建镜像提取，deploy.sh 自动同步进上下文）         | `scripts/prepare.mjs` 联网下载   |
+| GitHub 直连      | `GITHUB_MIRROR`（如 `https://gh-proxy.com/`，默认空=直连 github.com）                | 云主机无 GitHub 出口时**必须设** |
+| zashboard 面板   | core-assets 里的 `extra/panel-ui`（entrypoint 首启落位 `work/ui`）                   | 内核首启按 `external-ui-url` 下载 |
+
+> 云服务器（尤其境内/受限网络）常常**直连 github.com 完全不通**（`curl` 返回 000），此时
+> `prepare.mjs` 的内核/geo 下载会卡死重试。两个解法：拷 `/opt/cpx-core-assets` 过去（最快），
+> 或 `GITHUB_MIRROR=https://gh-proxy.com/ ./deploy.sh` 走镜像。`GITHUB_MIRROR` 只作用于
+> `prepare.mjs`，其余走 `NPM_REGISTRY` / `ELECTRON_MIRROR`。
+
+提取 core-assets（首次联网构建成功后执行一次，之后完全离线重建）：
+
+```bash
+docker create --name cpx-extract cpx-party:local
+docker cp cpx-extract:/app/extra /opt/cpx-core-assets-extract
+docker rm cpx-extract
+mkdir -p /opt/cpx-core-assets
+cp -a /opt/cpx-core-assets-extract/. /opt/cpx-core-assets/
+# zashboard 面板一并固化: 内核首启后 work/ui 即为面板, 拷进 panel-ui
+docker run --rm -v <party_data卷>:/data -v /opt/cpx-core-assets:/out alpine \
+  sh -c 'cp -a /data/.config/mihomo-party-dev/work/ui/. /out/extra/panel-ui/'
+rm -rf /opt/cpx-core-assets-extract
+```
+
+之后 `./deploy.sh --no-cache` 重建也不碰 GitHub。
+
 ### 轮换 Web UI 令牌
 
 `CP_WEB_TOKEN` 由 compose 在**创建容器时**从 `.env` 插值进容器（`docker-compose.yml` 的 `environment`），所以 `restart` 不会换值，必须 `up -d` 重建：
@@ -216,7 +249,7 @@ docker compose up -d
 | party 容器起不来，日志有 `xauth command not found` | 镜像残缺（旧版构建），`./deploy.sh --services party` 重建                           |
 | electron 不启动、Xvfb 起了但无输出                 | compose 已内置 `init: true`（tini 转发 SIGUSR1）；若自改过 compose 移除了该行会复现 |
 | npm 依赖下载极慢/超时                              | 默认已走 npmmirror；也可 `NPM_REGISTRY=... ./deploy.sh` 覆盖                        |
-| 面板 `:8080/` 打不开或循环                         | 确认 party 容器健康（`docker compose ps`），面板文件由 party 内核首次启动时下载     |
+| 面板 `:8080/` 打不开或循环                         | 确认 party 容器健康（`docker compose ps`）；面板文件优先由镜像离线预置（core-assets 含 `panel-ui` 时），否则由内核首启时从 GitHub 下载 |
 
 ---
 

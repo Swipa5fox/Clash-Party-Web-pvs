@@ -12,6 +12,19 @@ set -euo pipefail
 DATA_DIR="${HOME}/.config/mihomo-party-dev"
 mkdir -p "$DATA_DIR"
 
+# mihomo runs with `-d <dataDir>/work` (see src/main/utils/dirs.ts), so the
+# `external-ui: ui` below resolves to work/ui. Seed the offline panel UI from
+# the image (extra/panel-ui, part of the core-assets sync) on first boot only:
+# with ui/ in place mihomo serves it immediately and never downloads from
+# github.com at runtime. Without it, external-ui-url kicks in as fallback.
+WORK_DIR="${DATA_DIR}/work"
+PANEL_SRC="/app/extra/panel-ui"
+if [ ! -d "${WORK_DIR}/ui" ] && [ -d "$PANEL_SRC" ] && [ -n "$(ls -A "$PANEL_SRC" 2>/dev/null)" ]; then
+  mkdir -p "$WORK_DIR"
+  cp -a "$PANEL_SRC/." "${WORK_DIR}/ui/"
+  echo "[entrypoint] seeded offline panel UI -> ${WORK_DIR}/ui"
+fi
+
 if [ ! -f "${DATA_DIR}/mihomo.yaml" ]; then
   cat > "${DATA_DIR}/mihomo.yaml" <<'EOF'
 # Seeded by the cpx-party container (first boot only). Editable in the Web UI.
@@ -27,6 +40,8 @@ bind-address: '*'
 # talking to the core over its private unix socket regardless of this setting.
 external-controller: 0.0.0.0:9090
 # Panel files served through the gateway at :8080/ui (zashboard, CP's default).
+# ui/ is pre-seeded from the image when the offline panel ships; the URL stays
+# as the mihomo-native update/refresh channel (used only when ui/ is deleted).
 external-ui: ui
 external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
 EOF

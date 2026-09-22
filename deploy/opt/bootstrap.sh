@@ -88,20 +88,30 @@ else
   warn "✗ Docker Hub 不可达 → 在 /etc/docker/daemon.json 加 registry-mirrors 后 systemctl restart docker"
   NET_BAD=1
 fi
-# 内核/geo 资源: 已固化在 $CORE_ASSETS_DIR(deploy.sh 会同步进构建上下文)时,构建完全不碰
-# GitHub;否则回退 scripts/prepare.mjs 联网下载 —— 那时 github 不通会拖垮整个构建,提前拦截。
+# 内核/geo/面板资源: 已固化在 $CORE_ASSETS_DIR(deploy.sh 会同步进构建上下文)时,
+# 构建完全不碰 GitHub(Electron 二进制走 npmmirror 镜像);否则回退 scripts/prepare.mjs
+# 联网下载 —— 那时 github 不通会拖垮整个构建,提前拦截。
 CORE_ASSETS_DIR="${CORE_ASSETS_DIR:-/opt/cpx-core-assets}"
 if [ -f "$CORE_ASSETS_DIR/extra/sidecar/mihomo" ]; then
   log "  ✓ 预置内核资源就绪 (${CORE_ASSETS_DIR}),构建不依赖 GitHub"
+  if [ -d "$CORE_ASSETS_DIR/extra/panel-ui" ] && [ -n "$(ls -A "$CORE_ASSETS_DIR/extra/panel-ui" 2>/dev/null)" ]; then
+    log "  ✓ 离线面板(zashboard)就绪,运行期也不依赖 GitHub"
+  else
+    warn "△ core-assets 缺 panel-ui: 面板将由内核首启时从 GitHub 下载(代理不受影响)"
+  fi
+elif [ -n "${GITHUB_MIRROR:-}" ] && http_alive "${GITHUB_MIRROR%/}/https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"; then
+  log "  ✓ 无预置内核资源,GITHUB_MIRROR 可达(${GITHUB_MIRROR})→ 构建走镜像下载"
 elif http_alive https://github.com/ \
   || http_alive https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt; then
   log "  ✓ github.com 可达(mihomo 内核/geo 下载)"
 else
-  warn "✗ 无预置内核资源且 github.com 不可达 → 把旧机的 /opt/cpx-core-assets 拷来即可离线构建"
+  warn "✗ 无预置内核资源且 github.com 不可达 → 两个办法:"
+  warn "    1) 把旧机的 /opt/cpx-core-assets 拷来(最快, 零外网依赖)"
+  warn "    2) GITHUB_MIRROR=https://gh-proxy.com/ 重跑本脚本(构建走 GitHub 镜像)"
   NET_BAD=1
 fi
 http_alive https://registry.npmmirror.com/ \
-  && log "  ✓ npmmirror 可达(pnpm 依赖)" \
+  && log "  ✓ npmmirror 可达(pnpm 依赖 + Electron 二进制镜像)" \
   || { warn "✗ npmmirror 不可达 → 用 NPM_REGISTRY=<你的源> 重跑"; NET_BAD=1; }
 if [ "$NET_BAD" != "0" ] && [ "$FORCE" != "true" ]; then
   fail "外网自检未通过。修好网络后重跑;确知能通可加 FORCE=true 强推。"
