@@ -1,11 +1,10 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { ipcMain, net } from 'electron'
+import { net } from 'electron'
 import { getAppConfig, patchAppConfig, patchControledMihomoConfig } from '../config'
 import { patchMihomoConfig } from '../core/mihomoApi'
-import { mainWindow } from '../window'
+import { broadcastEvent } from '../resolve/broadcaster'
 import { getDefaultDevice } from '../core/manager'
-import { updateTrayIcon } from '../resolve/tray'
 
 export async function getCurrentSSID(): Promise<string | undefined> {
   if (process.platform === 'win32') {
@@ -49,18 +48,14 @@ export async function checkSSID(): Promise<void> {
       }
       await patchControledMihomoConfig({ mode: 'direct' })
       await patchMihomoConfig({ mode: 'direct' })
-      mainWindow?.webContents.send('controledMihomoConfigUpdated')
-      mainWindow?.webContents.send('appConfigUpdated')
-      ipcMain.emit('updateTrayMenu')
-      await updateTrayIcon()
+      broadcastEvent('controledMihomoConfigUpdated')
+      broadcastEvent('appConfigUpdated')
     } else {
       // DNS 恢复逻辑已移至 patchControledMihomoConfig，会在模式从 direct 切换到 rule/global 时自动触发
       await patchControledMihomoConfig({ mode: 'rule' })
       await patchMihomoConfig({ mode: 'rule' })
-      mainWindow?.webContents.send('controledMihomoConfigUpdated')
-      mainWindow?.webContents.send('appConfigUpdated')
-      ipcMain.emit('updateTrayMenu')
-      await updateTrayIcon()
+      broadcastEvent('controledMihomoConfigUpdated')
+      broadcastEvent('appConfigUpdated')
     }
   } catch {
     // ignore

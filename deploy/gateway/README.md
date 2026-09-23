@@ -7,8 +7,9 @@
 LAN 浏览器 ──:3999──►│ party 容器（Clash Party headless Web 模式）      │
                     │  ├─ 完整 React 界面（订阅/覆写/主题）            │
                     │  └─ 自带 mihomo 内核（sidecar 子进程）            │
-                    │      ├─ :7890 混合代理口 HTTP+SOCKS5（发布到宿主机）│
-                    │      └─ :9090 控制器（仅 compose 内网，不发布）   │
+                    │      ├─ :7890 混合代理口 HTTP+SOCKS5（直绑宿主机）│
+                    │      ├─ 自定义线路口（Web UI 添加,即写即生效）    │
+                    │      └─ :9090 控制器（仅 127.0.0.1，不对 LAN）  │
                     └───────────────┬────────────────────────────────┘
                                     │ 反代 panel/REST/WS
 LAN 客户端 ───:8080──►┌──────────────▼────────────────┐
@@ -32,7 +33,7 @@ LAN 设备 ────:7890───► party 的 mihomo 内核（HTTP + SOCKS5
 
 1. 一台内网机器（或 VPS），已安装 Docker 和 Docker Compose v2，项目源码完整在本机。
 2. 该机器有客户端可达的固定 IP（如 `192.168.1.100`）。
-3. 防火墙放行 TCP 端口：`8080`（网关/面板）、`3999`（Web UI）、`7890`（代理）、`17890+17891+8888+8889`（国家线路口，按需）。
+3. 防火墙放行 TCP 端口：`8080`（网关/面板）、`3999`（Web UI）、`7890`（代理）、以及你在 Web UI 添加的自定义线路组端口（host 网络模式直接绑宿主机，按需放行）。
 4. **磁盘 ≥ 8GB 可用空间**（party 镜像约 2.9GB，构建缓存峰值较大；不足时先 `docker builder prune -af`）。
 
 > 注意：本改造版已放宽客户端校验（允许 http 与内网 host），并移除了传输加密、SSRF 防护与设备签名。仅适合可信内网自用，不要分发到不可信网络。
@@ -79,7 +80,7 @@ NPM_REGISTRY=https://registry.npmjs.org ./deploy.sh  # 覆盖默认 npm 镜像�
 | 控制面板（zashboard）    | `http://<IP>:8080/`（首次输入 `PANEL_TOKEN` 验证，之后自动配置后端）                                                            |
 | 网关发现文件             | `curl http://<IP>:8080/.well-known/cpx-gateway`                                                                                 |
 | LAN 代理（设备手动配置） | `http://<IP>:7890`（HTTP+SOCKS5 混合口）                                                                                        |
-| 国家专线（可选）         | `:17890` AU 通用 / `:17891` AU 全局 / `:8888` JP 通用 / `:8889` JP 全局（先在 Web UI 加订阅，再用 `mihomo-lines` skill 写覆写） |
+| 国家专线（可选）         | `:17890` AU 通用 / `:17891` AU 全局 / `:8888` JP 通用 / `:8889` JP 全局（host 网络模式直接绑宿主机；先在 Web UI 加订阅，再用 `mihomo-lines` 写覆写） |
 
 忘记 token 时：`grep CP_WEB_TOKEN .env` 或 `docker compose logs party | grep 'Web UI'`。
 
@@ -104,7 +105,7 @@ node lines.mjs verify                                        # 全线路出口�
 node lines.mjs remove AU                                     # 撤销
 ```
 
-覆写按节点名正则**实时匹配**，机场节点名漂移会自动跟随；两个入口组共用 自动/故障/手动 三个子组。前提是 Web UI 已添加订阅且其中有对应地区节点。端口映射（门）在 `docker-compose.yml`(17890) 与 `docker-compose.override.yml`(17891/8888/8889)。
+覆写按节点名正则**实时匹配**，机场节点名漂移会自动跟随；两个入口组共用 自动/故障/手动 三个子组。前提是 Web UI 已添加订阅且其中有对应地区节点。compose 已是 `network_mode: host`：线路口直接绑宿主机，无需任何端口映射（旧部署的 override `ports` 段需删除）。
 
 局域网设备使用代理（在设备侧配置，非服务器侧）：
 

@@ -17,7 +17,7 @@ import dayjs from '@renderer/utils/dayjs'
 import React, { Key, useMemo, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { openFile, updatePluginProfile } from '@renderer/utils/ipc'
+import { updatePluginProfile } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useTranslation } from 'react-i18next'
 import BaseConfirmModal from '../base/base-confirm-modal'
@@ -113,13 +113,6 @@ const ProfileItem: React.FC<Props> = (props) => {
         className: ''
       } as MenuItem,
       {
-        key: 'open-file',
-        label: t('profiles.openFile'),
-        showDivider: true,
-        color: 'default',
-        className: ''
-      } as MenuItem,
-      {
         key: 'delete',
         label: t('common.delete'),
         showDivider: false,
@@ -164,10 +157,6 @@ const ProfileItem: React.FC<Props> = (props) => {
       }
       case 'edit-tunnels': {
         setOpenTunnelsEditor(true)
-        break
-      }
-      case 'open-file': {
-        openFile('profile', info.id)
         break
       }
       case 'delete': {

@@ -25,16 +25,13 @@ import ConnCard from '@renderer/components/sider/conn-card'
 import LogCard from '@renderer/components/sider/log-card'
 import MihomoCoreCard from '@renderer/components/sider/mihomo-core-card'
 import ResourceCard from '@renderer/components/sider/resource-card'
-import UpdaterButton from '@renderer/components/updater/updater-button'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
-import { applyTheme, setNativeTheme, setTitleBarOverlay } from '@renderer/utils/ipc'
-import { platform } from '@renderer/utils/init'
-import { TitleBarOverlayOptions } from 'electron'
+import { applyTheme, setNativeTheme } from '@renderer/utils/ipc'
 import NetworkCard from '@renderer/components/sider/network-card'
 import UsageCard from '@renderer/components/sider/usage-card'
+import FileShareCard from '@renderer/components/sider/file-share-card'
 import { useTrafficLogger } from '@renderer/hooks/use-traffic-logger'
 import { createTourDriver, getDriver, startTourIfNeeded } from '@renderer/utils/tour'
-import { hasPendingPluginFile, subscribePluginFile } from '@renderer/utils/plugin-file-open'
 import 'driver.js/dist/driver.css'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_ENABLE_TRAFFIC_LOGGER, DEFAULT_SIDER_ORDER } from '../../shared/appConfig'
@@ -42,21 +39,6 @@ import MihomoIcon from './components/base/mihomo-icon'
 import { SIDER_CARD_ROUTES, getSiderCardByPath, mergeSiderOrder } from './utils/sider'
 
 export { getDriver }
-
-const FirstContentReady: React.FC = () => {
-  const { appConfig } = useAppConfig()
-  const location = useLocation()
-  const sent = useRef(false)
-
-  useEffect(() => {
-    const ready = Boolean(appConfig) && location.pathname !== '/'
-    if (!ready || sent.current) return
-    sent.current = true
-    window.electron.ipcRenderer.send('rendererFirstContentReady')
-  }, [appConfig, location.pathname])
-
-  return null
-}
 
 const App: React.FC = () => {
   const { t } = useTranslation()
@@ -66,7 +48,6 @@ const App: React.FC = () => {
     enableTrafficLogger = DEFAULT_ENABLE_TRAFFIC_LOGGER,
     appTheme = 'system',
     customTheme,
-    useWindowFrame = false,
     siderWidth = 250,
     siderOrder = DEFAULT_SIDER_ORDER,
     lastSelectedSiderCard = 'proxy',
@@ -74,7 +55,7 @@ const App: React.FC = () => {
     lockSiderCards = false
   } = appConfig || {}
   useTrafficLogger(enableTrafficLogger)
-  const narrowWidth = platform === 'darwin' ? 70 : 60
+  const narrowWidth = 60
   const [order, setOrder] = useState<SiderCardKey[]>(mergeSiderOrder(siderOrder))
   const [siderWidthValue, setSiderWidthValue] = useState(siderWidth)
   const siderWidthValueRef = useRef(siderWidthValue)
@@ -86,28 +67,6 @@ const App: React.FC = () => {
   const navigate: NavigateFunction = useNavigate()
   const location = useLocation()
   const page = useRoutes(routes)
-
-  useEffect(() => {
-    const openPluginImport = (): void => {
-      navigate('/profiles')
-    }
-    const unsubscribe = subscribePluginFile(openPluginImport)
-    if (hasPendingPluginFile()) openPluginImport()
-    return unsubscribe
-  }, [navigate])
-
-  const setTitlebar = useCallback((): void => {
-    if (!useWindowFrame && platform !== 'darwin') {
-      const options = { height: 47 } as TitleBarOverlayOptions
-      try {
-        options.color = window.getComputedStyle(document.documentElement).backgroundColor
-        options.symbolColor = window.getComputedStyle(document.documentElement).color
-        setTitleBarOverlay(options)
-      } catch {
-        // ignore
-      }
-    }
-  }, [useWindowFrame])
 
   useEffect(() => {
     setOrder(mergeSiderOrder(siderOrder))
@@ -151,14 +110,11 @@ const App: React.FC = () => {
   useEffect(() => {
     setNativeTheme(appTheme)
     setTheme(appTheme)
-    setTitlebar()
-  }, [appTheme, systemTheme, setTheme, setTitlebar])
+  }, [appTheme, systemTheme, setTheme])
 
   useEffect(() => {
-    applyTheme(customTheme || 'default.css').then(() => {
-      setTitlebar()
-    })
-  }, [customTheme, setTitlebar])
+    applyTheme(customTheme || 'default.css')
+  }, [customTheme])
 
   useEffect(() => {
     window.addEventListener('mouseup', onResizeEnd)
@@ -208,7 +164,8 @@ const App: React.FC = () => {
     resource: ResourceCard,
     override: OverrideCard,
     network: NetworkCard,
-    usage: UsageCard
+    usage: UsageCard,
+    fileShare: FileShareCard
   }
 
   return (
@@ -230,7 +187,7 @@ const App: React.FC = () => {
       {siderWidthValue === narrowWidth ? (
         <div style={{ width: `${narrowWidth}px` }} className="side h-full flex flex-col">
           <div className="app-drag flex shrink-0 justify-center items-center z-40 bg-transparent h-11.25">
-            {platform !== 'darwin' && <MihomoIcon className="h-8 leading-8 text-lg mx-px" />}
+            <MihomoIcon className="h-8 leading-8 text-lg mx-px" />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
             <div className="min-h-full w-full flex flex-col gap-2">
@@ -241,7 +198,6 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="px-2 pt-2 pb-4 flex shrink-0 flex-col items-center space-y-2">
-            <UpdaterButton iconOnly={true} />
             <Button
               size="sm"
               className="app-nodrag"
@@ -262,14 +218,11 @@ const App: React.FC = () => {
           className="side h-full overflow-y-auto no-scrollbar"
         >
           <div className="app-drag sticky top-0 z-40 backdrop-blur bg-transparent h-12.25">
-            <div
-              className={`flex justify-between p-2 ${!useWindowFrame && platform === 'darwin' ? 'ml-15' : ''}`}
-            >
+            <div className="flex justify-between p-2">
               <div className="flex ml-1">
                 <MihomoIcon className="h-8 leading-8 text-lg mx-px" />
                 <h3 className="text-lg font-bold leading-8">Clash Party</h3>
               </div>
-              <UpdaterButton />
               <Button
                 size="sm"
                 className="app-nodrag"
@@ -325,7 +278,6 @@ const App: React.FC = () => {
       >
         <Suspense fallback={<div className="h-full w-full bg-content1" />}>
           {page}
-          <FirstContentReady />
         </Suspense>
       </div>
     </div>

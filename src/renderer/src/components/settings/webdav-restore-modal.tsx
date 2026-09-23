@@ -1,6 +1,6 @@
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from '@heroui/react'
 import { toast } from '@renderer/components/base/toast'
-import { relaunchApp, webdavDelete, webdavRestore } from '@renderer/utils/ipc'
+import { webdavDelete, webdavRestore } from '@renderer/utils/ipc'
 import React, { useState } from 'react'
 import { MdDeleteForever } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
@@ -45,7 +45,8 @@ const WebdavRestoreModal: React.FC<Props> = (props) => {
                       setRestoring(true)
                       try {
                         await webdavRestore(filename)
-                        await relaunchApp()
+                        // relaunchApp 通道已随桌面壳移除，web 端重载页面以应用恢复的配置
+                        window.location.reload()
                       } catch (e) {
                         toast.error(t('common.error.restoreFailed', { error: e }))
                       } finally {

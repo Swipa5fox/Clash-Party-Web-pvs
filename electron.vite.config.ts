@@ -26,24 +26,10 @@ export default defineConfig({
       ? { rollupOptions: { external: legacyExternal, output: { format: 'cjs' } } }
       : undefined
   },
-  preload: {
-    plugins: isLegacyBuild ? [] : [externalizeDepsPlugin()],
-    build: {
-      rollupOptions: {
-        external: isLegacyBuild ? legacyExternal : undefined,
-        output: {
-          format: 'cjs',
-          entryFileNames: '[name].cjs'
-        }
-      }
-    }
-  },
   renderer: {
     build: {
       rollupOptions: {
         input: {
-          index: resolve('src/renderer/index.html'),
-          floating: resolve('src/renderer/floating.html'),
           web: resolve('src/renderer/web.html')
         }
       }

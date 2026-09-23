@@ -3,10 +3,7 @@ import axios, { AxiosInstance } from 'axios'
 import WebSocket from 'ws'
 import { app } from 'electron'
 import { getAppConfig, getControledMihomoConfig } from '../config'
-import { mainWindow } from '../window'
-import { tray } from '../resolve/tray'
-import { calcTraffic } from '../utils/calc'
-import { floatingWindow } from '../resolve/floatingWindow'
+import { broadcastEvent } from '../resolve/broadcaster'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
 import { generateProfile, getRuntimeConfig } from './factory'
@@ -298,26 +295,44 @@ export const mihomoGroups = async (includeHidden = false): Promise<IMihomoMixedG
   const { mode = 'rule' } = await getControledMihomoConfig()
   if (mode === 'direct') return []
   const [proxies, runtime] = await Promise.all([mihomoProxies(), getRuntimeConfig()])
-  const rawGroups: { group: IMihomoGroup; providers: string[] }[] = []
+  // 「引用即收纳」: 被其他组引用为成员的组(订阅自带的 自动选择/故障转移、自定义组的
+  // 组名·自动/故障/手动/全局 等)不再顶层平铺 —— 它们的完整数据已递归内嵌在父组 all 中,
+  // 通过父组容器内的子面板即可操作,平铺只会造成重复混乱。
+  // GLOBAL 的 all 引用一切组,不作为引用来源参与判定(否则入口组也会被它"引用"而隐藏);
+  // GLOBAL 本身仅在 global 模式作为顶层组展示(rule 模式下无操作意义)。
+  const referencedNames = new Set<string>()
+  Object.values(proxies.proxies).forEach((p) => {
+    if (!isMihomoGroup(p) || p.name === 'GLOBAL') return
+    ;(p.all || []).forEach((n) => referencedNames.add(n))
+  })
+  const isNested = (name: string): boolean =>
+    referencedNames.has(name) || name === 'GLOBAL'
 
+  // 候选组(按 runtime 配置顺序): 收集全部组,含被收纳组
+  const candidates: { group: IMihomoGroup; providers: string[] }[] = []
   runtime?.['proxy-groups']?.forEach((group: { name: string; url?: string; use?: string[] }) => {
     const proxy = proxies.proxies[group.name]
     if (isMihomoGroup(proxy) && (includeHidden || !proxy.hidden)) {
-      rawGroups.push({ group: { ...proxy, testUrl: group.url }, providers: group.use || [] })
+      candidates.push({ group: { ...proxy, testUrl: group.url }, providers: group.use || [] })
     }
   })
+  // 顶层只保留「根组」: 未被其他组引用且非 GLOBAL(rule 模式下 GLOBAL 无操作意义);
+  // includeHidden(显示隐藏分组)时平铺全部,作为逃生舱
+  const roots = candidates.filter(({ group }) => includeHidden || !isNested(group.name))
+  // 兜底: 互引成环的异常配置会把所有组都判为"被引用"导致列表全空,此时退回平铺
+  const sourceGroups = roots.length > 0 ? roots : candidates
 
-  if (!rawGroups.find(({ group }) => group.name === 'GLOBAL')) {
+  if (mode === 'global' && !sourceGroups.find(({ group }) => group.name === 'GLOBAL')) {
     const global = proxies.proxies['GLOBAL']
-    if (isMihomoGroup(global) && (includeHidden || !global.hidden)) {
-      rawGroups.push({ group: global, providers: [] })
+    if (isMihomoGroup(global)) {
+      sourceGroups.push({ group: global, providers: [] })
     }
   }
 
   const missingProxyNames = new Set<string>()
   const providerNames = new Set<string>()
   let fallbackToAllProviders = false
-  rawGroups.forEach(({ group, providers }) => {
+  sourceGroups.forEach(({ group, providers }) => {
     const proxyNames = group.all || []
     proxyNames.forEach((name) => {
       if (!proxies.proxies[name]) {
@@ -354,7 +369,7 @@ export const mihomoGroups = async (includeHidden = false): Promise<IMihomoMixedG
       )
 
   const groups: IMihomoMixedGroup[] = []
-  rawGroups.forEach(({ group }) => {
+  sourceGroups.forEach(({ group }) => {
     groups.push({ ...group, all: resolveMembers(group.all, 3) })
   })
 
@@ -436,11 +451,6 @@ export const mihomoUpgrade = async (): Promise<void> => {
   return await instance.post('/upgrade', undefined, { timeout: 90000 })
 }
 
-export const mihomoUpgradeUI = async (): Promise<void> => {
-  const instance = await getAxios()
-  return await instance.post('/upgrade/ui')
-}
-
 export const mihomoHotReloadConfig = async (): Promise<void> => {
   mihomoApiLogger.info('mihomoHotReloadConfig called')
   if (!hasCoreProcess()) {
@@ -514,16 +524,7 @@ const mihomoTraffic = async (): Promise<void> => {
       // JSON.parse 必须放在 try 内：内核发来非 JSON 帧时，旧实现会在 async 回调里
       // 抛出并变成未捕获的 Promise rejection（其余三条流都已在 try 内解析）。
       const json = JSON.parse(data) as IMihomoTrafficInfo
-      mainWindow?.webContents.send('mihomoTraffic', json)
-      if (process.platform !== 'linux') {
-        tray?.setToolTip(
-          '↑' +
-            `${calcTraffic(json.up)}/s`.padStart(9) +
-            '\n↓' +
-            `${calcTraffic(json.down)}/s`.padStart(9)
-        )
-      }
-      floatingWindow?.webContents.send('mihomoTraffic', json)
+      broadcastEvent('mihomoTraffic', json)
     } catch {
       // ignore
     }
@@ -563,7 +564,7 @@ const mihomoMemory = async (): Promise<void> => {
     const data = e.data as string
     memoryStream.retry = MAX_RETRY
     try {
-      mainWindow?.webContents.send('mihomoMemory', JSON.parse(data) as IMihomoMemoryInfo)
+      broadcastEvent('mihomoMemory', JSON.parse(data) as IMihomoMemoryInfo)
     } catch {
       // ignore
     }
@@ -604,7 +605,7 @@ const mihomoLogs = async (): Promise<void> => {
     const data = e.data as string
     logsStream.retry = MAX_RETRY
     try {
-      mainWindow?.webContents.send('mihomoLogs', JSON.parse(data) as IMihomoLogInfo)
+      broadcastEvent('mihomoLogs', JSON.parse(data) as IMihomoLogInfo)
     } catch {
       // ignore
     }
@@ -643,7 +644,7 @@ const mihomoConnections = async (): Promise<void> => {
     const data = e.data as string
     connectionsStream.retry = MAX_RETRY
     try {
-      mainWindow?.webContents.send('mihomoConnections', JSON.parse(data) as IMihomoConnectionsInfo)
+      broadcastEvent('mihomoConnections', JSON.parse(data) as IMihomoConnectionsInfo)
     } catch {
       // ignore
     }
@@ -660,34 +661,4 @@ const mihomoConnections = async (): Promise<void> => {
   }
 }
 
-export async function SysProxyStatus(): Promise<boolean> {
-  const appConfig = await getAppConfig()
-  // 配置缺失/损坏时 sysProxy 可能为 undefined，直接取 .enable 会抛错并连带
-  // 把托盘图标状态刷新整条链路打断（TunStatus 已经是可选链写法）。
-  return appConfig?.sysProxy?.enable === true
-}
 
-export const TunStatus = async (): Promise<boolean> => {
-  const config = await getControledMihomoConfig()
-  return config?.tun?.enable === true
-}
-
-export function calculateTrayIconStatus(
-  sysProxyEnabled: boolean,
-  tunEnabled: boolean
-): 'white' | 'blue' | 'green' | 'red' {
-  if (sysProxyEnabled && tunEnabled) {
-    return 'red' // 系统代理 + TUN 同时启用（警告状态）
-  } else if (sysProxyEnabled) {
-    return 'blue' // 仅系统代理启用
-  } else if (tunEnabled) {
-    return 'green' // 仅 TUN 启用
-  } else {
-    return 'white' // 全关
-  }
-}
-
-export async function getTrayIconStatus(): Promise<'white' | 'blue' | 'green' | 'red'> {
-  const [sysProxyEnabled, tunEnabled] = await Promise.all([SysProxyStatus(), TunStatus()])
-  return calculateTrayIconStatus(sysProxyEnabled, tunEnabled)
-}

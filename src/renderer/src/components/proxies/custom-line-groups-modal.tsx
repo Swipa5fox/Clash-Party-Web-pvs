@@ -47,7 +47,9 @@ const newDraft = (): Draft => ({
   interval: 300,
   auto: true,
   fallback: true,
-  manual: true
+  manual: true,
+  global: true,
+  enabled: true
 })
 
 // 代理名列表弹窗: 多选
@@ -236,17 +238,21 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
       return
     }
     const ok = await onSave(
-      drafts.map(({ id, name, port, proxies, testUrl, interval, auto, fallback, manual }) => ({
-        id,
-        name: name.trim(),
-        port,
-        proxies,
-        testUrl: testUrl || DEFAULT_TEST_URL,
-        interval,
-        auto,
-        fallback,
-        manual
-      }))
+      drafts.map(
+        ({ id, name, port, proxies, testUrl, interval, auto, fallback, manual, global, enabled }) => ({
+          id,
+          name: name.trim(),
+          port,
+          proxies,
+          testUrl: testUrl || DEFAULT_TEST_URL,
+          interval,
+          auto,
+          fallback,
+          manual,
+          global,
+          enabled
+        })
+      )
     )
     setSaving(false)
     if (ok) onClose()
@@ -348,7 +354,8 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
                     [
                       ['auto', t('customLines.auto')],
                       ['fallback', t('customLines.fallback')],
-                      ['manual', t('customLines.manual')]
+                      ['manual', t('customLines.manual')],
+                      ['global', t('customLines.global')]
                     ] as [keyof Draft, string][]
                   ).map(([key, label]) => (
                     <Tooltip
@@ -366,7 +373,7 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
                     </Tooltip>
                   ))}
                 </div>
-                {d.auto === false && d.fallback === false && d.manual === false && (
+                {d.auto === false && d.fallback === false && d.manual === false && d.global === false && (
                   <div className="text-warning text-xs">{t('customLines.noSubGroup')}</div>
                 )}
                 <Divider />

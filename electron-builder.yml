@@ -1,11 +1,11 @@
 appId: party.mihomo.app
 productName: Clash Party
 directories:
-  buildResources: build
+  buildResources: deploy/build
 files:
   - '!**/.vscode/*'
   - '!src/*'
-  - '!aur/*'
+  - '!deploy/aur/*'
   - '!images/*'
   - '!scripts/*'
   - '!extra/*'
@@ -47,9 +47,9 @@ mac:
   target:
     - pkg
   extraResources:
-    - from: './build/pkg-scripts/party.mihomo.helper.plist'
+    - from: './deploy/build/pkg-scripts/party.mihomo.helper.plist'
       to: 'files/party.mihomo.helper.plist'
-  entitlementsInherit: build/entitlements.mac.plist
+  entitlementsInherit: deploy/build/entitlements.mac.plist
   hardenedRuntime: true
   gatekeeperAssess: false
   extendInfo:
@@ -65,10 +65,10 @@ pkg:
   isRelocatable: false
   background:
     alignment: bottomleft
-    file: build/background.png
+    file: deploy/build/background.png
 linux:
   executableName: mihomo-party
-  icon: build/icon.png
+  icon: deploy/build/icon.png
   desktop:
     entry:
       Name: Clash Party
@@ -86,22 +86,22 @@ linux:
   category: Utility
   artifactName: clash-party-linux-${version}-${arch}.${ext}
 deb:
-  afterInstall: 'build/linux/postinst'
-  afterRemove: 'build/linux/postuninst'
+  afterInstall: 'deploy/build/linux/postinst'
+  afterRemove: 'deploy/build/linux/postuninst'
   fpm:
     - --depends
     - wl-clipboard
 rpm:
-  afterInstall: 'build/linux/postinst'
-  afterRemove: 'build/linux/postuninst'
+  afterInstall: 'deploy/build/linux/postinst'
+  afterRemove: 'deploy/build/linux/postuninst'
   fpm:
     - --depends
     - wl-clipboard
     - '--rpm-rpmbuild-define'
     - '_build_id_links none'
 pacman:
-  afterInstall: 'build/linux/postinst'
-  afterRemove: 'build/linux/postuninst'
+  afterInstall: 'deploy/build/linux/postinst'
+  afterRemove: 'deploy/build/linux/postuninst'
   fpm:
     - --pacman-compression
     - zstd

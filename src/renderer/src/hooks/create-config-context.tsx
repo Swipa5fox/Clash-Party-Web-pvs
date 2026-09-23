@@ -47,7 +47,6 @@ export function createConfigContext<T>(options: CreateConfigContextOptions<T>) {
 
 interface ActionOptions {
   errorKey: string
-  updateTray?: boolean
 }
 
 export function useConfigAction<T>(
@@ -64,9 +63,6 @@ export function useConfigAction<T>(
       await showError(e, t(options.errorKey))
     } finally {
       mutate()
-      if (options.updateTray) {
-        window.electron.ipcRenderer.send('updateTrayMenu')
-      }
     }
-  }, [mutate, action, t, options.errorKey, options.updateTray])
+  }, [mutate, action, t, options.errorKey])
 }

@@ -16,6 +16,7 @@ import { mihomoCloseAllConnections, mihomoHotReloadConfig } from '../core/mihomo
 import { checkProfileConfig, restartCore } from '../core/manager'
 import { generateProfile } from '../core/factory'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
+import { broadcastEvent } from '../resolve/broadcaster'
 import {
   mihomoCorePath,
   mihomoProfileWorkDir,
@@ -247,12 +248,11 @@ export async function removeProfileItem(id: string): Promise<void> {
     const { removePluginItem } = await import('./plugin')
     const { removeVault } = await import('../resolve/plugin/vault')
     const { revokePluginDevice } = await import('../resolve/plugin')
-    const { mainWindow } = await import('../window')
     // best-effort 通知服务端解绑设备（需 vault，故在 removeVault 之前）；失败不阻塞删除
     await revokePluginDevice(removedItem.pluginId)
     await removePluginItem(removedItem.pluginId)
     await removeVault(removedItem.pluginId)
-    mainWindow?.webContents.send('pluginConfigUpdated')
+    broadcastEvent('pluginConfigUpdated')
   }
 }
 

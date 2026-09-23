@@ -1,3 +1,4 @@
+import { mkdtempSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -10,8 +11,9 @@ import {
   type WebBridgeHandle
 } from './webBridge'
 
-const TOKEN = 'test-token'
-const AUTH_TIMEOUT_MS = 150
+// web-auth.json 必须落在临时目录，避免读写真实 dataDir / 依赖用户已改过的凭据
+const { mockDataDir } = vi.hoisted(() => ({ mockDataDir: { value: '' } }))
+vi.mock('../utils/dirs', () => ({ dataDir: () => mockDataDir.value }))
 
 interface BridgeMessage {
   type: string
@@ -28,8 +30,14 @@ interface BridgeMessage {
 let handle: WebBridgeHandle
 let onSend: ReturnType<typeof vi.fn>
 let wsUrl: string
+let httpOrigin: string
+let staticRoot: string
+let sessionCookie: string
 
 beforeAll(async () => {
+  mockDataDir.value = mkdtempSync(join(tmpdir(), 'cp-web-auth-'))
+  staticRoot = mkdtempSync(join(tmpdir(), 'cp-web-static-'))
+  writeFileSync(join(staticRoot, 'web.html'), '<!DOCTYPE html><html><body>app</body></html>')
   onSend = vi.fn()
   const rpc = createRpcRouter(
     {
@@ -43,14 +51,13 @@ beforeAll(async () => {
   )
   handle = await startWebBridge({
     port: 0,
-    token: TOKEN,
     platform: 'test-platform',
     version: '1.2.3',
-    staticRoot: join(tmpdir(), 'clash-party-web-bridge-no-assets'),
-    authTimeoutMs: AUTH_TIMEOUT_MS,
+    staticRoot,
     rpc,
     onSend
   })
+  httpOrigin = `http://127.0.0.1:${handle.port}`
   wsUrl = `ws://127.0.0.1:${handle.port}/ws`
 })
 
@@ -58,8 +65,22 @@ afterAll(async () => {
   await handle.close()
 })
 
-function connect(url = wsUrl): WebSocket {
-  const ws = new WebSocket(url)
+// 登录（默认凭据 admin/admin123）并返回 Set-Cookie 中的会话串
+async function login(
+  username = 'admin',
+  password = 'admin123'
+): Promise<Response> {
+  return fetch(`${httpOrigin}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  })
+}
+
+function connect(url = wsUrl, cookie?: string): WebSocket {
+  const ws = cookie
+    ? new WebSocket(url, { headers: { cookie } })
+    : new WebSocket(url)
   ws.on('error', () => {})
   return ws
 }
@@ -80,20 +101,13 @@ function nextMessage(ws: WebSocket, timeoutMs = 2000): Promise<BridgeMessage> {
   })
 }
 
-function closed(ws: WebSocket, timeoutMs = 2000): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('timed out waiting for close')), timeoutMs)
-    ws.once('close', (code) => {
-      clearTimeout(timer)
-      resolve(code)
-    })
-  })
-}
-
 async function connectAuthed(): Promise<WebSocket> {
-  const ws = connect(`${wsUrl}?token=${TOKEN}`)
-  // attach the message listener before awaiting open: the hello ack for ?token= auth
-  // can arrive in the same tick as the open event
+  if (!sessionCookie) {
+    const res = await login()
+    expect(res.status).toBe(200)
+    sessionCookie = (res.headers.get('set-cookie') ?? '').split(';')[0]
+  }
+  const ws = connect(wsUrl, sessionCookie)
   const helloP = nextMessage(ws)
   await opened(ws)
   expect(await helloP).toEqual({
@@ -115,40 +129,59 @@ function invoke(
   return nextMessage(ws)
 }
 
-describe('webBridge auth', () => {
-  it('closes the connection when hello carries a wrong token', async () => {
-    const ws = connect()
-    await opened(ws)
-    const closeP = closed(ws)
-    ws.send(JSON.stringify({ type: 'hello', token: 'wrong-token' }))
-    expect(await closeP).toBe(4001)
+describe('web auth flow (cookie session)', () => {
+  it('redirects unauthenticated page requests to /login', async () => {
+    const res = await fetch(`${httpOrigin}/`, { redirect: 'manual' })
+    expect(res.status).toBe(302)
+    expect(res.headers.get('location')).toBe('/login')
   })
 
-  it('closes the connection when no hello arrives before authTimeoutMs', async () => {
-    const ws = connect()
-    await opened(ws)
-    expect(await closed(ws, AUTH_TIMEOUT_MS + 2000)).toBe(4001)
+  it('serves the login page without a session', async () => {
+    const res = await fetch(`${httpOrigin}/login`)
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('/api/login')
   })
 
-  it('closes the connection on a non-hello message before auth', async () => {
-    const ws = connect()
-    await opened(ws)
-    const closeP = closed(ws)
-    ws.send(JSON.stringify({ type: 'invoke', id: 1, channel: 'getAppConfig', args: [] }))
-    expect(await closeP).toBe(4001)
+  it('rejects a wrong password with 401', async () => {
+    const res = await login('admin', 'wrong-password')
+    expect(res.status).toBe(401)
+    expect(await res.json()).toMatchObject({ ok: false })
   })
 
-  it('replies hello on a correct token', async () => {
-    const ws = connect()
-    await opened(ws)
-    const helloP = nextMessage(ws)
-    ws.send(JSON.stringify({ type: 'hello', token: TOKEN }))
-    expect(await helloP).toEqual({
-      type: 'hello',
-      ok: true,
-      platform: 'test-platform',
-      version: '1.2.3'
+  it('logs in with default credentials and sets a session cookie', async () => {
+    const res = await login()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true })
+    const cookie = res.headers.get('set-cookie') ?? ''
+    expect(cookie).toContain('cp_session=')
+    expect(cookie).toContain('HttpOnly')
+  })
+
+  it('serves the app page with a valid session cookie', async () => {
+    if (!sessionCookie) {
+      const res0 = await login()
+      sessionCookie = (res0.headers.get('set-cookie') ?? '').split(';')[0]
+    }
+    const res = await fetch(`${httpOrigin}/`, {
+      redirect: 'manual',
+      headers: { cookie: sessionCookie }
     })
+    expect(res.status).toBe(200)
+    expect(await res.text()).toContain('app')
+  })
+
+  it('rejects a websocket upgrade without a session cookie', async () => {
+    const ws = connect()
+    const statusCode = await new Promise<number>((resolve) => {
+      ws.once('unexpected-response', (_req, res) => resolve(res.statusCode ?? 0))
+      ws.once('close', () => resolve(0))
+    })
+    expect(statusCode).toBe(401)
+    ws.close()
+  })
+
+  it('sends hello ack immediately on an authenticated websocket', async () => {
+    const ws = await connectAuthed()
     ws.close()
   })
 })
@@ -277,21 +310,10 @@ describe('serializeValue', () => {
 })
 
 describe('WEB_BLOCKED_CHANNELS', () => {
-  it('covers the dangerous channels from the spec', () => {
-    for (const channel of [
-      'restartAsAdmin',
-      'quitApp',
-      'relaunchApp',
-      'quitWithoutCore',
-      'resetAppConfig',
-      'showTunPermissionDialog',
-      'showErrorDialog',
-      'readTextFile',
-      'openFile',
-      'exportGistAgeSecretKey'
-    ]) {
-      expect(WEB_BLOCKED_CHANNELS).toContain(channel)
-    }
+  it('stays empty now that desktop-only handlers are removed', () => {
+    // 历史上收录的 13 条危险通道已随桌面专属 handler 删除；若未来重新注册
+    // 危险通道，应同步登记到屏蔽表并恢复此处断言。
+    expect(WEB_BLOCKED_CHANNELS).toEqual([])
   })
 
   it('contains no duplicates', () => {
@@ -355,18 +377,18 @@ describe('createRpcRouter blocked channels', () => {
 describe('webBridge blocked channels wiring', () => {
   let blockedHandle: WebBridgeHandle
   let blockedWsUrl: string
+  let blockedHttpOrigin: string
 
   beforeAll(async () => {
     blockedHandle = await startWebBridge({
       port: 0,
-      token: TOKEN,
       platform: 'test-platform',
       version: '1.2.3',
       staticRoot: join(tmpdir(), 'clash-party-web-bridge-blocked-no-assets'),
-      authTimeoutMs: AUTH_TIMEOUT_MS,
       blockedChannels: ['quitApp']
     })
     blockedWsUrl = `ws://127.0.0.1:${blockedHandle.port}/ws`
+    blockedHttpOrigin = `http://127.0.0.1:${blockedHandle.port}`
   })
 
   afterAll(async () => {
@@ -374,7 +396,13 @@ describe('webBridge blocked channels wiring', () => {
   })
 
   async function connectAuthedBlocked(): Promise<WebSocket> {
-    const ws = connect(`${blockedWsUrl}?token=${TOKEN}`)
+    const res = await fetch(`${blockedHttpOrigin}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: 'admin123' })
+    })
+    const cookie = (res.headers.get('set-cookie') ?? '').split(';')[0]
+    const ws = connect(blockedWsUrl, cookie)
     const helloP = nextMessage(ws)
     await opened(ws)
     await helloP

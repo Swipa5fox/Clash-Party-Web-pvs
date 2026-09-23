@@ -3,10 +3,8 @@
   "include": [
     "src/renderer/**/*",
     "src/shared/**/*",
-    "src/renderer/src/utils/env.d.ts",
     "src/renderer/src/**/*",
-    "src/renderer/src/**/*.tsx",
-    "src/preload/*.d.ts"
+    "src/renderer/src/**/*.tsx"
   ],
   "exclude": ["**/*.test.ts", "node_modules"],
   "compilerOptions": {

@@ -4,6 +4,15 @@ import net from 'net'
 import path from 'path'
 import express from 'express'
 import { WebSocket, WebSocketServer } from 'ws'
+import {
+  LOGIN_PAGE_HTML,
+  WEB_AUTH_COOKIE,
+  createSessionId,
+  ensureWebAuthConfig,
+  isValidSession,
+  parseSidFromCookie,
+  verifyWebLogin
+} from './webAuth'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AsyncFn = (...args: any[]) => Promise<any>
@@ -16,43 +25,20 @@ export type RpcFn = (channel: string, args: unknown[]) => Promise<RpcResult>
 export interface WebBridgeOptions {
   port?: number
   host?: string
-  token: string
   platform: string
   version: string
   staticRoot: string
   devServerUrl?: string
-  authTimeoutMs?: number
   rpc?: RpcFn
   blockedChannels?: readonly string[]
   onSend?: (channel: string, args: unknown[]) => void
 }
 
-// web 模式下拒绝的危险 channel：可杀死主进程 / 触发宿主模态弹窗（阻塞桥连接）/
-// 宿主 GUI 专属能力 / 路径暴露。GUI 模式的 ipcMain 注册不受影响。
-export const WEB_BLOCKED_CHANNELS: readonly string[] = [
-  'restartAsAdmin',
-  'requestTunPermissions',
-  'showTunPermissionDialog',
-  'showErrorDialog',
-  'grantTunPermissions',
-  'manualGrantCorePermition',
-  'quitWithoutCore',
-  'relaunchApp',
-  'quitApp',
-  'resetAppConfig',
-  'downloadAndInstallUpdate',
-  'getFilePath',
-  'readTextFile',
-  'openFile',
-  'openUWPTool',
-  'showTrayIcon',
-  'showFloatingWindow',
-  'showContextMenu',
-  'startMonitor',
-  'registerShortcut',
-  'readImageFileDataURL',
-  'exportGistAgeSecretKey'
-]
+// web 模式下拒绝的危险 channel：可杀死/重启主进程 / 触发宿主模态弹窗（阻塞桥连接）/
+// 路径暴露 / 私钥导出。历史收录的 13 条通道已随桌面专属 handler 一并删除
+// （唯一运行模式即 web，被屏蔽的 handler 永不可达），现表为空；机制保留以备
+// 未来注册新的危险通道时直接登记。
+export const WEB_BLOCKED_CHANNELS: readonly string[] = []
 
 export interface WebBridgeHandle {
   broadcast(channel: string, payload?: unknown): void
@@ -185,7 +171,6 @@ function createDevProxy(devServerUrl: string): {
 export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeHandle> {
   const port = opts.port ?? (Number(process.env.CP_WEB_PORT) || 3999)
   const host = opts.host ?? process.env.CP_WEB_HOST ?? '127.0.0.1'
-  const authTimeoutMs = opts.authTimeoutMs ?? 5000
   const blockedInWeb = new Set(opts.blockedChannels ?? [])
   const rpc: RpcFn =
     opts.rpc ??
@@ -195,6 +180,8 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
       }
       return { ok: false, error: `unknown channel: ${channel}` }
     })
+  // 确保登录凭据已初始化（首次启动生成默认 admin/admin123 并落盘）
+  await ensureWebAuthConfig()
   const webHtmlPath = path.join(opts.staticRoot, 'web.html')
   const devProxy = opts.devServerUrl ? createDevProxy(opts.devServerUrl) : undefined
 
@@ -215,6 +202,45 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
   }
 
   const app = express()
+
+  // ---- 登录端点（公开路径） ----
+  app.get('/login', (_req, res) => {
+    res.type('html').send(LOGIN_PAGE_HTML)
+  })
+
+  app.post('/api/login', express.json(), async (req, res) => {
+    const { username, password } = (req.body ?? {}) as { username?: unknown; password?: unknown }
+    if (typeof username !== 'string' || typeof password !== 'string') {
+      res.status(400).json({ ok: false, message: '参数缺失' })
+      return
+    }
+    const clientIp = req.socket.remoteAddress ?? 'unknown'
+    const result = await verifyWebLogin(username, password, clientIp)
+    if (!result.ok) {
+      const message = result.lockedSeconds
+        ? `失败次数过多，已锁定，请 ${result.lockedSeconds} 秒后重试`
+        : '账号或密码错误'
+      res.status(401).json({ ok: false, message })
+      return
+    }
+    const sid = createSessionId()
+    // Max-Age 与 SESSION_TTL_MS 一致（7 天 = 604800 秒）
+    res.setHeader(
+      'Set-Cookie',
+      `${WEB_AUTH_COOKIE}=${sid}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800`
+    )
+    res.json({ ok: true })
+  })
+
+  // ---- 会话保护：除登录端点外的所有页面/静态/dev 代理均需有效 Cookie ----
+  app.use((req, res, next) => {
+    const sid = parseSidFromCookie(req.headers.cookie)
+    if (isValidSession(sid)) {
+      next()
+      return
+    }
+    res.redirect(302, '/login')
+  })
 
   app.get('/', (req, res, next) => {
     if (devProxy) {
@@ -258,10 +284,18 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
 
   server.on('upgrade', (req, socket, head) => {
     if ((req.url ?? '').split('?')[0] === '/ws') {
+      // WS 与 HTTP 同源鉴权：upgrade 阶段校验 Cookie 会话，无效回 401
+      const sid = parseSidFromCookie(req.headers.cookie)
+      if (!isValidSession(sid)) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+        socket.destroy()
+        return
+      }
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req))
       return
     }
     if (devProxy) {
+      // Vite HMR 等 dev 连接不鉴权（仅本机开发源码，无敏感面）
       devProxy.upgrade(req, socket as net.Socket, head)
       return
     }
@@ -283,31 +317,11 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
     }
   }
 
-  wss.on('connection', (ws: WebSocket, req: http.IncomingMessage) => {
+  wss.on('connection', (ws: WebSocket) => {
     sockets.add(ws)
-    let authed = false
-    let authTimer: NodeJS.Timeout | undefined
-
-    const rejectAuth = (): void => {
-      ws.close(4001, 'unauthorized')
-    }
-
-    try {
-      const url = new URL(req.url ?? '/', 'http://localhost')
-      if (url.searchParams.get('token') === opts.token) {
-        authed = true
-        authedClients.add(ws)
-        sendJson(ws, helloAck)
-      }
-    } catch {
-      // malformed request URL: stay unauthenticated
-    }
-
-    if (!authed) {
-      authTimer = setTimeout(() => {
-        if (!authed) rejectAuth()
-      }, authTimeoutMs)
-    }
+    // 会话已在 upgrade 阶段验证，连接即认证，立即下发 hello ack
+    authedClients.add(ws)
+    sendJson(ws, helloAck)
 
     ws.on('message', (raw) => {
       let msg: unknown
@@ -318,23 +332,9 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
       }
       const record = msg as {
         type?: unknown
-        token?: unknown
         id?: unknown
         channel?: unknown
         args?: unknown
-      }
-
-      if (!authed) {
-        if (record.type === 'hello' && record.token === opts.token) {
-          authed = true
-          if (authTimer) clearTimeout(authTimer)
-          authTimer = undefined
-          authedClients.add(ws)
-          sendJson(ws, helloAck)
-        } else {
-          rejectAuth()
-        }
-        return
       }
 
       if (record.type === 'invoke') {
@@ -369,8 +369,6 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
     const cleanup = (): void => {
       sockets.delete(ws)
       authedClients.delete(ws)
-      if (authTimer) clearTimeout(authTimer)
-      authTimer = undefined
     }
     ws.on('close', cleanup)
     ws.on('error', cleanup)

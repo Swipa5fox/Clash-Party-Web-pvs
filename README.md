@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases">
-    <img src="https://img.shields.io/badge/release-v6.0-blue">
+    <img src="https://img.shields.io/badge/release-v1.0-blue">
   </a>
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs">
     <img src="https://img.shields.io/badge/upstream-Clash%20Party%20v2.0.2-green">
@@ -23,6 +23,18 @@
 基于 [Clash Party](https://github.com/mihomo-party-org/mihomo-party)（Mihomo / Clash Meta 的 Electron 图形客户端，fork 自 v2.0.2）重建的**内网自用版本**：把桌面客户端装进容器，用浏览器访问与桌面端一致的完整界面，由网关统一承担机场插件与面板反代。
 
 > ⚠️ 本项目面向**可信内网**自用：为支持内网直连，移除了传输加密、SSRF 防护与设备签名，凭据改为明文落盘。**不要暴露到公网，也不要对外分发。**
+
+## 当前版本 v1.0（2026-09-23）
+
+自 Rebuild v6.0 基线以来共 **156 个文件变更（+3650 / −10771）**，核心更新：
+
+- **新增**：Web UI 文件分享（局域网直链 / 二维码 / 别名分组 / ZeroOmega 备份安全校验）、规则命中统计（历史 + 迷你图）、代理子组面板重构（tab 容器合并）、Web 端账号密码登录（Cookie 会话）
+- **桌面壳彻底移除**：preload 桥、托盘、悬浮窗、快捷键、deeplink、自动更新等桌面专属代码（约 -1.1 万行）；语言包收敛为简中 / 英文
+- **修复**：Web 模式下文件分享「重命名 / 修改分组」报 `Invalid invoke channel`；插件状态徽标显示原始 key 等翻译缺失
+- **优化**：面板入口统一为网关 `:8080`；清理死图标 / 死脚本 / 死文案与 Windows 安装包冗余资产
+- **部署变更**：compose 切换 `network_mode: host` —— 自定义线路端口**即写即生效**，不再需要端口映射；mihomo 控制器收紧至 `127.0.0.1`
+
+完整分类清单见 [changelog.md](./changelog.md) 与 [GitHub Release](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases)。
 
 ## 重要功能
 
@@ -55,7 +67,7 @@
 | 语言 | TypeScript 5.9 |
 | 界面 | React 19 + HeroUI + Tailwind CSS 4，配 react-virtuoso、Monaco、d3、chart.js |
 | 状态与国际化 | SWR、i18next / react-i18next |
-| 构建 | electron-vite 4（Vite 7）+ electron-builder，渲染层三入口 `index` / `floating` / `web` |
+| 构建 | electron-vite 4（Vite 7）+ electron-builder，渲染层单入口 `web` |
 | 主进程与桥接 | Node 22、express（Web 模式静态服务）、ws（RPC 桥） |
 | 网关 | Node ≥ 22.5，零第三方依赖，使用内置 `node:sqlite` |
 | 容器 | Docker + Compose v2，多阶段构建，依赖默认走 npmmirror |
@@ -63,10 +75,9 @@
 
 ## 实现方式
 
-### 三进程与通信
+### 主进程与通信
 
 - `src/main`：内核启停与配置生成、订阅更新、覆写执行，IPC handler 集中在单一字典中注册
-- `src/preload`：通过 `contextBridge` 暴露 `window.electron`，维护 invoke / listen / send 三类 channel 白名单
 - `src/renderer`：React 应用，统一通过 `window.electron.ipcRenderer` 调用全部能力
 
 ### Web 模式：WebSocket RPC 桥
@@ -74,7 +85,7 @@
 浏览器中没有 Electron IPC，因此 Web 端以「同形状 shim + 服务端桥」对齐桌面端：
 
 - 主进程用 express 托管 `out/renderer/web.html` 静态资源，并在同端口（默认 `:3999`）挂 WebSocket
-- `src/renderer/src/web/main-web.ts` 提供与 preload 完全同形状的 `window.electron`：invoke 发 `{type:'invoke', id, channel, args}`，结果按 id 回填；事件按 `{type:'event', channel, payload}` 广播
+- `src/renderer/src/web/main-web.ts` 在浏览器实现 `window.electron`：invoke 发 `{type:'invoke', id, channel, args}`，结果按 id 回填；事件按 `{type:'event', channel, payload}` 广播
 - 服务端复用主进程同一份 handler 字典（约 150 个 invoke channel），因此 Web 端与桌面端功能对齐
 - 桌面专属能力（杀进程、宿主弹窗、路径暴露等 20 余个 channel）在 Web 模式统一拒绝；本地文件读写类能力改由「内容直传」通道替代（备份 base64、主题内容导入等）
 - token 经 URL `?token=` 进入后写入 sessionStorage 并从地址栏清除；无效或过期以 4001 关闭码进入终端提示态
@@ -134,6 +145,8 @@ src/
   renderer/     React 界面（index / floating / web 三入口）
   shared/       主进程与渲染层共用的类型、i18n 资源
 deploy/
+  aur/          AUR 打包定义（PKGBUILD ×5，CI tag 发布时更新）
+  build/        electron-builder 打包资源（图标、安装器脚本、entitlements）
   gateway/      cpx-gateway：机场插件网关 + 面板反代（零依赖 Node）
   party/        cpx-party：Clash Party Web 容器（Dockerfile + entrypoint）
   opt/          bootstrap.sh 新机器构筑脚本、订阅备份脚本
@@ -148,8 +161,7 @@ scripts/        构建期资源准备与打包脚本
 
 ```bash
 pnpm install
-pnpm run dev          # 桌面端开发
-pnpm run dev:web      # Web 模式开发（浏览器访问 :3999）
+pnpm run dev          # 开发（Web 模式，浏览器访问 :3999）
 pnpm run build:win    # 打包（另有 build:mac / build:linux）
 ```
 
@@ -167,8 +179,7 @@ cd deploy/gateway
 | `8080` | 网关：机场插件 API + 面板与控制器反代 |
 | `3999` | Clash Party Web UI（token 鉴权） |
 | `7890` | 局域网共享代理（HTTP + SOCKS5 混合口） |
-| `17890` / `17891` | 国家线路：AU 通用口 / AU 全局口（可选） |
-| `8888` / `8889` | 国家线路：JP 通用口 / JP 全局口（可选） |
+| 任意 | 自定义线路组端口：Web UI 即写即生效（host 网络模式直接绑宿主机，仅需放行防火墙） |
 
 ## 文档
 
@@ -184,7 +195,7 @@ cd deploy/gateway
 - 客户端与网关允许纯 HTTP 与内网 host，不强制 HTTPS，也不拦截私网地址（便于订阅源放内网）
 - 移除 Ed25519 设备签名，防重放改由一次性 nonce 承担
 - vault 明文 JSON 落盘，不再使用系统 Keychain / safeStorage 加密
-- Web UI 由单枚 `CP_WEB_TOKEN` 鉴权，拿到即等同完全控制该实例，请勿外泄；mihomo 控制器端口不发布宿主机，面板与控制 API 经网关反代并由 `PANEL_TOKEN` 门禁（默认与 `CP_WEB_TOKEN` 同值）
+- Web UI 由单枚 `CP_WEB_TOKEN` 鉴权，拿到即等同完全控制该实例，请勿外泄；mihomo 控制器仅绑 `127.0.0.1`，面板与控制 API 经网关反代并由 `PANEL_TOKEN` 门禁（默认与 `CP_WEB_TOKEN` 同值）
 
 ## 许可证与致谢
 

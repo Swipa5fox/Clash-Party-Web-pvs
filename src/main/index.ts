@@ -1,10 +1,8 @@
 import { execFile } from 'child_process'
-import { randomBytes } from 'node:crypto'
 import { join } from 'path'
 import { promisify } from 'util'
-import { electronApp, optimizer } from '@electron-toolkit/utils'
-import { app, dialog, ipcMain } from 'electron'
-import i18next from 'i18next'
+import { electronApp } from '@electron-toolkit/utils'
+import { app, ipcMain } from 'electron'
 import { initI18n } from '../shared/i18n'
 import { asyncHandlers, registerIpcMainHandlers, syncHandlers } from './utils/ipc'
 import { getAppConfig, patchAppConfig } from './config'
@@ -14,31 +12,16 @@ import {
   startCoreForStartup,
   checkAdminRestartForTun,
   checkHighPrivilegeCore,
-  restartAsAdmin,
   initAdminStatus,
   checkAdminPrivileges,
   initCoreWatcher
 } from './core/manager'
-import { createTray } from './resolve/tray'
 import { startWebBridge, createRpcRouter, WEB_BLOCKED_CHANNELS } from './resolve/webBridge'
+import { broadcastEvent, setBroadcaster } from './resolve/broadcaster'
 import { init, initBasic, safeShowErrorBox } from './utils/init'
-import { initShortcut } from './resolve/shortcut'
 import { initProfileUpdater } from './core/profileUpdater'
-import { startMonitor } from './resolve/trafficMonitor'
-import { showFloatingWindow } from './resolve/floatingWindow'
-import { logger, createLogger } from './utils/logger'
+import { createLogger } from './utils/logger'
 import { initWebdavBackupScheduler } from './resolve/backup'
-import {
-  createWindow,
-  mainWindow,
-  markInitialRendererReady,
-  setMainWindowStub,
-  showMainWindow,
-  triggerMainWindow,
-  closeMainWindow
-} from './window'
-import { findDeepLink, handleDeepLink } from './deeplink'
-import { findPluginFile, readPluginFile } from './resolve/plugin/file'
 import {
   fixUserDataPermissions,
   setupPlatformSpecifics,
@@ -47,8 +30,8 @@ import {
 } from './lifecycle'
 import { configureAppPaths } from './utils/dirs'
 
-// Web UI 模式：--web 参数或 CP_WEB_MODE 环境变量触发 headless 启动（无窗口/托盘/悬浮窗）。
-const webMode = process.argv.includes('--web') || !!process.env.CP_WEB_MODE
+// Web-Only 启动编排：仍以 Electron 运行时承载（app.whenReady 等），
+// 但全程无 BrowserWindow/托盘/快捷键，唯一 UI 出口是 :3999 WS 桥。
 
 async function getWindowsPowerShellMajorVersion(): Promise<number | null> {
   // 仅 PS 3.0+ 写入 \3\ 键（\1\ 键恒为 2.0，不可用）。
@@ -73,7 +56,7 @@ async function getWindowsPowerShellMajorVersion(): Promise<number | null> {
   }
 }
 
-// 尽早并行检查，但不再阻塞 Electron 初始化和首窗创建。
+// 尽早并行检查，不阻塞 Electron 初始化。
 const windowsPowerShellVersionPromise =
   process.platform === 'win32' ? getWindowsPowerShellMajorVersion() : Promise.resolve(null)
 
@@ -81,23 +64,20 @@ async function ensureSupportedWindowsPowerShell(): Promise<boolean> {
   const major = await windowsPowerShellVersionPromise
   if (major === null || major >= 5) return true
 
+  // Web-Only（headless）下无宿主弹窗可用，原 dialog + app.quit 交互流程
+  // 降级为日志（参照 safeShowErrorBox 的 web 降级做法），服务不退出。
   const isZh = Intl.DateTimeFormat().resolvedOptions().locale?.startsWith('zh')
-  await dialog.showMessageBox({
-    type: 'warning',
-    title: isZh ? '需要更新 PowerShell' : 'PowerShell Update Required',
-    message: isZh
-      ? `检测到您的 PowerShell 版本为 ${major}.x，部分功能需要 PowerShell 5.1 才能正常运行。\n\n请访问 Microsoft 官网下载并安装 Windows Management Framework 5.1。`
-      : `Detected PowerShell version ${major}.x. Some features require PowerShell 5.1.\n\nPlease install Windows Management Framework 5.1 from the Microsoft website.`
-  })
-  app.quit()
-  return false
+  mainLogger.warn(
+    isZh
+      ? `检测到 PowerShell 版本为 ${major}.x，部分功能需要 PowerShell 5.1 才能正常运行，请安装 Windows Management Framework 5.1`
+      : `Detected PowerShell version ${major}.x. Some features require PowerShell 5.1 (Windows Management Framework 5.1).`
+  )
+  return true
 }
 
 configureAppPaths()
 
 const mainLogger = createLogger('Main')
-
-export { mainWindow, showMainWindow, triggerMainWindow, closeMainWindow }
 
 const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
@@ -114,122 +94,7 @@ initApp().catch((e) => {
 })
 
 setupPlatformSpecifics()
-
-async function initHardwareAcceleration(): Promise<void> {
-  try {
-    await initBasic()
-    const { disableHardwareAcceleration = false } = await getAppConfig()
-    if (disableHardwareAcceleration) {
-      app.disableHardwareAcceleration()
-    }
-  } catch (e) {
-    mainLogger.warn('Failed to read hardware acceleration config', e)
-  }
-}
-
-initHardwareAcceleration()
 setupAppLifecycle()
-
-type LaunchTarget = { type: 'deep-link' | 'plugin-file'; value: string }
-
-let launchTargetsReady = false
-let pendingLaunchTargets: LaunchTarget[] = []
-let launchTargetChain = Promise.resolve()
-
-function queueLaunchTarget(target: LaunchTarget): void {
-  if (!launchTargetsReady) {
-    const duplicate = pendingLaunchTargets.some(
-      (pending) => pending.type === target.type && pending.value === target.value
-    )
-    if (!duplicate) pendingLaunchTargets.push(target)
-    return
-  }
-
-  launchTargetChain = launchTargetChain
-    .then(async () => {
-      if (target.type === 'deep-link') {
-        showMainWindow()
-        await handleDeepLink(target.value)
-        return
-      }
-
-      try {
-        await createWindow()
-        const window = mainWindow
-        if (!window || window.isDestroyed()) throw new Error('Main window is unavailable')
-        const rendererReady =
-          window.webContents.isLoadingMainFrame() || window.webContents.getURL() === ''
-            ? new Promise<void>((resolve) => window.webContents.once('did-finish-load', resolve))
-            : Promise.resolve()
-        showMainWindow()
-        const payload = await readPluginFile(target.value)
-        await rendererReady
-        window.webContents.send('openPluginFile', payload)
-      } catch (e) {
-        safeShowErrorBox('plugins.previewFailed', `${e}`)
-      }
-    })
-    .catch((e) => safeShowErrorBox('common.error.default', `${e}`))
-}
-
-interface RendererFirstContentWaiter {
-  promise: Promise<void>
-  startTimeout: () => void
-  dispose: () => void
-}
-
-function createRendererFirstContentWaiter(timeout = 10000): RendererFirstContentWaiter {
-  // web 模式无 renderer 首屏事件，立即放行，避免启动编排被 ipcMain.once 阻塞。
-  if (webMode) {
-    return { promise: Promise.resolve(), startTimeout: () => {}, dispose: () => {} }
-  }
-
-  let timeoutId: NodeJS.Timeout | undefined
-  let settled = false
-  let resolvePromise!: () => void
-
-  const finish = (): void => {
-    if (settled) return
-    settled = true
-    ipcMain.removeListener('rendererFirstContentReady', finish)
-    if (timeoutId) clearTimeout(timeoutId)
-    resolvePromise()
-  }
-
-  const promise = new Promise<void>((resolve) => {
-    resolvePromise = resolve
-  })
-  ipcMain.once('rendererFirstContentReady', finish)
-
-  return {
-    promise,
-    startTimeout: () => {
-      if (!settled && !timeoutId) timeoutId = setTimeout(finish, timeout)
-    },
-    dispose: finish
-  }
-}
-
-app.on('second-instance', (_event, commandline) => {
-  const url = findDeepLink(commandline)
-  if (url) {
-    queueLaunchTarget({ type: 'deep-link', value: url })
-    return
-  }
-  const pluginFile = findPluginFile(commandline)
-  if (pluginFile) queueLaunchTarget({ type: 'plugin-file', value: pluginFile })
-  else showMainWindow()
-})
-
-app.on('open-url', (_event, url) => {
-  queueLaunchTarget({ type: 'deep-link', value: url })
-})
-
-app.on('open-file', (event, filePath) => {
-  event.preventDefault()
-  const pluginFile = findPluginFile([filePath])
-  if (pluginFile) queueLaunchTarget({ type: 'plugin-file', value: pluginFile })
-})
 
 const initPromise = (async () => {
   await initBasic()
@@ -257,45 +122,12 @@ const initPromise = (async () => {
   return { appConfig: await appConfigPromise, adminPromise }
 })()
 
-async function ensureNoHighPrivilegeCore(isAdmin: boolean): Promise<boolean> {
-  if (process.platform !== 'win32' || isAdmin) return true
-
-  try {
-    if (!(await checkHighPrivilegeCore())) return true
-
-    const choice = dialog.showMessageBoxSync({
-      type: 'warning',
-      title: i18next.t('core.highPrivilege.title'),
-      message: i18next.t('core.highPrivilege.message'),
-      buttons: [i18next.t('common.confirm'), i18next.t('common.cancel')],
-      defaultId: 0,
-      cancelId: 1
-    })
-
-    if (choice === 0) {
-      try {
-        await restartAsAdmin(false)
-        app.exit(0)
-      } catch (error) {
-        safeShowErrorBox('common.error.adminRequired', `${error}`)
-        app.exit(1)
-      }
-    } else {
-      app.exit(0)
-    }
-    return false
-  } catch (e) {
-    mainLogger.error('Failed to check high privilege core', e)
-    return true
-  }
-}
-
 app
   .whenReady()
   .then(async () => {
     electronApp.setAppUserModelId('party.mihomo.app')
 
-    const { appConfig, adminPromise } = await initPromise
+    const { adminPromise } = await initPromise
     beginCoreInitialization()
 
     // 安全检查尽早并行执行，但只用一个布尔 gate 控制核心启动。
@@ -303,69 +135,45 @@ app
       const isAdmin = await adminPromise
       await initAdminStatus()
       if (!(await ensureSupportedWindowsPowerShell())) return false
-      if (webMode) {
-        // web 模式：ensureNoHighPrivilegeCore 内部耦合宿主同步弹窗与 admin 重启，
-        // 整体跳过交互流程，仅保留纯检测（checkHighPrivilegeCore）并记录日志，进程不退出。
-        mainLogger.warn('[web] skip high-privilege core interactive check')
-        if (!isAdmin) {
-          try {
-            if (await checkHighPrivilegeCore()) {
-              mainLogger.warn(
-                '[web] high-privilege residual core detected; continuing without host dialog or admin restart'
-              )
-            }
-          } catch (e) {
-            mainLogger.error('[web] Failed to check high privilege core', e)
+
+      // high-privilege core 检查：headless 下无宿主弹窗与 admin 重启交互，
+      // 仅保留纯检测（checkHighPrivilegeCore）并记录日志，进程不退出。
+      if (!isAdmin) {
+        try {
+          if (await checkHighPrivilegeCore()) {
+            mainLogger.warn(
+              '[web] high-privilege residual core detected; continuing without host dialog or admin restart'
+            )
           }
+        } catch (e) {
+          mainLogger.error('[web] Failed to check high privilege core', e)
         }
-        return true
       }
-      return ensureNoHighPrivilegeCore(isAdmin)
+      return true
     })().catch((error) => {
       mainLogger.error('Startup safety checks failed', error)
       return false
     })
 
-    const rendererFirstContentWaiter = createRendererFirstContentWaiter()
-
-    app.on('browser-window-created', (_, window) => {
-      optimizer.watchWindowShortcuts(window)
-    })
-
     registerIpcMainHandlers()
 
-    if (webMode) {
-      const token = process.env.CP_WEB_TOKEN || randomBytes(24).toString('base64url')
-      const bridge = await startWebBridge({
-        token,
-        platform: process.platform,
-        version: app.getVersion(),
-        staticRoot: join(__dirname, '../renderer'),
-        // electron-vite dev 注入的是 ELECTRON_RENDERER_URL（与 window.ts / floatingWindow.ts 一致）；
-        // 容器/生产下为空，web 桥接走静态产物。
-        devServerUrl: process.env['ELECTRON_RENDERER_URL'],
-        rpc: createRpcRouter(asyncHandlers, syncHandlers, WEB_BLOCKED_CHANNELS),
-        onSend: (channel, args) => ipcMain.emit(channel, ...args)
-      })
-      setMainWindowStub(bridge.broadcast)
-      const host = process.env.CP_WEB_HOST || '127.0.0.1'
-      console.log(`[web] Clash Party Web UI: http://${host}:${bridge.port}/?token=${token}`)
-    } else {
-      try {
-        await createWindow()
-      } catch (error) {
-        rendererFirstContentWaiter.dispose()
-        completeCoreInitialization(false)
-        throw error
-      }
-    }
+    const bridge = await startWebBridge({
+      platform: process.platform,
+      version: app.getVersion(),
+      staticRoot: join(__dirname, '../renderer'),
+      // electron-vite dev 注入的是 ELECTRON_RENDERER_URL；容器/生产下为空，
+      // web 桥接走静态产物。
+      devServerUrl: process.env['ELECTRON_RENDERER_URL'],
+      rpc: createRpcRouter(asyncHandlers, syncHandlers, WEB_BLOCKED_CHANNELS),
+      onSend: (channel, args) => ipcMain.emit(channel, ...args)
+    })
+    // 主进程事件推送出口接到 WS 桥（替代原 setMainWindowStub(bridge.broadcast)）
+    setBroadcaster(bridge.broadcast)
+    const host = process.env.CP_WEB_HOST || '127.0.0.1'
+    // 账号密码登录（初始账号 admin，凭据哈希存 dataDir/web-auth.json，首次启动自动生成）
+    console.log(`[web] Clash Party Web UI: http://${host}:${bridge.port}`)
 
-    // loadURL/loadFile 成功后才开始兜底计时；加载重试不会提前耗尽首屏预算。
-    rendererFirstContentWaiter.startTimeout()
-    await rendererFirstContentWaiter.promise
-    markInitialRendererReady()
-
-    // 首窗完成加载后再启动磁盘和子进程密集型任务，避免与 renderer 抢占冷启动资源。
+    // 后台服务初始化（PAC/sysproxy/SSID 巡检等）与核心启动并行。
     const runtimeInitPromise = startupSafetyPromise
       .then(async (canContinue) => {
         if (!canContinue) return
@@ -409,67 +217,13 @@ app
       }
     })()
 
-    const monitorPromise = (async (): Promise<void> => {
-      try {
-        if (webMode) return
-        if (!(await startupSafetyPromise)) return
-        await startMonitor()
-      } catch {
-        // ignore
-      }
-    })()
-
-    // macOS delivers cold-start targets through open-url/open-file; Windows/Linux put them in argv.
-    if (!webMode && process.platform !== 'darwin') {
-      const initialDeepLink = findDeepLink(process.argv)
-      if (initialDeepLink) {
-        queueLaunchTarget({ type: 'deep-link', value: initialDeepLink })
-      } else {
-        const initialPluginFile = findPluginFile(process.argv)
-        if (initialPluginFile) {
-          queueLaunchTarget({ type: 'plugin-file', value: initialPluginFile })
-        }
-      }
-    }
-    launchTargetsReady = true
-    const queuedLaunchTargets = pendingLaunchTargets
-    pendingLaunchTargets = []
-    queuedLaunchTargets.forEach(queueLaunchTarget)
-
-    const { showFloatingWindow: showFloating = false, disableTray = false } = appConfig
-    const uiTasks: Promise<void>[] = []
-
-    if (!webMode) {
-      uiTasks.push(initShortcut())
-
-      if (showFloating) {
-        uiTasks.push(
-          (async () => {
-            try {
-              await showFloatingWindow()
-            } catch (error) {
-              await logger.error('Failed to create floating window on startup', error)
-            }
-          })()
-        )
-      }
-
-      if (!disableTray) {
-        uiTasks.push(createTray())
-      }
-    }
-
-    await Promise.all(uiTasks)
     void runtimeInitPromise
-    await Promise.all([coreStartPromise, monitorPromise])
+    await coreStartPromise
 
     if (coreStarted) {
-      mainWindow?.webContents.send('core-started')
+      // 通知已连接的 Web 客户端核心就绪
+      broadcastEvent('core-started')
     }
-
-    app.on('activate', () => {
-      showMainWindow()
-    })
   })
   .catch((error) => {
     mainLogger.error('Application startup failed', error)

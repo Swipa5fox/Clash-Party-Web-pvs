@@ -1,9 +1,6 @@
 import i18next from 'i18next'
 import enUS from '../renderer/src/locales/en-US.json'
 import zhCN from '../renderer/src/locales/zh-CN.json'
-import zhTW from '../renderer/src/locales/zh-TW.json'
-import ruRU from '../renderer/src/locales/ru-RU.json'
-import faIR from '../renderer/src/locales/fa-IR.json'
 
 export const resources = {
   'en-US': {
@@ -11,15 +8,6 @@ export const resources = {
   },
   'zh-CN': {
     translation: zhCN
-  },
-  'zh-TW': {
-    translation: zhTW
-  },
-  'ru-RU': {
-    translation: ruRU
-  },
-  'fa-IR': {
-    translation: faIR
   }
 }
 

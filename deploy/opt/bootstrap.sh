@@ -136,44 +136,15 @@ else
 fi
 log ".env 就绪 (PUBLIC_ORIGIN=http://${HOST_IP}:8080)"
 
-# 线路端口门: docker-compose.yml 只映射了 AU 通用口 17890,其余三个口靠 override 补。
-# 门与屋分离——覆写(屋)由 tools/mihomo-lines 的线路工具通过 WS 桥写入,端口映射(门)必须在 compose 层。
+# 线路端口: compose 已改为 network_mode: host——所有线路口(17890/17891/8888/8889
+# 以及 Web UI 运行时新增的任意口)直接绑宿主机,不再需要 docker-compose.override.yml
+# 端口门(旧版「门+屋」两层中的门已拆除,屋=覆写仍由 mihomo-lines 写入)。
+# 旧机残留的 override 若含 ports 段,会与 host 模式冲突(compose 报错),备份后删除。
 OVR="$ROOT/deploy/gateway/docker-compose.override.yml"
-# 旧机上残留的 override 可能缺端口(或重复映射 17890 导致冲突),所以不能「存在就跳过」,
-# 必须逐口校验;缺则备份后重写为规范版。
-WRITE_OVR="false"
-if [ ! -f "$OVR" ]; then
-  WRITE_OVR="true"
-else
-  MISSING=""
-  for p in 17891 8888 8889; do
-    grep -q "${p}:${p}" "$OVR" || MISSING="$MISSING $p"
-  done
-  if [ -n "$MISSING" ]; then
-    cp "$OVR" "${OVR}.bak-$(date +%Y%m%d-%H%M%S)"
-    warn "旧 override 缺端口:$MISSING → 已备份原文件并重写规范版"
-    WRITE_OVR="true"
-  else
-    log "override 已含 17891/8888/8889,保留"
-  fi
-  # 17890 在 docker-compose.yml 里已映射,override 再写一次会端口冲突。
-  if grep -q "17890:17890" "$OVR"; then
-    warn "override 里重复映射了 17890(与 docker-compose.yml 冲突),已移除该行"
-    sed -i '/17890:17890/d' "$OVR"
-  fi
-fi
-if [ "$WRITE_OVR" = "true" ]; then
-  cat > "$OVR" <<'YML'
-# 国家双口线路的端口映射(门)。17890 已在 docker-compose.yml 里,勿重复以免端口冲突。
-# AU·全局 17891 / JP·通用 8888 / JP·全局 8889
-services:
-  party:
-    ports:
-      - '17891:17891'
-      - '8888:8888'
-      - '8889:8889'
-YML
-  log "已写 docker-compose.override.yml(17891/8888/8889)"
+if [ -f "$OVR" ] && grep -qE '^ *ports:' "$OVR"; then
+  cp "$OVR" "${OVR}.bak-$(date +%Y%m%d-%H%M%S)"
+  rm -f "$OVR"
+  warn "旧 override 含 ports 段(与 network_mode: host 冲突),已备份为 .bak 并删除"
 fi
 
 # ------------------------------------------------ 5. 构建 + 启动 + 自检 ---
@@ -200,10 +171,10 @@ cat <<EOF
 Web UI   : http://${HOST_IP}:${WEB_PORT}/?token=${TOKEN}
 网关面板 : http://${HOST_IP}:8080/
 代理口   : http://${HOST_IP}:7890 (HTTP+SOCKS5 混合口)
-线路口   : 17890 AU·通用 / 17891 AU·全局 / 8888 JP·通用 / 8889 JP·全局
+线路口   : host 模式即写即生效(示例: 17890 AU·通用 / 17891 AU·全局 / 8888 JP·通用 / 8889 JP·全局)
 源码位置 : $ROOT
 
-下一步(线路是「门+屋」两层,门已开,屋需写覆写):
+下一步(host 网络模式: 线路口无需开「门」,写覆写即生效):
   1) 浏览器打开上面的 Web UI,在「订阅」里添加订阅(全新盘需要重新加;搬迁盘已自带)
   2) 本地准备线路工具配置(工具在 tools/mihomo-lines/scripts/,存为同目录 lines.config.json):
        { "host": "${HOST_IP}", "token": "${TOKEN}" }

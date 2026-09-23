@@ -1,6 +1,4 @@
 node_modules
-resources/files
-resources/sidecar
 extra
 dist
 out
@@ -34,6 +32,10 @@ deploy/gateway/mihomo/providers
 
 # local gateway test data (SQLite db from source-code runs)
 deploy/gateway/data
+
+# machine-local compose overrides (host network mode: ports gate no longer needed)
+deploy/gateway/docker-compose.override.yml
+deploy/gateway/docker-compose.override.yml.bak-*
 
 # mihomo-lines tool: personal host + party web token (keep the .example only)
 tools/mihomo-lines/scripts/lines.config.json

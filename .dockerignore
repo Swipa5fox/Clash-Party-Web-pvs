@@ -1,6 +1,6 @@
 # Build context for deploy/party/Dockerfile (docker build from the repo root).
 # Keep everything the builder needs: package.json, pnpm-lock.yaml, src/,
-# scripts/, extra/files geo + sub-store assets. Drop everything regenerable
+# scripts/, extra/files geo assets. Drop everything regenerable
 # or machine-local.
 
 # VCS / IDE
@@ -20,9 +20,10 @@ release
 extra/sidecar/*.exe
 extra/sidecar/*win32*.node
 extra/sidecar/*darwin*.node
-extra/files/TrafficMonitor
-extra/files/7za.exe
-extra/files/enableLoopback.exe
+
+# Desktop packaging assets — the linux container never uses them.
+deploy/aur
+deploy/build
 
 # Local deployment state / secrets
 deploy/gateway/.env

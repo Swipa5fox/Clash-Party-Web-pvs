@@ -44,7 +44,7 @@ const ProfileConfigContextWrapper: React.FC<{ children: ReactNode }> = ({ childr
   const pendingTask = useRef<Promise<void> | null>(null)
 
   const withErrorHandling = useCallback(
-    (action: () => Promise<void>, errorKey: string, updateTray = true) =>
+    (action: () => Promise<void>, errorKey: string) =>
       async () => {
         try {
           await action()
@@ -52,9 +52,6 @@ const ProfileConfigContextWrapper: React.FC<{ children: ReactNode }> = ({ childr
           await showError(e, t(errorKey))
         } finally {
           mutate()
-          if (updateTray) {
-            window.electron.ipcRenderer.send('updateTrayMenu')
-          }
         }
       },
     [mutate, t]
@@ -113,7 +110,6 @@ const ProfileConfigContextWrapper: React.FC<{ children: ReactNode }> = ({ childr
 
       if (config) {
         mutate({ ...config, current: id }, false)
-        window.electron.ipcRenderer.send('updateTrayMenu')
       }
 
       targetProfileId.current = id

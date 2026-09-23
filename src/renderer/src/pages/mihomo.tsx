@@ -28,11 +28,13 @@ import { FaNetworkWired } from 'react-icons/fa'
 import {
   IoMdCloudDownload,
   IoMdInformationCircleOutline,
+  IoMdOpen,
   IoMdRefresh,
   IoMdShuffle,
   IoMdEye,
   IoMdEyeOff
 } from 'react-icons/io'
+import { useCustomLineGroups } from '@renderer/hooks/use-custom-line-groups'
 import PubSub from 'pubsub-js'
 import {
   mihomoUpgrade,
@@ -41,12 +43,11 @@ import {
   triggerSysProxy,
   fetchMihomoTags,
   installSpecificMihomoCore,
-  clearMihomoVersionCache,
-  mihomoUpgradeUI
+  clearMihomoVersionCache
 } from '@renderer/utils/ipc'
 import React, { useState, useEffect } from 'react'
 import InterfaceModal from '@renderer/components/mihomo/interface-modal'
-import { MdDeleteForever, MdOpenInNew } from 'react-icons/md'
+import { MdDeleteForever } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
 import {
   DEFAULT_MIHOMO_LAN_ALLOWED_IPS,
@@ -60,36 +61,6 @@ const CoreMap = {
   'mihomo-smart': 'mihomo.smartVersion',
   'mihomo-specific': 'mihomo.specificVersion'
 }
-
-interface WebUIPanelOption {
-  name: string
-  url: string
-}
-
-const WEBUI_PANEL_OPTIONS: WebUIPanelOption[] = [
-  {
-    name: 'zashboard',
-    url: 'https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip'
-  },
-  {
-    name: 'metacubexd',
-    url: 'https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip'
-  },
-  {
-    name: 'yacd-meta',
-    url: 'https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip'
-  },
-  {
-    name: 'yacd',
-    url: 'https://github.com/haishanh/yacd/archive/refs/heads/gh-pages.zip'
-  },
-  {
-    name: 'razord-meta',
-    url: 'https://github.com/MetaCubeX/Razord-meta/archive/refs/heads/gh-pages.zip'
-  }
-]
-
-const DEFAULT_WEBUI_PANEL_URL = WEBUI_PANEL_OPTIONS[0].url
 
 const Mihomo: React.FC = () => {
   const { t } = useTranslation()
@@ -108,23 +79,13 @@ const Mihomo: React.FC = () => {
     disableCoreLog = false,
     sysProxy,
     showMixedPort,
-    enableMixedPort = true,
-    showSocksPort,
-    enableSocksPort = true,
-    showHttpPort,
-    enableHttpPort = true,
-    showRedirPort,
-    enableRedirPort = false,
-    showTproxyPort,
-    enableTproxyPort = false
+    enableMixedPort = true
   } = appConfig || {}
   const { controledMihomoConfig, patchControledMihomoConfig } = useControledMihomoConfig()
 
   const {
     ipv6,
     'external-controller': externalController = '',
-    'external-ui': externalUi = '',
-    'external-ui-url': externalUiUrl = DEFAULT_WEBUI_PANEL_URL,
     secret = '',
     authentication = [],
     'skip-auth-prefixes': skipAuthPrefixes = DEFAULT_MIHOMO_SKIP_AUTH_PREFIXES,
@@ -136,20 +97,15 @@ const Mihomo: React.FC = () => {
     'unified-delay': unifiedDelay,
     'tcp-concurrent': tcpConcurrent,
     'mixed-port': mixedPort = DEFAULT_MIHOMO_PORTS.mixed,
-    'socks-port': socksPort = DEFAULT_MIHOMO_PORTS.socks,
-    port: httpPort = DEFAULT_MIHOMO_PORTS.http,
-    'redir-port': redirPort = DEFAULT_MIHOMO_PORTS.redir,
-    'tproxy-port': tproxyPort = DEFAULT_MIHOMO_PORTS.tproxy,
     profile = {}
   } = controledMihomoConfig || {}
   const { 'store-selected': storeSelected, 'store-fake-ip': storeFakeIp } = profile
 
   const [isManualPortChange, setIsManualPortChange] = useState(false)
   const [mixedPortInput, setMixedPortInput] = useState(showMixedPort ?? mixedPort)
-  const [socksPortInput, setSocksPortInput] = useState(showSocksPort ?? socksPort)
-  const [httpPortInput, setHttpPortInput] = useState(showHttpPort ?? httpPort)
-  const [redirPortInput, setRedirPortInput] = useState(showRedirPort ?? redirPort)
-  const [tproxyPortInput, setTproxyPortInput] = useState(showTproxyPort ?? tproxyPort)
+  // 自定义线路组端口行编辑草稿: 组 id -> 待确认端口值
+  const [customPortDrafts, setCustomPortDrafts] = useState<Record<string, number>>({})
+  const { groups: customLineGroups, saveGroups: saveCustomGroups } = useCustomLineGroups()
   const [externalControllerInput, setExternalControllerInput] = useState(externalController)
   const [externalControllerError, setExternalControllerError] = useState<string | null>(() => {
     const result = isValidListenAddress(externalController)
@@ -157,9 +113,6 @@ const Mihomo: React.FC = () => {
   })
   const [secretInput, setSecretInput] = useState(secret)
   const [isSecretVisible, setIsSecretVisible] = useState(false)
-  const [enableExternalUi, setEnableExternalUi] = useState(externalUi === 'ui')
-  const [externalUiUrlInput, setExternalUiUrlInput] = useState(externalUiUrl)
-  const [upgradingExternalUi, setUpgradingExternalUi] = useState(false)
   const [lanAllowedIpsInput, setLanAllowedIpsInput] = useState(lanAllowedIps)
   const [lanDisallowedIpsInput, setLanDisallowedIpsInput] = useState(lanDisallowedIps)
   const [authenticationInput, setAuthenticationInput] = useState(authentication)
@@ -177,14 +130,6 @@ const Mihomo: React.FC = () => {
   // 生成随机端口 (范围 1024-65535)
   const generateRandomPort = () => Math.floor(Math.random() * (65535 - 1024 + 1)) + 1024
 
-  useEffect(() => {
-    setEnableExternalUi(externalUi === 'ui')
-  }, [externalUi])
-
-  useEffect(() => {
-    setExternalUiUrlInput(externalUiUrl)
-  }, [externalUiUrl])
-
   const onChangeNeedRestart = async (patch: Partial<IMihomoConfig>): Promise<void> => {
     await patchControledMihomoConfig(patch)
     try {
@@ -195,57 +140,6 @@ const Mihomo: React.FC = () => {
       }
     } catch (e) {
       console.error('Apply config change failed:', e)
-    }
-  }
-
-  const upgradeExternalUi = async (): Promise<void> => {
-    try {
-      setUpgradingExternalUi(true)
-      await mihomoUpgradeUI()
-      toast.success(t('settings.webui.updateSuccess'))
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      toast.error(message, t('settings.webui.updateFailed'))
-    } finally {
-      setUpgradingExternalUi(false)
-    }
-  }
-
-  const saveExternalUiUrl = async (): Promise<void> => {
-    await onChangeNeedRestart({ 'external-ui-url': externalUiUrlInput })
-    await upgradeExternalUi()
-  }
-
-  const openExternalUi = (): void => {
-    try {
-      let controller = externalController.trim()
-      if (controller.startsWith(':')) controller = `127.0.0.1${controller}`
-      if (controller.startsWith('0.0.0.0:')) {
-        controller = controller.replace('0.0.0.0:', '127.0.0.1:')
-      }
-      if (controller.startsWith('[::]:')) controller = controller.replace('[::]:', '[::1]:')
-
-      const controllerUrl = new URL(`http://${controller}`)
-      const hostname = controllerUrl.hostname.replace(/^\[|\]$/g, '')
-      const params = new URLSearchParams({
-        hostname,
-        port: controllerUrl.port
-      })
-      if (secret) params.set('secret', secret)
-
-      const panelName = externalUiUrl.toLowerCase()
-      let webUiUrl = `${controllerUrl.origin}/ui/?${params.toString()}`
-      if (panelName.includes('zashboard') || panelName.includes('metacubexd')) {
-        webUiUrl = `${controllerUrl.origin}/ui/#/setup?${params.toString()}`
-      } else if (panelName.includes('razord')) {
-        params.set('host', hostname)
-        params.delete('hostname')
-        webUiUrl = `${controllerUrl.origin}/ui/#/proxies?${params.toString()}`
-      }
-
-      window.open(webUiUrl, '_blank', 'noopener,noreferrer')
-    } catch {
-      toast.error(t('settings.webui.invalidController'))
     }
   }
 
@@ -676,254 +570,85 @@ const Mihomo: React.FC = () => {
               />
             </div>
           </SettingItem>
-          <SettingItem title={t('mihomo.socksPort')} divider>
-            <div className="flex">
-              {isManualPortChange && socksPortInput !== socksPort && (
-                <Button
-                  size="sm"
-                  color="primary"
-                  className="mr-2"
-                  onPress={async () => {
-                    await onChangeNeedRestart({ 'socks-port': socksPortInput })
-                  }}
-                >
-                  {t('mihomo.confirm')}
-                </Button>
-              )}
-
-              <Input
-                size="sm"
-                type="number"
-                className="w-25"
-                value={(showSocksPort ?? socksPort ?? '').toString()}
-                max={65535}
-                min={0}
-                onValueChange={(v) => {
-                  const port = v === '' ? 0 : parseInt(v)
-                  if (!isNaN(port) && port >= 0 && port <= 65535) {
-                    setSocksPortInput(port)
-                    patchAppConfig({ showSocksPort: port })
-                    setIsManualPortChange(true)
-                  }
-                }}
-              />
-              <Button
-                isIconOnly
-                size="sm"
-                variant="light"
-                className="ml-2"
-                onPress={() => {
-                  const randomPort = generateRandomPort()
-                  setSocksPortInput(randomPort)
-                  patchAppConfig({ showSocksPort: randomPort })
-                  setIsManualPortChange(true)
-                }}
+          {/* 自定义线路组专属端口: 每组一行,端口可编辑/复制/启停(停用移除 listener,配置保留) */}
+          {(customLineGroups ?? []).map((cg) => {
+            const draftPort = customPortDrafts[cg.id]
+            const dirty = draftPort !== undefined && draftPort !== cg.port && draftPort > 0
+            return (
+              <SettingItem
+                key={cg.id}
+                title={`${cg.name} ${t('customLines.port')}`}
+                divider
               >
-                <IoMdShuffle className="text-lg" />
-              </Button>
-              <Switch
-                size="sm"
-                className="ml-2"
-                isSelected={enableSocksPort}
-                onValueChange={(value) => {
-                  patchAppConfig({ enableSocksPort: value })
-                  if (value) {
-                    const port = appConfig?.showSocksPort ?? socksPort
-                    onChangeNeedRestart({ 'socks-port': port })
-                  } else {
-                    onChangeNeedRestart({ 'socks-port': 0 })
-                  }
-                }}
-              />
-            </div>
-          </SettingItem>
-          <SettingItem title={t('mihomo.httpPort')} divider>
-            <div className="flex">
-              {isManualPortChange && httpPortInput !== httpPort && (
-                <Button
-                  size="sm"
-                  color="primary"
-                  className="mr-2"
-                  onPress={async () => {
-                    await onChangeNeedRestart({ port: httpPortInput })
-                  }}
-                >
-                  {t('mihomo.confirm')}
-                </Button>
-              )}
-
-              <Input
-                size="sm"
-                type="number"
-                className="w-25"
-                value={(showHttpPort ?? httpPort ?? '').toString()}
-                max={65535}
-                min={0}
-                onValueChange={(v) => {
-                  const port = v === '' ? 0 : parseInt(v)
-                  if (!isNaN(port) && port >= 0 && port <= 65535) {
-                    setHttpPortInput(port)
-                    patchAppConfig({ showHttpPort: port })
-                    setIsManualPortChange(true)
-                  }
-                }}
-              />
-              <Button
-                isIconOnly
-                size="sm"
-                variant="light"
-                className="ml-2"
-                onPress={() => {
-                  const randomPort = generateRandomPort()
-                  setHttpPortInput(randomPort)
-                  patchAppConfig({ showHttpPort: randomPort })
-                  setIsManualPortChange(true)
-                }}
-              >
-                <IoMdShuffle className="text-lg" />
-              </Button>
-              <Switch
-                size="sm"
-                className="ml-2"
-                isSelected={enableHttpPort}
-                onValueChange={(value) => {
-                  patchAppConfig({ enableHttpPort: value })
-                  if (value) {
-                    const port = appConfig?.showHttpPort ?? httpPort
-                    onChangeNeedRestart({ port: port })
-                  } else {
-                    onChangeNeedRestart({ port: 0 })
-                  }
-                }}
-              />
-            </div>
-          </SettingItem>
-          {platform !== 'win32' && (
-            <SettingItem title={t('mihomo.redirPort')} divider>
-              <div className="flex">
-                {isManualPortChange && redirPortInput !== redirPort && (
-                  <Button
+                <div className="flex">
+                  {dirty && (
+                    <Button
+                      size="sm"
+                      color="primary"
+                      className="mr-2"
+                      onPress={async () => {
+                        const next = (customLineGroups ?? []).map((g) =>
+                          g.id === cg.id ? { ...g, port: draftPort } : g
+                        )
+                        await saveCustomGroups(next)
+                        setCustomPortDrafts((prev) => {
+                          const nextDrafts = { ...prev }
+                          delete nextDrafts[cg.id]
+                          return nextDrafts
+                        })
+                        toast.success(t('mihomo.customPortSaved'))
+                      }}
+                    >
+                      {t('mihomo.confirm')}
+                    </Button>
+                  )}
+                  <Input
                     size="sm"
-                    color="primary"
-                    className="mr-2"
-                    onPress={async () => {
-                      await onChangeNeedRestart({ 'redir-port': redirPortInput })
+                    type="number"
+                    className="w-25"
+                    value={String(draftPort ?? cg.port)}
+                    max={65535}
+                    min={1024}
+                    onValueChange={(v) => {
+                      const port = v === '' ? 0 : parseInt(v)
+                      if (!isNaN(port) && port >= 1024 && port <= 65535) {
+                        setCustomPortDrafts((prev) => ({ ...prev, [cg.id]: port }))
+                      }
+                    }}
+                  />
+                  <Button
+                    isIconOnly
+                    size="sm"
+                    variant="light"
+                    className="ml-2"
+                    title={t('proxies.portCopyTip')}
+                    onPress={() => {
+                      const host = location.hostname || '127.0.0.1'
+                      const addr = `${host}:${cg.port}`
+                      navigator.clipboard
+                        .writeText(addr)
+                        .then(() => toast.success(t('proxies.portCopied', { addr })))
+                        .catch(() => {})
                     }}
                   >
-                    {t('mihomo.confirm')}
+                    <IoMdOpen className="text-lg" />
                   </Button>
-                )}
-
-                <Input
-                  size="sm"
-                  type="number"
-                  className="w-25"
-                  value={(showRedirPort ?? redirPort ?? '').toString()}
-                  max={65535}
-                  min={0}
-                  onValueChange={(v) => {
-                    const port = v === '' ? 0 : parseInt(v)
-                    if (!isNaN(port) && port >= 0 && port <= 65535) {
-                      setRedirPortInput(port)
-                      patchAppConfig({ showRedirPort: port })
-                      setIsManualPortChange(true)
-                    }
-                  }}
-                />
-                <Button
-                  isIconOnly
-                  size="sm"
-                  variant="light"
-                  className="ml-2"
-                  onPress={() => {
-                    const randomPort = generateRandomPort()
-                    setRedirPortInput(randomPort)
-                    patchAppConfig({ showRedirPort: randomPort })
-                    setIsManualPortChange(true)
-                  }}
-                >
-                  <IoMdShuffle className="text-lg" />
-                </Button>
-                <Switch
-                  size="sm"
-                  className="ml-2"
-                  isSelected={enableRedirPort}
-                  onValueChange={(value) => {
-                    patchAppConfig({ enableRedirPort: value })
-                    if (value) {
-                      const port = appConfig?.showRedirPort ?? redirPort
-                      onChangeNeedRestart({ 'redir-port': port })
-                    } else {
-                      onChangeNeedRestart({ 'redir-port': 0 })
-                    }
-                  }}
-                />
-              </div>
-            </SettingItem>
-          )}
-          {platform === 'linux' && (
-            <SettingItem title={t('mihomo.tproxyPort')} divider>
-              <div className="flex">
-                {isManualPortChange && tproxyPortInput !== tproxyPort && (
-                  <Button
+                  <Switch
                     size="sm"
-                    color="primary"
-                    className="mr-2"
-                    onPress={async () => {
-                      await onChangeNeedRestart({ 'tproxy-port': tproxyPortInput })
+                    className="ml-2"
+                    isSelected={cg.enabled !== false}
+                    onValueChange={async (value) => {
+                      const next = (customLineGroups ?? []).map((g) =>
+                        g.id === cg.id ? { ...g, enabled: value } : g
+                      )
+                      await saveCustomGroups(next)
+                      toast.success(t('mihomo.customPortSaved'))
                     }}
-                  >
-                    {t('mihomo.confirm')}
-                  </Button>
-                )}
-
-                <Input
-                  size="sm"
-                  type="number"
-                  className="w-25"
-                  value={(showTproxyPort ?? tproxyPort ?? '').toString()}
-                  max={65535}
-                  min={0}
-                  onValueChange={(v) => {
-                    const port = v === '' ? 0 : parseInt(v)
-                    if (!isNaN(port) && port >= 0 && port <= 65535) {
-                      setTproxyPortInput(port)
-                      patchAppConfig({ showTproxyPort: port })
-                      setIsManualPortChange(true)
-                    }
-                  }}
-                />
-                <Button
-                  isIconOnly
-                  size="sm"
-                  variant="light"
-                  className="ml-2"
-                  onPress={() => {
-                    const randomPort = generateRandomPort()
-                    setTproxyPortInput(randomPort)
-                    patchAppConfig({ showTproxyPort: randomPort })
-                    setIsManualPortChange(true)
-                  }}
-                >
-                  <IoMdShuffle className="text-lg" />
-                </Button>
-                <Switch
-                  size="sm"
-                  className="ml-2"
-                  isSelected={enableTproxyPort}
-                  onValueChange={(value) => {
-                    patchAppConfig({ enableTproxyPort: value })
-                    if (value) {
-                      const port = appConfig?.showTproxyPort ?? tproxyPort
-                      onChangeNeedRestart({ 'tproxy-port': port })
-                    } else {
-                      onChangeNeedRestart({ 'tproxy-port': 0 })
-                    }
-                  }}
-                />
-              </div>
-            </SettingItem>
-          )}
+                  />
+                </div>
+              </SettingItem>
+            )
+          })}
           <SettingItem title={t('mihomo.externalController')} divider>
             <div className="flex">
               {externalControllerInput !== externalController && !externalControllerError && (
@@ -1025,86 +750,6 @@ const Mihomo: React.FC = () => {
               />
             </div>
           </SettingItem>
-          {externalController && (
-            <>
-              <SettingItem title={t('settings.webui.enable')} divider>
-                <Switch
-                  size="sm"
-                  isSelected={enableExternalUi}
-                  onValueChange={(enabled) => {
-                    setEnableExternalUi(enabled)
-                    onChangeNeedRestart({ 'external-ui': enabled ? 'ui' : '' })
-                  }}
-                />
-              </SettingItem>
-              {enableExternalUi && (
-                <SettingItem
-                  title={t('settings.webui.panel')}
-                  actions={
-                    <>
-                      <Button
-                        isIconOnly
-                        size="sm"
-                        variant="light"
-                        isLoading={upgradingExternalUi}
-                        title={t('settings.webui.update')}
-                        onPress={upgradeExternalUi}
-                      >
-                        <IoMdCloudDownload className="text-lg" />
-                      </Button>
-                      <Button
-                        isIconOnly
-                        size="sm"
-                        variant="light"
-                        title={t('settings.webui.open')}
-                        onPress={openExternalUi}
-                      >
-                        <MdOpenInNew className="text-lg" />
-                      </Button>
-                    </>
-                  }
-                  divider
-                >
-                  <div className="flex">
-                    {externalUiUrlInput !== externalUiUrl && (
-                      <Button
-                        size="sm"
-                        color="primary"
-                        className="mr-2"
-                        onPress={saveExternalUiUrl}
-                      >
-                        {t('mihomo.confirm')}
-                      </Button>
-                    )}
-                    <Select
-                      aria-label={t('settings.webui.panel')}
-                      classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
-                      className="w-40"
-                      size="sm"
-                      selectedKeys={new Set([externalUiUrlInput])}
-                      disallowEmptySelection
-                      onSelectionChange={(selection) => {
-                        setExternalUiUrlInput(selection.currentKey as string)
-                      }}
-                    >
-                      {(WEBUI_PANEL_OPTIONS.some((panel) => panel.url === externalUiUrlInput)
-                        ? WEBUI_PANEL_OPTIONS
-                        : [
-                            {
-                              name: t('settings.webui.customPanel'),
-                              url: externalUiUrlInput
-                            },
-                            ...WEBUI_PANEL_OPTIONS
-                          ]
-                      ).map((panel) => (
-                        <SelectItem key={panel.url}>{panel.name}</SelectItem>
-                      ))}
-                    </Select>
-                  </div>
-                </SettingItem>
-              )}
-            </>
-          )}
           <SettingItem title={t('mihomo.ipv6')} divider>
             <Switch
               size="sm"

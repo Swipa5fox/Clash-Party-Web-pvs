@@ -11,6 +11,8 @@ import {
   DropdownTrigger
 } from '@heroui/react'
 import BasePage from '@renderer/components/base/base-page'
+import BaseConfirmModal from '@renderer/components/base/base-confirm-modal'
+import { toast } from '@renderer/components/base/toast'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import {
   getImageDataURL,
@@ -18,7 +20,7 @@ import {
   mihomoCloseAllConnections,
   mihomoProxyDelay
 } from '@renderer/utils/ipc'
-import { FaLocationCrosshairs } from 'react-icons/fa6'
+import { FaLocationCrosshairs, FaRegTrashCan } from 'react-icons/fa6'
 import { CgDetailsLess, CgDetailsMore } from 'react-icons/cg'
 import { TbCircleLetterD } from 'react-icons/tb'
 import { RxLetterCaseCapitalize } from 'react-icons/rx'
@@ -32,7 +34,10 @@ import {
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { GroupedVirtuoso, GroupedVirtuosoHandle } from 'react-virtuoso'
 import ProxyItem from '@renderer/components/proxies/proxy-item'
-import SubgroupItem from '@renderer/components/proxies/subgroup-item'
+import NestedGroupPanel from '@renderer/components/proxies/nested-group-panel'
+import TabbedGroupPanel, {
+  splitUniformLineFamily
+} from '@renderer/components/proxies/tabbed-group-panel'
 import { IoIosArrowBack } from 'react-icons/io'
 import { useGroups } from '@renderer/hooks/use-groups'
 import CollapseInput from '@renderer/components/base/collapse-input'
@@ -165,7 +170,17 @@ const Proxies: React.FC = () => {
 
   const [cols, setCols] = useState(1)
   const [showLineGroups, setShowLineGroups] = useState(false)
+  // 组头快捷删除的目标自定义线路组名(null = 关闭确认弹窗)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const { groups: customGroups, saveGroups } = useCustomLineGroups()
+  // 自定义线路组 入口组名 -> 专属端口 映射, 供组头端口徽章使用
+  const portByGroupName = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const g of customGroups ?? []) {
+      if (g.name && g.port) map[g.name] = g.port
+    }
+    return map
+  }, [customGroups])
   const { virtuosoRef, isOpen, setIsOpen } = useProxyState(groupData)
   const [delaying, setDelaying] = useState<Set<string>[]>(() =>
     Array.from({ length: groups.length }, () => new Set<string>())
@@ -187,9 +202,13 @@ const Proxies: React.FC = () => {
   }, [groups.length])
 
   // 代理列表排序
-  // 成员可能是嵌套子组(递归解析后的 IMihomoMixedGroup),入参放宽到三者联合
+  // 成员可能是嵌套子组(递归解析后的 IMihomoMixedGroup),入参放宽到三者联合;
+  // 泛型化以保持调用侧类型(分区后节点区只需 IMihomoProxy[])
   const sortProxies = useCallback(
-    (proxies: (IMihomoProxy | IMihomoGroup | IMihomoMixedGroup)[], order: string) => {
+    <T extends IMihomoProxy | IMihomoGroup | IMihomoMixedGroup>(
+      proxies: T[],
+      order: string
+    ): T[] => {
       if (order === 'delay') {
         return [...proxies].sort((a, b) => {
           if (a.history.length === 0) return 1
@@ -209,9 +228,12 @@ const Proxies: React.FC = () => {
     []
   )
 
-  const { groupCounts, allProxies } = useMemo(() => {
+  // 数据分区: 组展开后成员拆两份 —— subgroups(含 'all' 的子组成员,保持配置顺序不排序)
+  // 与 allProxies(仅节点,排序/隐藏不可用只作用于节点);搜索对两区都过滤
+  const { groupCounts, allProxies, subgroups } = useMemo(() => {
     const groupCounts: number[] = []
-    const allProxies: (IMihomoProxy | IMihomoGroup | IMihomoMixedGroup)[][] = []
+    const allProxies: IMihomoProxy[][] = []
+    const subgroups: IMihomoMixedGroup[][] = []
 
     groups.forEach((group, index) => {
       if (isOpen[index]) {
@@ -221,8 +243,8 @@ const Proxies: React.FC = () => {
             return false
           }
           if (appConfig?.hideUnavailableProxies) {
-            const isGroup = 'all' in proxy
-            if (isGroup) {
+            // 子组不受「隐藏不可用节点」影响
+            if ('all' in proxy) {
               return true
             }
             if (!proxy.history || proxy.history.length === 0) {
@@ -235,16 +257,22 @@ const Proxies: React.FC = () => {
           }
           return true
         })
-        const sorted = sortProxies(filtered, proxyDisplayOrder)
-        const count = Math.ceil(sorted.length / cols)
-        groupCounts.push(count)
-        allProxies.push(sorted)
+        const subs = filtered.filter((p): p is IMihomoMixedGroup => 'all' in p)
+        const nodes = filtered.filter((p): p is IMihomoProxy => !('all' in p))
+        const sortedNodes = sortProxies(nodes, proxyDisplayOrder)
+        // 同线路子组族(自动/故障/手动/全局)合并为一个 tab 容器,虚拟行数相应扣减
+        const { family } = splitUniformLineFamily(subs)
+        const panelRows = subs.length - (family ? family.length - 1 : 0)
+        groupCounts.push(panelRows + Math.ceil(sortedNodes.length / cols))
+        subgroups.push(subs)
+        allProxies.push(sortedNodes)
       } else {
         groupCounts.push(0)
+        subgroups.push([])
         allProxies.push([])
       }
     })
-    return { groupCounts, allProxies }
+    return { groupCounts, allProxies, subgroups }
   }, [
     groups,
     isOpen,
@@ -356,14 +384,21 @@ const Proxies: React.FC = () => {
 
   const onGroupDelay = useCallback(
     async (index: number): Promise<void> => {
-      if (allProxies[index].length === 0) {
+      // 分区后 allProxies 仅直接节点,组测速全集 = 直接节点 + 各子组的直接节点
+      const testTargets = [
+        ...allProxies[index],
+        ...subgroups[index].flatMap((sub) =>
+          sub.all.filter((p): p is IMihomoProxy => !('all' in p))
+        )
+      ]
+      if (testTargets.length === 0) {
         setIsOpen((prev) => {
           const newOpen = [...prev]
           newOpen[index] = true
           return newOpen
         })
       }
-      const proxyNames = allProxies[index].map((p) => p.name)
+      const proxyNames = testTargets.map((p) => p.name)
       setDelaying((prev) => {
         const next = [...prev]
         next[index] = new Set(proxyNames)
@@ -373,7 +408,7 @@ const Proxies: React.FC = () => {
       // 限制并发数量
       const result: Promise<void>[] = []
       const runningList: Promise<void>[] = []
-      for (const proxy of allProxies[index]) {
+      for (const proxy of testTargets) {
         const promise = Promise.resolve().then(async () => {
           let res: IMihomoDelay | undefined
           try {
@@ -415,6 +450,7 @@ const Proxies: React.FC = () => {
     },
     [
       allProxies,
+      subgroups,
       groups,
       delayTestConcurrency,
       scheduleFlushDelayResults,
@@ -423,27 +459,35 @@ const Proxies: React.FC = () => {
     ]
   )
 
-  const calcCols = useCallback((): number => {
+  const calcCols = useCallback((containerWidth: number): number => {
     if (proxyCols !== 'auto') {
       return parseInt(proxyCols)
     }
-    if (window.matchMedia('(min-width: 1536px)').matches) return 5
-    if (window.matchMedia('(min-width: 1280px)').matches) return 4
-    if (window.matchMedia('(min-width: 1024px)').matches) return 3
+    // 按列表容器实测宽度换算列数(而非视口): 侧栏/嵌套缩进导致的实际可用宽度
+    // 与视口断点脱节, 用容器宽保证虚拟分页 cols 与渲染列严格一致
+    if (containerWidth >= 1536) return 5
+    if (containerWidth >= 1280) return 4
+    if (containerWidth >= 1024) return 3
     return 2
   }, [proxyCols])
 
+  // ResizeObserver 实测代理列表容器宽度 → 自适应分列
+  const listContainerRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
-    const handleResize = (): void => {
-      setCols(calcCols())
+    const element = listContainerRef.current
+    if (!element || typeof ResizeObserver === 'undefined') {
+      // 兜底: 无 ResizeObserver 环境退回视口宽度
+      setCols(calcCols(window.innerWidth))
+      const onWinResize = (): void => setCols(calcCols(window.innerWidth))
+      window.addEventListener('resize', onWinResize)
+      return (): void => window.removeEventListener('resize', onWinResize)
     }
-
-    handleResize() // 初始化
-    window.addEventListener('resize', handleResize)
-
-    return (): void => {
-      window.removeEventListener('resize', handleResize)
-    }
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0
+      if (width > 0) setCols(calcCols(width))
+    })
+    observer.observe(element)
+    return (): void => observer.disconnect()
   }, [calcCols])
 
   const renderGroupContent = useCallback(
@@ -496,6 +540,28 @@ const Proxies: React.FC = () => {
                       <span title={groups[index].name} className="flag-emoji inline-block truncate">
                         {groups[index].name}
                       </span>
+                      {/* 自定义线路组入口: 显示该组专属端口徽章, 点击复制完整代理地址 */}
+                      {portByGroupName[groups[index].name] && (
+                        <Chip
+                          size="sm"
+                          variant="flat"
+                          color="primary"
+                          className="ml-1 h-5 text-[10px] cursor-pointer shrink-0"
+                          title={`${t('customLines.port')}: ${portByGroupName[groups[index].name]} | ${t('proxies.portCopyTip')}`}
+                          onClick={(e) => {
+                            // 阻止冒泡: 组头点击是折叠/展开, 徽章点击是复制
+                            e.stopPropagation()
+                            const host = location.hostname || '127.0.0.1'
+                            const addr = `${host}:${portByGroupName[groups[index].name]}`
+                            navigator.clipboard
+                              .writeText(addr)
+                              .then(() => toast.success(t('proxies.portCopied', { addr })))
+                              .catch(() => {})
+                          }}
+                        >
+                          :{portByGroupName[groups[index].name]}
+                        </Chip>
+                      )}
                     </div>
                     <div className="text-ellipsis overflow-hidden whitespace-nowrap text-[10px] text-foreground-500 leading-tight flex-3 flex items-center">
                       <span>{groups[index].type}</span>
@@ -531,6 +597,19 @@ const Proxies: React.FC = () => {
                         })
                       }}
                     />
+                    {/* 自定义线路组: 组头快捷删除(确认后删组与端口,免开编辑弹窗) */}
+                    {portByGroupName[groups[index].name] && (
+                      <Button
+                        title={t('customLines.deleteTitle')}
+                        variant="light"
+                        size="sm"
+                        isIconOnly
+                        className="text-danger"
+                        onPress={() => setDeleteTarget(groups[index].name)}
+                      >
+                        <FaRegTrashCan className="text-lg" />
+                      </Button>
+                    )}
                     <Button
                       title={t('proxies.locate')}
                       variant="light"
@@ -548,10 +627,22 @@ const Proxies: React.FC = () => {
                         for (let j = 0; j < index; j++) {
                           i += groupCounts[j]
                         }
-                        i += Math.floor(
-                          allProxies[index].findIndex((proxy) => proxy.name === groups[index].now) /
-                            cols
-                        )
+                        // 当前选中是子组 → 定位到该子组面板行(族内子组合并在第 0 行 tab 容器);
+                        // 否则计入面板偏移后定位到节点网格行
+                        const { family, rest } = splitUniformLineFamily(subgroups[index])
+                        const familyHit = family?.some((sub) => sub.name === groups[index].now)
+                        const restIdx = rest.findIndex((sub) => sub.name === groups[index].now)
+                        if (familyHit || restIdx >= 0) {
+                          i += (familyHit ? 0 : (family ? 1 : 0) + restIdx)
+                        } else {
+                          i +=
+                            subgroups[index].length +
+                            Math.floor(
+                              allProxies[index].findIndex(
+                                (proxy) => proxy.name === groups[index].now
+                              ) / cols
+                            )
+                        }
                         virtuosoRef.current?.scrollToIndex({
                           index: Math.floor(i),
                           align: 'start'
@@ -596,9 +687,11 @@ const Proxies: React.FC = () => {
       mutate,
       setIsOpen,
       allProxies,
+      subgroups,
       cols,
       virtuosoRef,
-      onGroupDelay
+      onGroupDelay,
+      portByGroupName
     ]
   )
 
@@ -608,58 +701,99 @@ const Proxies: React.FC = () => {
       groupCounts.slice(0, groupIndex).forEach((count) => {
         innerIndex -= count
       })
-      return allProxies[groupIndex] ? (
-        <div
-          style={
-            proxyCols !== 'auto'
-              ? { gridTemplateColumns: `repeat(${proxyCols}, minmax(0, 1fr))` }
-              : {}
-          }
-          className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} ${groupIndex === groupCounts.length - 1 && innerIndex === groupCounts[groupIndex] - 1 ? 'pb-2' : ''} gap-2 pt-2 mx-2`}
-        >
-          {Array.from({ length: cols }).map((_, i) => {
-            const item = allProxies[groupIndex][innerIndex * cols + i]
-            if (!item) return null
-            // 成员本身是组(如 AU·自动/故障/手动) → 渲染为可展开嵌套子组卡片
-            if ('all' in item) {
+      if (!allProxies[groupIndex]) {
+        return <div>Never See This</div>
+      }
+      const subs = subgroups[groupIndex]
+      const nodes = allProxies[groupIndex]
+      // 两区都非空时才显示分区小标题(渲染进对应分区首行 item 内部顶部,不增加虚拟行数)
+      const showSectionTitles = subs.length > 0 && nodes.length > 0
+      const isLastRow =
+        groupIndex === groupCounts.length - 1 && innerIndex === groupCounts[groupIndex] - 1
+      // 子组面板区: 同线路子组族(自动/故障/手动/全局)合并为一个 tab 容器虚拟 item,
+      // 其余子组每个独占一个全宽虚拟 item(族首恒为第 0 项)
+      if (innerIndex < subs.length) {
+        const { family, rest } = splitUniformLineFamily(subs)
+        return (
+          <div className="px-2 pt-2">
+            {showSectionTitles && innerIndex === 0 && (
+              <div className="text-[10px] text-foreground-400 px-4 pt-2">
+                {t('proxies.subgroups')}
+              </div>
+            )}
+            {innerIndex === 0 && family && (
+              <TabbedGroupPanel
+                family={family}
+                parentGroup={groups[groupIndex]}
+                mutateProxies={mutate}
+                onProxyDelay={onProxyDelay}
+                onSelect={onChangeProxy}
+                proxyDisplayMode={proxyDisplayMode}
+                isGroupTesting={false}
+                pathKey={`${groups[groupIndex].name}::${family[0].name}`}
+              />
+            )}
+            {(() => {
+              const sub = rest[innerIndex - (family ? 1 : 0)]
+              if (!sub) return null
               return (
-                <SubgroupItem
+                <NestedGroupPanel
+                  key={sub.name}
+                  mutateProxies={mutate}
+                  onProxyDelay={onProxyDelay}
+                  onSelect={onChangeProxy}
+                  subproxy={sub}
+                  parentGroup={groups[groupIndex]}
+                  pathKey={`${groups[groupIndex].name}::${sub.name}`}
+                  proxyDisplayMode={proxyDisplayMode}
+                  selected={sub.name === groups[groupIndex].now}
+                  isGroupTesting={delaying[groupIndex]?.has(sub.name) ?? false}
+                />
+              )
+            })()}
+          </div>
+        )
+      }
+      // 节点网格区: 扣除子组面板偏移得到节点行号
+      const nodeRow = innerIndex - subs.length
+      return (
+        <>
+          {showSectionTitles && nodeRow === 0 && (
+            <div className="text-[10px] text-foreground-400 px-4 pt-2">{t('proxies.nodes')}</div>
+          )}
+          <div
+            style={
+              proxyCols !== 'auto'
+                ? { gridTemplateColumns: `repeat(${proxyCols}, minmax(0, 1fr))` }
+                : {}
+            }
+            className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} ${isLastRow ? 'pb-2' : ''} gap-2 pt-2 mx-2`}
+          >
+            {Array.from({ length: cols }).map((_, i) => {
+              const item = nodes[nodeRow * cols + i]
+              if (!item) return null
+              return (
+                <ProxyItem
                   key={item.name}
                   mutateProxies={mutate}
                   onProxyDelay={onProxyDelay}
                   onSelect={onChangeProxy}
-                  subproxy={item as IMihomoMixedGroup}
+                  proxy={item}
                   group={groups[groupIndex]}
                   proxyDisplayMode={proxyDisplayMode}
                   selected={item.name === groups[groupIndex].now}
-                  isGroupTesting={
-                    delaying[groupIndex]?.has(item.name) ?? false
-                  }
+                  isGroupTesting={delaying[groupIndex]?.has(item.name) ?? false}
                 />
               )
-            }
-            return (
-              <ProxyItem
-                key={item.name}
-                mutateProxies={mutate}
-                onProxyDelay={onProxyDelay}
-                onSelect={onChangeProxy}
-                proxy={item}
-                group={groups[groupIndex]}
-                proxyDisplayMode={proxyDisplayMode}
-                selected={item.name === groups[groupIndex].now}
-                isGroupTesting={delaying[groupIndex]?.has(item.name) ?? false}
-              />
-            )
-          })}
-        </div>
-      ) : (
-        <div>Never See This</div>
+            })}
+          </div>
+        </>
       )
     },
     [
       groupCounts,
       allProxies,
+      subgroups,
       proxyCols,
       cols,
       groups,
@@ -667,7 +801,8 @@ const Proxies: React.FC = () => {
       delaying,
       mutate,
       onProxyDelay,
-      onChangeProxy
+      onChangeProxy,
+      t
     ]
   )
 
@@ -821,7 +956,7 @@ const Proxies: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="h-[calc(100vh-50px)]">
+        <div className="h-[calc(100vh-50px)]" ref={listContainerRef}>
           <GroupedVirtuoso
             ref={virtuosoRef}
             groupCounts={groupCounts}
@@ -840,6 +975,25 @@ const Proxies: React.FC = () => {
         groups={customGroups ?? []}
         onSave={saveGroups}
       />
+      {/* 组头快捷删除确认: 删除该自定义线路组及其专属端口 */}
+      {deleteTarget && (
+        <BaseConfirmModal
+          isOpen={Boolean(deleteTarget)}
+          title={t('customLines.deleteTitle')}
+          content={t('customLines.deleteConfirm', {
+            name: deleteTarget,
+            port: portByGroupName[deleteTarget]
+          })}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => {
+            const name = deleteTarget
+            setDeleteTarget(null)
+            void saveGroups((customGroups ?? []).filter((g) => g.name !== name)).then((ok) => {
+              if (ok) toast.success(t('customLines.deleteSuccess', { name }))
+            })
+          }}
+        />
+      )}
     </BasePage>
   )
 }

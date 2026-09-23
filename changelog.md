@@ -4,6 +4,42 @@
 
 该文件同时是发布流水线的发布说明来源：`scripts/updater.mjs` 读取它生成 `latest.yml`（应用内更新弹窗展示），`scripts/telegram.mjs` 读取它发布到频道。因此最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
+## Rebuild v1.0（2026-09-23）
+
+自 Rebuild v6.0 基线（`5405588c`）以来的变更：156 个文件，+3650 / −10771。
+
+### 新增
+
+- **Web UI 文件分享**：上传文件生成局域网直链与二维码，支持别名 / 分组管理、分组批量重命名；内置 ZeroOmega 备份安全校验（JSON 合法性 / 代理凭证 / 可路由 IP / 内部分流域名等 18 项规则）；主进程 `fileShare.ts` 服务 + 文件分享页与侧栏卡片
+- **规则命中统计**：规则页新增命中频率历史与 sparkline 迷你图（`rule-hit-history` / `rule-sparkline`），直观定位高频规则
+- **代理子组面板重构**：自定义线路组的子组族（自动 / 故障 / 手动 / 全局）合并为 tab 容器展示（`tabbed-group-panel` / `nested-group-panel`），虚拟列表支持定位到子组行与节点网格行
+- **Web 端账号密码登录**：`webAuth.ts` 提供 Cookie 会话鉴权（登录页 POST `/api/login` 后 HttpOnly Cookie 自动携带），Web UI 与 WS 桥共用同一会话
+- **主进程事件广播中枢** `broadcaster.ts`：托盘 / 悬浮窗等桌面接收方移除后，统一承接事件推送出口
+
+### Bug 修复
+
+- Web 模式下文件分享「重命名 / 修改分组」报 `Invalid invoke channel: setFileShareFileMeta`——Web shim 白名单补齐 `setFileShareFileMeta` / `renameFileShareGroup` 两个通道
+- en-US 缺失 `mihomo.coreAuthLost`；插件卡片状态徽标显示原始 key（补 `plugins.status.*` 中英文案）
+- README 快速开始中不存在的 `pnpm run dev:web` 命令、插件对接文档引用不存在脚本的死链
+
+### 优化
+
+- **面板入口统一**：移除设置页内置「控制器面板」管理块（5 面板选择 / 更新 / 打开按钮与 `mihomoUpgradeUI` IPC 全链路），网关 `:8080`（zashboard + PANEL_TOKEN）成为唯一外部面板入口
+- **桌面壳彻底移除**（约 -1.1 万行）：preload 桥、`index.html` / `floating.html` 双入口、托盘、悬浮窗、流量悬浮器、全局快捷键、deeplink、开机自启、UWP loopback、wayland 剪贴板、自动更新及对应设置 UI；语言包收敛为 zh-CN / en-US
+- **冗余清理**：删除 `resources/` 全部桌面图标（10 个，原会被打进安装包）、`out/preload` 构建残留、`package.json` 死脚本（`artifact` / `test-copy-legacy`）、115 个零引用 locale key；`prepare.mjs` 移除 Windows 遗留下载项（TrafficMonitor / 7za / enableLoopback），Windows 安装包瘦身
+
+### 部署变更
+
+- **目录统一**：`aur/` 与 `build/` 并入 `deploy/`（`deploy/aur` / `deploy/build`），electron-builder 配置、CI workflow 与 .dockerignore 路径同步更新
+- **compose 切换 `network_mode: host`**（gateway + party 双服务）：固定端口与 Web UI 运行时新增的任意自定义线路端口均直接绑宿主机，**即写即生效**，不再需要 `ports` 映射与 `docker-compose.override.yml` 端口门
+- **mihomo 控制器收紧**：首启种子由 `0.0.0.0:9090` 改为 `127.0.0.1:9090`——host 模式下不对 LAN 暴露，面板与控制 API 仍经网关反代并由 `PANEL_TOKEN` 门禁
+- **bootstrap.sh**：移除「端口门 override」写入逻辑，改为自动备份并清理含 `ports` 的残留 override（避免与 host 模式冲突报错）
+
+### 升级注意
+
+- 旧数据卷的控制器仍是 `0.0.0.0:9090`：host 模式部署后请在 Web UI（设置 → Mihomo 内核 → 外部控制器）改为 `127.0.0.1:9090`，或删除 `party_data` 卷重建
+- 旧部署的 `docker-compose.override.yml` 若含 `ports` 段必须删除（与 host 模式冲突会导致 compose 报错；重新运行 `bootstrap.sh` 会自动处理）
+
 ## Rebuild v6.0
 
 ### 新增

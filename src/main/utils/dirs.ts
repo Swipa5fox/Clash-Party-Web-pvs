@@ -184,6 +184,15 @@ export function rulesDir(): string {
   return path.join(dataDir(), 'rules')
 }
 
+export function fileShareDir(): string {
+  return path.join(dataDir(), 'file-share')
+}
+
+// 文件分发元数据(别名/分组): 与分发文件分离,记录 file -> { alias, group }
+export function fileShareMetaPath(): string {
+  return path.join(dataDir(), 'file-share-meta.json')
+}
+
 export function rulePath(id: string): string {
   return path.join(rulesDir(), `${id}.yaml`)
 }

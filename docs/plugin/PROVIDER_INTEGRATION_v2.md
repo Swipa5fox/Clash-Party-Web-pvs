@@ -495,12 +495,6 @@ Verify:
 1. Your canonical input hex equals `inputHex`.
 2. `sigB64` verifies under `pubKeyB64`.
 
-Regenerate vectors:
-
-```bash
-node scripts/plugin/gen-sign-vectors.mjs
-```
-
 ---
 
 ## 15. Launch Checklist

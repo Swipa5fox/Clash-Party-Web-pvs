@@ -5,6 +5,7 @@ import { promisify } from 'util'
 import path from 'path'
 import { app, dialog } from 'electron'
 import { startPacServer } from '../resolve/server'
+import { startFileShareServer } from '../resolve/fileShare'
 import { triggerSysProxy } from '../sys/sysproxy'
 import {
   getAppConfig,
@@ -31,6 +32,7 @@ import {
   appConfigPath,
   controledMihomoConfigPath,
   dataDir,
+  fileShareDir,
   logDir,
   mihomoTestDir,
   mihomoWorkDir,
@@ -115,7 +117,8 @@ async function initDirs(): Promise<void> {
     rulesDir(),
     mihomoWorkDir(),
     logDir(),
-    mihomoTestDir()
+    mihomoTestDir(),
+    fileShareDir()
   ]
 
   await Promise.all(
@@ -308,12 +311,13 @@ async function migrateEnvType(): Promise<void> {
   }
 }
 
-// 迁移：禁用托盘时必须显示悬浮窗
-async function migrateTraySettings(): Promise<void> {
-  const { showFloatingWindow = false, disableTray = false } = await getAppConfig()
-  if (!showFloatingWindow && disableTray) {
-    await patchAppConfig({ disableTray: false })
-  }
+async function migration(): Promise<void> {
+  await Promise.all([
+    migrateAppTheme(),
+    migrateEnvType(),
+    migrateRemovePassword(),
+    migrateMihomoConfig()
+  ])
 }
 
 // 迁移：移除加密密码
@@ -367,28 +371,6 @@ async function migrateMihomoConfig(): Promise<void> {
   }
 }
 
-async function migration(): Promise<void> {
-  await Promise.all([
-    migrateAppTheme(),
-    migrateEnvType(),
-    migrateTraySettings(),
-    migrateRemovePassword(),
-    migrateMihomoConfig()
-  ])
-}
-
-function initDeeplink(): void {
-  if (process.defaultApp) {
-    if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient('clash', process.execPath, [path.resolve(process.argv[1])])
-      app.setAsDefaultProtocolClient('mihomo', process.execPath, [path.resolve(process.argv[1])])
-    }
-  } else {
-    app.setAsDefaultProtocolClient('clash')
-    app.setAsDefaultProtocolClient('mihomo')
-  }
-}
-
 export async function initBasic(): Promise<void> {
   if (isInitBasicCompleted) return
   if (initBasicPromise) return initBasicPromise
@@ -431,6 +413,13 @@ export async function init(): Promise<void> {
 
   const initTasks: Promise<void>[] = [ensureRuntimeFiles(), startSSIDCheck()]
 
+  // 文件分发服务：内部已捕获启动错误（记录到状态供 UI 展示），不会拖垮其他初始化
+  initTasks.push(
+    startFileShareServer().catch(() => {
+      // ignore
+    })
+  )
+
   initTasks.push(
     (async (): Promise<void> => {
       try {
@@ -445,5 +434,4 @@ export async function init(): Promise<void> {
   )
 
   await Promise.all(initTasks)
-  initDeeplink()
 }

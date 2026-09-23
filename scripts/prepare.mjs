@@ -356,11 +356,6 @@ const resolveBundleMRS = () =>
     file: 'BundleMRS.7z',
     downloadURL: `https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/BundleMRS.7z`
   })
-const resolveEnableLoopback = () =>
-  resolveResource({
-    file: 'enableLoopback.exe',
-    downloadURL: `https://github.com/Kuingsmile/uwp-tool/releases/download/latest/enableLoopback.exe`
-  })
 /* ======= sysproxy-rs ======= */
 const SYSPROXY_RS_URL_PREFIX =
   'https://github.com/mihomo-party-org/sysproxy-rs-opti/releases/latest/download'
@@ -459,32 +454,6 @@ const resolveSysproxy = async () => {
   console.log(`[INFO]: ${nodeName} finished`)
 }
 
-const resolveMonitor = async () => {
-  const tempDir = path.join(TEMP_DIR, 'TrafficMonitor')
-  const tempZip = path.join(tempDir, `${arch}.zip`)
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true })
-  }
-  await downloadFile(
-    `https://github.com/mihomo-party-org/mihomo-party-run/releases/download/monitor/${arch}.zip`,
-    tempZip
-  )
-  const zip = new AdmZip(tempZip)
-  const resDir = path.join(cwd, 'extra', 'files')
-  const targetPath = path.join(resDir, 'TrafficMonitor')
-  if (fs.existsSync(targetPath)) {
-    fs.rmSync(targetPath, { recursive: true })
-  }
-  zip.extractAllTo(targetPath, true)
-
-  console.log(`[INFO]: TrafficMonitor finished`)
-}
-
-const resolve7zip = () =>
-  resolveResource({
-    file: '7za.exe',
-    downloadURL: `https://github.com/develar/7zip-bin/raw/master/win/${arch}/7za.exe`
-  })
 const resolveHelper = () =>
   resolveResource({
     file: 'party.mihomo.helper',
@@ -537,27 +506,9 @@ const tasks = [
     retry: 5
   },
   {
-    name: 'enableLoopback',
-    func: resolveEnableLoopback,
-    retry: 5,
-    winOnly: true
-  },
-  {
     name: 'sysproxy',
     func: resolveSysproxy,
     retry: 5
-  },
-  {
-    name: 'monitor',
-    func: resolveMonitor,
-    retry: 5,
-    winOnly: true
-  },
-  {
-    name: '7zip',
-    func: resolve7zip,
-    retry: 5,
-    winOnly: true
   },
   {
     name: 'helper',

@@ -20,7 +20,8 @@ export const DEFAULT_SIDER_ORDER: SiderCardKey[] = [
   'sniff',
   'log',
   'network',
-  'usage'
+  'usage',
+  'fileShare'
 ]
 
 export const DEFAULT_NETWORK_INFO_CARD_ORDER: NetworkInfoCardKey[] = ['ip', 'topology', 'latency']

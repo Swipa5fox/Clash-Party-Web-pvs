@@ -17,7 +17,6 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 interface Props {
   onClose: () => void
   initialFile?: File // dropped file: auto-load + preview on open
-  initialData?: IPluginFilePayload // associated file: already read by the main process
 }
 
 const MAX_CPX_BYTES = 10 * 1024 * 1024 // guard against a huge mis-dropped file freezing the renderer
@@ -44,7 +43,7 @@ function hostOf(url: string): string {
   }
 }
 
-const PluginInstallModal: React.FC<Props> = ({ onClose, initialFile, initialData }) => {
+const PluginInstallModal: React.FC<Props> = ({ onClose, initialFile }) => {
   const { t } = useTranslation()
 
   const { appConfig, patchAppConfig } = useAppConfig()
@@ -97,12 +96,6 @@ const PluginInstallModal: React.FC<Props> = ({ onClose, initialFile, initialData
   }
 
   useEffect(() => {
-    if (initialData) {
-      setFileName(initialData.name)
-      setFileB64(initialData.fileBytesB64)
-      previewB64(initialData.fileBytesB64)
-      return
-    }
     if (!initialFile) return
     loadFile(initialFile).then((b64) => {
       if (b64) previewB64(b64)

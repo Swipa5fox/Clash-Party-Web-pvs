@@ -16,6 +16,7 @@ const Resources = lazy(() => import('@renderer/pages/resources'))
 const DNS = lazy(() => import('@renderer/pages/dns'))
 const Sniffer = lazy(() => import('@renderer/pages/sniffer'))
 const Traffic = lazy(() => import('@renderer/pages/traffic'))
+const FileShare = lazy(() => import('@renderer/pages/file-share'))
 
 const HomeRedirect: React.FC = () => {
   const { appConfig } = useAppConfig()
@@ -77,6 +78,10 @@ const routes = [
   {
     path: '/traffic',
     element: <Traffic />
+  },
+  {
+    path: '/file-share',
+    element: <FileShare />
   },
   {
     path: '/',

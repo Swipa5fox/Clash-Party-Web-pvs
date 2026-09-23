@@ -8,7 +8,7 @@ import {
 } from '../../config/plugin'
 import { upsertPluginProfile, removePluginProfileContent } from '../../config/profile'
 import { getAppConfig } from '../../config/app'
-import { mainWindow } from '../../window'
+import { broadcastEvent } from '../broadcaster'
 import { parseDescriptor } from './descriptor'
 import { discoverGateway } from './discovery'
 import { browserLogin, CLIENT_ID } from './oauth'
@@ -22,8 +22,8 @@ import { fetchRemotePlugin } from './remote'
 const DEFAULT_PLUGIN_INTERVAL_MIN = 1440 // 24h
 
 function notifyRenderer(): void {
-  mainWindow?.webContents.send('pluginConfigUpdated')
-  mainWindow?.webContents.send('profileConfigUpdated')
+  broadcastEvent('pluginConfigUpdated')
+  broadcastEvent('profileConfigUpdated')
 }
 
 interface NetOpts {

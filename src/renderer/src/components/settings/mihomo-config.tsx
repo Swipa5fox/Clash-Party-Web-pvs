@@ -4,7 +4,7 @@ import { Button, Input, Select, SelectItem, Switch, Tooltip } from '@heroui/reac
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import debounce from '@renderer/utils/debounce'
 import {
-  exportGistAgeSecretKey,
+  exportGistAgeSecretKeyText,
   generateGistAgeKeyPair,
   getGistUrl,
   restartCore
@@ -73,8 +73,17 @@ const MihomoConfig: React.FC = () => {
   const handleExportGistAgeSecretKey = async (): Promise<void> => {
     setIsExportingGistAgeKey(true)
     try {
-      const exported = await exportGistAgeSecretKey()
-      if (exported) toast.success(t('mihomo.gist.exportPrivateKeySuccess'))
+      // web 模式下主进程不再弹出保存对话框，取回文本后由前端生成 .key 文件下载
+      const text = await exportGistAgeSecretKeyText()
+      if (!text) return
+      const blob = new Blob([text], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = 'gist-age-secret.key'
+      anchor.click()
+      URL.revokeObjectURL(url)
+      toast.success(t('mihomo.gist.exportPrivateKeySuccess'))
     } catch (e) {
       toast.error(String(e))
     } finally {

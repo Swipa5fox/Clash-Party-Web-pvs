@@ -14,7 +14,7 @@ import dayjs from '@renderer/utils/dayjs'
 import React, { Key, useMemo, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { openFile, mihomoHotReloadConfig } from '@renderer/utils/ipc'
+import { mihomoHotReloadConfig } from '@renderer/utils/ipc'
 import { useTranslation } from 'react-i18next'
 import ExecLogModal from './exec-log-modal'
 import EditInfoModal from './edit-info-modal'
@@ -73,13 +73,6 @@ const OverrideItem: React.FC<Props> = (props) => {
         className: ''
       } as MenuItem,
       {
-        key: 'open-file',
-        label: t('override.menuItems.openFile'),
-        showDivider: false,
-        color: 'default',
-        className: ''
-      } as MenuItem,
-      {
         key: 'exec-log',
         label: t('override.menuItems.execLog'),
         showDivider: true,
@@ -107,10 +100,6 @@ const OverrideItem: React.FC<Props> = (props) => {
       }
       case 'edit-file': {
         setOpenFileEditor(true)
-        break
-      }
-      case 'open-file': {
-        openFile('override', info.id, info.ext)
         break
       }
       case 'exec-log': {

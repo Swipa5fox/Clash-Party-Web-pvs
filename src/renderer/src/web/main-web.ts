@@ -1,10 +1,10 @@
-// Web 模式入口：浏览器端 preload shim
-// 通过 WebSocket 桥接主进程 IPC，暴露面与 src/preload/index.ts 逐一对齐
+// Web 模式入口：浏览器端 IPC shim
+// 通过 WebSocket 桥接主进程 IPC，invoke 白名单与 src/main/utils/ipc.ts 的 handler 注册表逐一对齐
 import type { IpcRendererEvent } from 'electron'
 
 type IpcListener = (event: IpcRendererEvent, ...args: unknown[]) => void
 
-// 允许的 invoke channels 白名单（与 preload 保持一致）
+// 允许的 invoke channels 白名单（与主进程 handler 注册表保持一致）
 const validInvokeChannels: readonly string[] = [
   // Mihomo API
   'mihomoVersion',
@@ -22,22 +22,16 @@ const validInvokeChannels: readonly string[] = [
   'mihomoUnfixedProxy',
   'mihomoUpgradeGeo',
   'mihomoUpgrade',
-  'mihomoUpgradeUI',
   'mihomoProxyDelay',
   'mihomoGroupDelay',
   'patchMihomoConfig',
   'mihomoSmartGroupWeights',
   'mihomoSmartFlushCache',
-  // AutoRun
-  'checkAutoRun',
-  'enableAutoRun',
-  'disableAutoRun',
   // Config
   'getAppConfig',
   'patchAppConfig',
   'getControledMihomoConfig',
   'patchControledMihomoConfig',
-  'resetAppConfig',
   // Profile
   'getProfileConfig',
   'setProfileConfig',
@@ -73,36 +67,20 @@ const validInvokeChannels: readonly string[] = [
   'getSmartOverrideContent',
   'getRuleStr',
   'setRuleStr',
-  'getFilePath',
-  'readTextFile',
-  'readImageFileDataURL',
-  'openFile',
   // Core
   'restartCore',
   'mihomoHotReloadConfig',
-  'startMonitor',
-  'quitWithoutCore',
   // System
   'triggerSysProxy',
   'checkTunPermissions',
-  'grantTunPermissions',
-  'manualGrantCorePermition',
   'checkAdminPrivileges',
-  'restartAsAdmin',
   'checkMihomoCorePermissions',
-  'requestTunPermissions',
   'checkHighPrivilegeCore',
-  'showTunPermissionDialog',
-  'showErrorDialog',
-  'openUWPTool',
   'setupFirewall',
   'getInterfaces',
   'setNativeTheme',
-  'copyEnv',
   'copyEnvText',
   // Update
-  'checkUpdate',
-  'downloadAndInstallUpdate',
   'getVersion',
   'platform',
   'getDeploymentEnv',
@@ -122,32 +100,9 @@ const validInvokeChannels: readonly string[] = [
   // Theme
   'resolveThemes',
   'fetchThemes',
-  'importThemes',
   'importThemesFromContents',
   'readTheme',
   'writeTheme',
-  'applyTheme',
-  // Tray
-  'showTrayIcon',
-  'closeTrayIcon',
-  'updateTrayIcon',
-  'updateTrayIconImmediate',
-  // Window
-  'showMainWindow',
-  'closeMainWindow',
-  'triggerMainWindow',
-  'showFloatingWindow',
-  'closeFloatingWindow',
-  'showContextMenu',
-  'setTitleBarOverlay',
-  'setAlwaysOnTop',
-  'isAlwaysOnTop',
-  'openDevTools',
-  'createHeapSnapshot',
-  'relaunchApp',
-  'quitApp',
-  // Shortcut
-  'registerShortcut',
   // Plugin
   'getPluginConfig',
   'previewPlugin',
@@ -159,17 +114,25 @@ const validInvokeChannels: readonly string[] = [
   // Misc
   'getGistUrl',
   'generateGistAgeKeyPair',
-  'exportGistAgeSecretKey',
   'exportGistAgeSecretKeyText',
   'fetchIPInfo',
   'measureLatency',
   'getImageDataURL',
   'getIconDataURL',
   'getAppName',
-  'changeLanguage'
+  'changeLanguage',
+  // File Share
+  'getFileShareServerState',
+  'restartFileShareServer',
+  'listFileShareFiles',
+  'addFileShareFile',
+  'revokeFileShareFile',
+  'getFileShareUrls',
+  'setFileShareFileMeta',
+  'renameFileShareGroup'
 ]
 
-// 允许的 on/removeListener channels 白名单（与 preload 保持一致）
+// 允许的 on/removeListener channels 白名单（与主进程 broadcastEvent 推送面保持一致）
 const validListenChannels: readonly string[] = [
   'mihomoLogs',
   'mihomoConnections',
@@ -180,24 +143,15 @@ const validListenChannels: readonly string[] = [
   'profileConfigUpdated',
   'groupsUpdated',
   'rulesUpdated',
-  'updateDownloadProgress',
-  'pluginConfigUpdated',
-  'openPluginFile'
+  'pluginConfigUpdated'
 ]
 
-// 允许的 send channels 白名单（与 preload 保持一致）
-const validSendChannels: readonly string[] = [
-  'updateTrayMenu',
-  'updateFloatingWindow',
-  'trayIconUpdate',
-  'rendererFirstContentReady'
-]
+// 允许的 send channels 白名单：桌面壳（托盘/悬浮窗/首屏等待器）删除后主进程已无接收方，置空
+const validSendChannels: readonly string[] = []
 
 // ---- WebSocket 桥 ----
-const TOKEN_STORAGE_KEY = 'cp:web:token'
 const RECONNECT_BASE_DELAY = 1000
 const RECONNECT_MAX_DELAY = 10000
-const TOKEN_CLOSE_CODE = 4001
 
 type HelloMessage = { type: 'hello'; ok: boolean; platform?: NodeJS.Platform; version?: string }
 type ResultMessage =
@@ -217,25 +171,18 @@ interface PendingInvoke {
 const listenerMap = new Map<string, Set<IpcListener>>()
 const pendingInvokes = new Map<number, PendingInvoke>()
 
-// 平台信息：hello 后由桥填充，形状与 preload 的 window.electron.process 一致
+// 平台信息：hello 后由桥填充，形状与 window.electron.process 保持一致
 const processInfo = { platform: undefined as unknown as NodeJS.Platform }
 
 let ws: WebSocket | null = null
 let ready = false
 let appStarted = false
-let fatal = false
 let nextInvokeId = 0
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let reconnectDelay = RECONNECT_BASE_DELAY
 
-// ---- token：URL ?token= 优先并写入 sessionStorage，随后从地址栏清除 ----
-let token = new URLSearchParams(location.search).get('token')
-if (token) {
-  sessionStorage.setItem(TOKEN_STORAGE_KEY, token)
-  history.replaceState(null, '', location.pathname + location.hash)
-} else {
-  token = sessionStorage.getItem(TOKEN_STORAGE_KEY)
-}
+// 鉴权由 Cookie 会话承担（登录页 POST /api/login 后 HttpOnly Cookie 自动随请求携带），
+// 页面与 WS 均不再需要 URL token；会话失效时 HTTP 302 / WS 401 回登录页。
 
 // 响应 reviver：还原桥侧序列化的特殊值
 // {__buf: base64} -> Uint8Array；{__img: dataURL} -> dataURL 字符串
@@ -258,7 +205,8 @@ function revive(_key: string, value: unknown): unknown {
 
 function wsUrl(): string {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  return `${protocol}//${location.host}/ws?token=${encodeURIComponent(token ?? '')}`
+  // Cookie 由浏览器随同源 WS 握手自动携带，无需显式传参
+  return `${protocol}//${location.host}/ws`
 }
 
 function sendRaw(message: unknown): void {
@@ -286,7 +234,7 @@ function dispatchEvent(channel: string, payload?: unknown): void {
   if (!listeners || listeners.size === 0) {
     return
   }
-  // 合成事件仅作占位，保证 listener 收到 (event, payload) 与 preload 签名一致
+  // 合成事件仅作占位，保证 listener 收到 (event, payload) 与 ipcRenderer.on 签名一致
   const event = {} as IpcRendererEvent
   listeners.forEach((listener) => {
     try {
@@ -318,19 +266,8 @@ function startApp(): void {
   // 动态加载应用：确保 platform 先于应用代码就绪
   import('../main').catch((error) => {
     console.error('failed to load app:', error)
+    showFatalError('应用加载失败，请刷新页面重试')
   })
-}
-
-function enterFatalState(message: string): void {
-  fatal = true
-  ready = false
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer)
-    reconnectTimer = null
-  }
-  rejectPendingInvokes('web bridge disconnected')
-  showFatalError(message)
-  ws?.close()
 }
 
 function handleServerMessage(raw: string): void {
@@ -348,12 +285,13 @@ function handleServerMessage(raw: string): void {
       if (message.platform) {
         processInfo.platform = message.platform
       }
-      // window.process 仅在 preload 环境存在，此处用受控断言赋值（镜像 preload 形状）
+      // window.process 不在 DOM 类型中，且与 @types/node 的全局 process 交集，需受控断言赋值
       browserWindow.process = processInfo
       flushPendingInvokes()
       startApp()
     } else {
-      enterFatalState('Web 桥连接失败：Token 无效或已过期，请从应用控制台输出的链接重新访问')
+      // 会话失效（如服务重启后 sid 不再有效）：整页刷新由 HTTP 302 引导回登录页
+      location.reload()
     }
     return
   }
@@ -376,7 +314,7 @@ function handleServerMessage(raw: string): void {
 }
 
 function scheduleReconnect(): void {
-  if (fatal || reconnectTimer) {
+  if (reconnectTimer) {
     return
   }
   reconnectTimer = setTimeout(() => {
@@ -386,10 +324,20 @@ function scheduleReconnect(): void {
   reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_DELAY)
 }
 
-function connect(): void {
-  if (fatal) {
-    return
+// 探测会话有效性：受保护路径在未登录时返回 302（fetch redirect:'manual' 表现为
+// opaqueredirect / redirected），此时整页刷新由 HTTP 层引导回登录页
+async function checkSessionAndMaybeReload(): Promise<void> {
+  try {
+    const res = await fetch('/', { redirect: 'manual' })
+    if (res.type === 'opaqueredirect' || res.redirected) {
+      location.reload()
+    }
+  } catch {
+    // 网络错误：交给重连循环处理
   }
+}
+
+function connect(): void {
   let socket: WebSocket
   try {
     socket = new WebSocket(wsUrl())
@@ -400,8 +348,7 @@ function connect(): void {
   }
   ws = socket
   socket.onopen = () => {
-    // token 已随 URL 携带，连接后立刻补发 hello 完成握手
-    sendRaw({ type: 'hello', token })
+    // 无需发送 hello：会话已在 upgrade 阶段凭 Cookie 验证，服务端连接后立即下发 hello ack
   }
   socket.onmessage = (event: MessageEvent) => {
     if (typeof event.data === 'string') {
@@ -413,14 +360,10 @@ function connect(): void {
       ws = null
       ready = false
     }
-    if (fatal) {
-      return
-    }
-    if (event.code === TOKEN_CLOSE_CODE) {
-      enterFatalState(
-        'Web 桥连接失败：Token 无效或已过期（close 4001），请从应用控制台输出的链接重新访问'
-      )
-      return
+    // 异常断开时先探测会话是否仍有效：未登录（302）则整页刷新回登录页，
+    // 已登录则交给指数退避重连（覆盖服务重启后旧会话失效的场景）
+    if (event.code !== 1000) {
+      void checkSessionAndMaybeReload()
     }
     // 断开期间所有未完成的 invoke 立即失败
     rejectPendingInvokes('web bridge disconnected')
@@ -428,7 +371,7 @@ function connect(): void {
   }
 }
 
-// ---- window.electron / window.api（形状与 preload 暴露面一致）----
+// ---- window.electron / window.api（本 shim 对浏览器暴露的完整 IPC 面）----
 const electronAPI = {
   ipcRenderer: {
     invoke: (channel: string, ...args: unknown[]): Promise<unknown> => {

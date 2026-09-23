@@ -1,5 +1,4 @@
 import { createHash } from 'crypto'
-import { dialog } from 'electron'
 import * as chromeRequest from '../utils/chromeRequest'
 import { getAppConfig } from '../config/app'
 import { getControledMihomoConfig } from '../config/controledMihomo'
@@ -7,7 +6,6 @@ import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
 import { getRuntimeConfigStr } from '../core/factory'
 import { encryptAgeContent, generateAgeKeyPair } from '../utils/age'
 import { createLogger } from '../utils/logger'
-import { atomicWriteFile } from '../utils/safeFile'
 
 interface GistInfo {
   id: string
@@ -195,19 +193,4 @@ export async function exportGistAgeSecretKeyText(): Promise<string> {
     throw new Error('Gist Age private key has not been generated')
   }
   return gistAgeSecretKey.trim()
-}
-
-export async function exportGistAgeSecretKey(): Promise<boolean> {
-  const gistAgeSecretKey = await exportGistAgeSecretKeyText()
-
-  const { canceled, filePath } = await dialog.showSaveDialog({
-    title: 'Export Gist Age Private Key',
-    defaultPath: 'clash-party-gist-age-secret-key.txt',
-    filters: [{ name: 'Text File', extensions: ['txt'] }]
-  })
-
-  if (canceled || !filePath) return false
-
-  await atomicWriteFile(filePath, `${gistAgeSecretKey}\n`, { encoding: 'utf8', mode: 0o600 })
-  return true
 }

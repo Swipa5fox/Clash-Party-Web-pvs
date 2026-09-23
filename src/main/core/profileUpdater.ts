@@ -6,6 +6,7 @@ import {
   getProfileConfig,
   getProfileItem
 } from '../config'
+import { broadcastEvent } from '../resolve/broadcaster'
 import { logger } from '../utils/logger'
 
 const intervalPool: Record<string, Cron | NodeJS.Timeout> = {}
@@ -35,10 +36,8 @@ async function updateProfile(id: string): Promise<void> {
     const item = await getProfileItem(id)
     if (item && item.type === 'remote') {
       await addProfileItem(item)
-      // 后台定时更新完成后主动通知渲染层，否则订阅列表的更新时间/流量要等窗口重新聚焦才刷新（#1570）
-      // 动态 import 避免与 window.ts 形成静态循环依赖
-      const { mainWindow } = await import('../window')
-      mainWindow?.webContents.send('profileConfigUpdated')
+      // 后台定时更新完成后主动通知渲染层，否则订阅列表的更新时间/流量要等页面重新加载才刷新（#1570）
+      broadcastEvent('profileConfigUpdated')
     } else if (item && item.type === 'plugin' && item.pluginId) {
       const { updatePluginProfile } = await import('../resolve/plugin')
       await updatePluginProfile(item.pluginId)

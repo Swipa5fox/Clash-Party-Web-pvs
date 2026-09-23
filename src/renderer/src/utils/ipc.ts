@@ -1,5 +1,3 @@
-import { TitleBarOverlayOptions } from 'electron'
-
 function checkIpcError<T>(response: unknown): T {
   if (response && typeof response === 'object' && 'invokeError' in response) {
     throw (response as { invokeError: unknown }).invokeError
@@ -30,23 +28,17 @@ interface IpcApi {
   mihomoUnfixedProxy: (group: string) => Promise<IMihomoProxy>
   mihomoUpgradeGeo: () => Promise<void>
   mihomoUpgrade: () => Promise<void>
-  mihomoUpgradeUI: () => Promise<void>
   mihomoProxyDelay: (proxy: string, url?: string, provider?: string) => Promise<IMihomoDelay>
   mihomoGroupDelay: (group: string, url?: string) => Promise<IMihomoGroupDelay>
   patchMihomoConfig: (patch: Partial<IMihomoConfig>) => Promise<void>
   mihomoSmartGroupWeights: (groupName: string) => Promise<Record<string, number>>
   mihomoSmartFlushCache: (configName?: string) => Promise<void>
   getSmartOverrideContent: () => Promise<string | null>
-  // AutoRun
-  checkAutoRun: () => Promise<boolean>
-  enableAutoRun: () => Promise<void>
-  disableAutoRun: () => Promise<void>
   // Config
   getAppConfig: (force?: boolean) => Promise<IAppConfig>
   patchAppConfig: (patch: Partial<IAppConfig>) => Promise<void>
   getControledMihomoConfig: (force?: boolean) => Promise<Partial<IMihomoConfig>>
   patchControledMihomoConfig: (patch: Partial<IMihomoConfig>) => Promise<void>
-  resetAppConfig: () => Promise<void>
   // Profile
   getProfileConfig: (force?: boolean) => Promise<IProfileConfig>
   setProfileConfig: (config: IProfileConfig) => Promise<void>
@@ -81,35 +73,20 @@ interface IpcApi {
   getRuntimeConfigStr: () => Promise<string>
   getRuleStr: (id: string) => Promise<string>
   setRuleStr: (id: string, str: string) => Promise<void>
-  getFilePath: (ext: string[], title?: string, filterName?: string) => Promise<string[] | undefined>
-  readTextFile: (filePath: string) => Promise<string>
-  readImageFileDataURL: (filePath: string) => Promise<string>
-  openFile: (type: 'profile' | 'override', id: string, ext?: 'yaml' | 'js') => Promise<void>
   // Core
   restartCore: () => Promise<void>
   mihomoHotReloadConfig: () => Promise<void>
-  startMonitor: () => Promise<void>
-  quitWithoutCore: () => Promise<void>
   // System
   triggerSysProxy: (enable: boolean) => Promise<void>
   checkTunPermissions: () => Promise<boolean>
-  grantTunPermissions: () => Promise<void>
-  manualGrantCorePermition: () => Promise<void>
   checkAdminPrivileges: () => Promise<boolean>
-  restartAsAdmin: () => Promise<void>
   checkMihomoCorePermissions: () => Promise<boolean>
   checkHighPrivilegeCore: () => Promise<boolean>
-  showTunPermissionDialog: () => Promise<boolean>
-  showErrorDialog: (title: string, message: string) => Promise<void>
-  openUWPTool: () => Promise<void>
   setupFirewall: () => Promise<void>
   getInterfaces: () => Promise<Record<string, NetworkInterfaceInfo[]>>
   setNativeTheme: (theme: 'system' | 'light' | 'dark') => Promise<void>
-  copyEnv: (type: 'bash' | 'cmd' | 'powershell' | 'fish' | 'nushell') => Promise<void>
   copyEnvText: (type?: 'bash' | 'cmd' | 'powershell' | 'fish' | 'nushell') => Promise<string>
   // Update
-  checkUpdate: () => Promise<IAppVersion | undefined>
-  downloadAndInstallUpdate: (version: string) => Promise<void>
   getVersion: () => Promise<string>
   platform: () => Promise<NodeJS.Platform>
   getDeploymentEnv: () => Promise<'desktop' | 'container'>
@@ -131,27 +108,9 @@ interface IpcApi {
   // Theme
   resolveThemes: () => Promise<{ key: string; label: string; content: string }[]>
   fetchThemes: () => Promise<void>
-  importThemes: (files: string[]) => Promise<void>
   importThemesFromContents: (files: { name: string; content: string }[]) => Promise<number>
   readTheme: (theme: string) => Promise<string>
   writeTheme: (theme: string, css: string) => Promise<void>
-  // Tray
-  showTrayIcon: () => Promise<void>
-  closeTrayIcon: () => Promise<void>
-  updateTrayIcon: () => Promise<void>
-  // Window
-  showMainWindow: () => Promise<void>
-  closeMainWindow: () => Promise<void>
-  triggerMainWindow: () => Promise<void>
-  showFloatingWindow: () => Promise<void>
-  closeFloatingWindow: () => Promise<void>
-  showContextMenu: () => Promise<void>
-  setAlwaysOnTop: (alwaysOnTop: boolean) => Promise<void>
-  isAlwaysOnTop: () => Promise<boolean>
-  openDevTools: () => Promise<void>
-  createHeapSnapshot: () => Promise<void>
-  // Shortcut
-  registerShortcut: (oldShortcut: string, newShortcut: string, action: string) => Promise<boolean>
   // Plugin
   getPluginConfig: (force?: boolean) => Promise<IPluginConfig>
   previewPlugin: (fileBytesB64: string) => Promise<IPluginDescriptorPreview>
@@ -163,13 +122,19 @@ interface IpcApi {
   // Misc
   getGistUrl: () => Promise<string>
   generateGistAgeKeyPair: () => Promise<{ secretKey: string; recipient: string }>
-  exportGistAgeSecretKey: () => Promise<boolean>
   exportGistAgeSecretKeyText: () => Promise<string>
   fetchIPInfo: (url: string) => Promise<unknown>
   measureLatency: (url: string) => Promise<number | null>
   getImageDataURL: (url: string) => Promise<string>
-  relaunchApp: () => Promise<void>
-  quitApp: () => Promise<void>
+  // File Share
+  getFileShareServerState: () => Promise<IFileShareServerState>
+  restartFileShareServer: () => Promise<void>
+  listFileShareFiles: () => Promise<IFileShareFileInfo[]>
+  addFileShareFile: (fileName: string, contentBase64: string) => Promise<IFileShareAddResult>
+  revokeFileShareFile: (file: string) => Promise<void>
+  getFileShareUrls: (file: string) => Promise<string[]>
+  setFileShareFileMeta: (file: string, patch: IFileShareFileMetaPatch) => Promise<void>
+  renameFileShareGroup: (from: string, to: string) => Promise<void>
 }
 
 // 使用 Proxy 自动生成 IPC 调用
@@ -198,23 +163,17 @@ export const {
   mihomoUnfixedProxy,
   mihomoUpgradeGeo,
   mihomoUpgrade,
-  mihomoUpgradeUI,
   mihomoProxyDelay,
   mihomoGroupDelay,
   patchMihomoConfig,
   mihomoSmartGroupWeights,
   mihomoSmartFlushCache,
   getSmartOverrideContent,
-  // AutoRun
-  checkAutoRun,
-  enableAutoRun,
-  disableAutoRun,
   // Config
   getAppConfig,
   patchAppConfig,
   getControledMihomoConfig,
   patchControledMihomoConfig,
-  resetAppConfig,
   // Profile
   getProfileConfig,
   setProfileConfig,
@@ -249,35 +208,20 @@ export const {
   getRuntimeConfigStr,
   getRuleStr,
   setRuleStr,
-  getFilePath,
-  readTextFile,
-  readImageFileDataURL,
-  openFile,
   // Core
   restartCore,
   mihomoHotReloadConfig,
-  startMonitor,
-  quitWithoutCore,
   // System
   triggerSysProxy,
   checkTunPermissions,
-  grantTunPermissions,
-  manualGrantCorePermition,
   checkAdminPrivileges,
-  restartAsAdmin,
   checkMihomoCorePermissions,
   checkHighPrivilegeCore,
-  showTunPermissionDialog,
-  showErrorDialog,
-  openUWPTool,
   setupFirewall,
   getInterfaces,
   setNativeTheme,
-  copyEnv,
   copyEnvText,
   // Update
-  checkUpdate,
-  downloadAndInstallUpdate,
   getVersion,
   fetchMihomoTags,
   installSpecificMihomoCore,
@@ -295,27 +239,9 @@ export const {
   // Theme
   resolveThemes,
   fetchThemes,
-  importThemes,
   importThemesFromContents,
   readTheme,
   writeTheme,
-  // Tray
-  showTrayIcon,
-  closeTrayIcon,
-  updateTrayIcon,
-  // Window
-  showMainWindow,
-  closeMainWindow,
-  triggerMainWindow,
-  showFloatingWindow,
-  closeFloatingWindow,
-  showContextMenu,
-  setAlwaysOnTop,
-  isAlwaysOnTop,
-  openDevTools,
-  createHeapSnapshot,
-  // Shortcut
-  registerShortcut,
   // Plugin
   getPluginConfig,
   previewPlugin,
@@ -327,14 +253,20 @@ export const {
   // Misc
   getGistUrl,
   generateGistAgeKeyPair,
-  exportGistAgeSecretKey,
   exportGistAgeSecretKeyText,
   fetchIPInfo,
   measureLatency,
   getImageDataURL,
-  getDeploymentEnv,
-  relaunchApp,
-  quitApp
+  // File Share
+  getFileShareServerState,
+  restartFileShareServer,
+  listFileShareFiles,
+  addFileShareFile,
+  revokeFileShareFile,
+  getFileShareUrls,
+  setFileShareFileMeta,
+  renameFileShareGroup,
+  getDeploymentEnv
 } = ipc
 
 // platform 需要重命名导出
@@ -342,9 +274,29 @@ export const getPlatform = ipc.platform
 
 // 需要特殊处理的函数
 
-// applyTheme: 防抖处理，避免频繁调用
+// applyTheme: 主题 CSS 由渲染层本地注入（桌面壳移除后主进程无 BrowserWindow
+// 可 insertCSS），经 readTheme 通道读取主题文件后写入 <style>；防抖处理避免频繁调用
+const CUSTOM_THEME_STYLE_ID = 'custom-theme-style'
 let applyThemeRunning = false
 let pendingTheme: string | null = null
+
+async function injectThemeCss(theme: string): Promise<void> {
+  let css = ''
+  if (theme && theme !== 'default.css') {
+    css = await readTheme(theme)
+  }
+  let style = document.getElementById(CUSTOM_THEME_STYLE_ID)
+  if (!css) {
+    style?.remove()
+    return
+  }
+  if (!style) {
+    style = document.createElement('style')
+    style.id = CUSTOM_THEME_STYLE_ID
+    document.head.appendChild(style)
+  }
+  style.textContent = css
+}
 
 export async function applyTheme(theme: string): Promise<void> {
   if (applyThemeRunning) {
@@ -353,7 +305,10 @@ export async function applyTheme(theme: string): Promise<void> {
   }
   applyThemeRunning = true
   try {
-    await invoke<void>('applyTheme', theme)
+    await injectThemeCss(theme)
+  } catch {
+    // 主题文件缺失/读取失败时回退为无自定义样式
+    document.getElementById(CUSTOM_THEME_STYLE_ID)?.remove()
   } finally {
     applyThemeRunning = false
     if (pendingTheme !== null) {
@@ -362,20 +317,6 @@ export async function applyTheme(theme: string): Promise<void> {
       await applyTheme(nextTheme)
     }
   }
-}
-
-// setTitleBarOverlay: 需要静默处理不支持的平台
-export async function setTitleBarOverlay(overlay: TitleBarOverlayOptions): Promise<void> {
-  try {
-    await invoke<void>('setTitleBarOverlay', overlay)
-  } catch {
-    // Not supported on this platform
-  }
-}
-
-// updateTrayIconImmediate: 同步调用，不等待结果
-export function updateTrayIconImmediate(sysProxyEnabled: boolean, tunEnabled: boolean): void {
-  window.electron.ipcRenderer.invoke('updateTrayIconImmediate', sysProxyEnabled, tunEnabled)
 }
 
 // getAppName: 获取应用程序名称

@@ -100,14 +100,10 @@ export const createLogger = (moduleName: string): Logger => {
 export const appLogger = createLogger('app')
 
 // 为了保持向后兼容性，创建各模块的日志实例（都指向同一个应用日志）
-export const floatingWindowLogger = createLogger('floating-window')
-export const mainWindowLogger = createLogger('main-window')
 export const coreLogger = createLogger('mihomo-core')
 export const apiLogger = createLogger('mihomo-api')
 export const configLogger = createLogger('config')
 export const systemLogger = createLogger('system')
-export const trafficLogger = createLogger('traffic-monitor')
-export const trayLogger = createLogger('tray')
 export const initLogger = createLogger('init')
 export const ipcLogger = createLogger('ipc')
 export const proxyLogger = createLogger('sysproxy')

@@ -7,9 +7,11 @@
 # Build context: REPOSITORY ROOT (not this directory):
 #   docker build -t cpx-party:local -f deploy/party/Dockerfile .
 #
-# Container-side fixed ports:
-#   3999 web UI (CP_WEB_PORT)   7890 mihomo mixed proxy (HTTP+SOCKS5)   9090 controller
-# 9090 is NOT published to the host — the cpx-gateway proxies it (compose only).
+# Host-side fixed ports (compose runs network_mode: host):
+#   3999 web UI (CP_WEB_PORT)   7890 mihomo mixed proxy (HTTP+SOCKS5)
+#   + any custom line-group listener added at runtime from the Web UI.
+# The controller (127.0.0.1:9090) is loopback-only — the cpx-gateway proxies
+# it on :8080; LAN clients never reach it directly.
 
 # ------------------------------------------------------------------ builder --
 FROM node:22-slim AS builder

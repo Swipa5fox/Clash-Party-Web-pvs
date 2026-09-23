@@ -15,7 +15,43 @@ type SiderCardKey =
   | 'log'
   | 'network'
   | 'usage'
+  | 'fileShare'
 type NetworkInfoCardKey = 'ip' | 'topology' | 'latency'
+type FileShareIssueLevel = 'info' | 'warn' | 'fatal'
+interface IFileShareIssue {
+  level: FileShareIssueLevel
+  message: string
+}
+interface IFileShareValidation {
+  ok: boolean
+  issues: IFileShareIssue[]
+}
+interface IFileShareFileInfo {
+  file: string
+  size: number
+  mtime: number
+  // 显示别名(重命名不影响分发 URL,底层文件名即凭证不变)
+  alias?: string
+  // 所属分组名(未归组为 undefined,渲染层归入默认分组)
+  group?: string
+}
+// 文件分发元数据编辑: alias 改显示名, group 改归属分组(空串=移出分组)
+interface IFileShareFileMetaPatch {
+  alias?: string
+  group?: string
+}
+interface IFileShareServerState {
+  enabled: boolean
+  running: boolean
+  port: number
+  host: string
+  error: string | null
+}
+interface IFileShareAddResult {
+  added: boolean
+  file: string | null
+  validation: IFileShareValidation
+}
 type AppTheme = 'system' | 'light' | 'dark'
 type MihomoGroupType = 'Selector' | 'URLTest' | 'Fallback' | 'LoadBalance' | 'Relay'
 type Priority =
@@ -257,12 +293,6 @@ interface INetworkLatencyTarget {
   url: string
 }
 
-interface ICustomTrayIcons {
-  off?: string
-  sysProxy?: string
-  tun?: string
-}
-
 interface IAppConfig {
   core: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
   specificVersion?: string
@@ -287,12 +317,6 @@ interface IAppConfig {
   connectionTableSortDirection?: 'asc' | 'desc'
   displayIcon?: boolean
   displayAppName?: boolean
-  spinFloatingIcon?: boolean
-  disableTray?: boolean
-  swapTrayClick?: boolean
-  showFloatingWindow?: boolean
-  floatingWindowCompatMode?: boolean
-  disableHardwareAcceleration?: boolean
   connectionCardStatus?: CardStatus
   dnsCardStatus?: CardStatus
   logCardStatus?: CardStatus
@@ -309,22 +333,22 @@ interface IAppConfig {
   ruleCardStatus?: CardStatus
   sniffCardStatus?: CardStatus
   usageCardStatus?: CardStatus
+  fileShareCardStatus?: CardStatus
+  fileShare?: {
+    enable?: boolean
+    port?: number
+    host?: string
+  }
   githubToken?: string
   gistAgeEncrypt?: boolean
   gistAgeRecipient?: string
   gistAgeSecretKey?: string
-  autoQuitWithoutCore?: boolean
-  autoQuitWithoutCoreDelay?: number
-  autoQuitWithoutCoreMode?: 'core' | 'tray'
   pluginUseProxy?: boolean // 插件网关请求经由本地混合端口代理（安全保证降级，默认关闭）
   mihomoCpuPriority?: Priority
   coreStartupMode?: 'log' | 'post-up'
   diffWorkDir?: boolean
   autoSetDNS?: boolean
   originDNS?: string
-  useWindowFrame: boolean
-  proxyInTray: boolean
-  showCurrentProxyInTray: boolean
   enableTrafficLogger?: boolean
   siderOrder: string[]
   lastSelectedSiderCard?: SiderCardKey
@@ -337,7 +361,6 @@ interface IAppConfig {
   autoUpdateProfileOnStart: boolean
   silentUpdate: boolean
   githubProxy?: string
-  silentStart: boolean
   autoCloseConnection: boolean
   sysProxy: ISysProxyConfig
   maxLogDays: number
@@ -355,12 +378,6 @@ interface IAppConfig {
   encryptedPassword?: number[]
   controlDns?: boolean
   controlSniff?: boolean
-  useDockIcon?: boolean
-  showTraffic?: boolean
-  disableTrayIconColor?: boolean
-  customTrayIcon?: string
-  customTrayIcons?: ICustomTrayIcons
-  trayProxyGroupStyle?: 'default' | 'submenu'
   disableAnimations?: boolean
   webdavUrl?: string
   webdavDir?: string
@@ -371,18 +388,8 @@ interface IAppConfig {
   webdavIgnoreCert?: boolean
   useNameserverPolicy: boolean
   nameserverPolicy: { [key: string]: string | string[] }
-  showWindowShortcut?: string
-  showFloatingWindowShortcut?: string
-  triggerSysProxyShortcut?: string
-  triggerTunShortcut?: string
-  ruleModeShortcut?: string
-  globalModeShortcut?: string
-  directModeShortcut?: string
-  restartAppShortcut?: string
-  quitWithoutCoreShortcut?: string
-  copyEnvShortcut?: string
-  language?: 'zh-CN' | 'zh-TW' | 'en-US'
-  triggerMainWindowBehavior?: 'show' | 'toggle'
+  // 语言集合与 general-config 语言下拉及 locales 资源保持一致
+  language?: 'zh-CN' | 'en-US'
   showMixedPort?: number
   enableMixedPort?: boolean
   showSocksPort?: number
@@ -533,7 +540,7 @@ interface IProfileConfig {
   items: IProfileItem[]
 }
 
-// 自定义线路组: 入口组(自动/故障/手动子组) + 专属端口
+// 自定义线路组: 入口组(自动/故障/手动/全局子组) + 专属端口
 interface ICustomLineGroup {
   id: string
   name: string
@@ -544,6 +551,10 @@ interface ICustomLineGroup {
   auto: boolean
   fallback: boolean
   manual: boolean
+  // 全局子组: select 类型直接包含该组全部线路, 可手选任意线路
+  global?: boolean
+  // 停用开关: false 时不注入该组的代理组与专属端口 listener(配置保留)
+  enabled?: boolean
 }
 
 interface ICustomLineGroupsConfig {
@@ -632,11 +643,6 @@ interface IPluginDescriptorPreview {
   site?: string
   loginUrl: string // full url; UI shows the host
   spec: string
-}
-
-interface IPluginFilePayload {
-  name: string
-  fileBytesB64: string
 }
 
 interface IGatewayEndpoints {

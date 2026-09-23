@@ -40,9 +40,11 @@ PORT   组名              国外出口  国内出口(应直连)
 9999   KR·全局[9999]     KR        走了代理!
 ```
 
-## 端口门（bridge 网络模式才需要）
+## 端口门（仅 bridge 网络模式才需要）
 
-listener 绑 `0.0.0.0` 在容器内，若 party 容器是默认 bridge + ports 映射，新端口必须在 `docker-compose.override.yml` 映射后才对外可达：
+默认部署（`deploy/gateway/docker-compose.yml`）已改用 `network_mode: host`：listener 直接绑宿主机，加线路零 ssh、即写即生效，无需任何端口映射。
+
+若你的部署仍是默认 bridge + ports 映射，新端口必须在 `docker-compose.override.yml` 映射后才对外可达：
 
 ```yaml
 services:
@@ -52,9 +54,7 @@ services:
       - '9999:9999'
 ```
 
-然后 `docker compose up -d party`。脚本 add 完会自动检测，门没开会打印这段提示。
-
-**推荐终局：party 容器用 `network_mode: host`**，listener 直接绑宿主机，加线路零 ssh、即写即生效。注意 compose 的 `ports` 是追加合并，清空要用 `!override []`（compose ≥ 2.24）或直接改 base yml；host 模式下 override 里不能再出现 ports（会冲突报错）。
+然后 `docker compose up -d party`。脚本 add 完会自动检测，门没开会打印这段提示。迁移到 host 模式时记得删除 override 里残留的 `ports` 段（与 host 模式冲突会报错）。
 
 ## 原理
 

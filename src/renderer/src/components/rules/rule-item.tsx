@@ -1,15 +1,16 @@
-import { Card, CardBody, Chip, Switch } from '@heroui/react'
+import { Chip, Switch } from '@heroui/react'
 import React, { useState, useEffect } from 'react'
 import { mihomoRulesDisable } from '@renderer/utils/ipc'
-import { useTranslation } from 'react-i18next'
+import RuleSparkline from './rule-sparkline'
 
 interface RuleItemProps extends IMihomoRulesDetail {
   index: number
+  sparkline?: number[]
 }
 
+// 紧凑单行展示：列宽与 rules.tsx 表头保持一致
 const RuleItem: React.FC<RuleItemProps> = (props) => {
-  const { t } = useTranslation()
-  const { type, payload, proxy, index: listIndex, extra } = props
+  const { type, payload, proxy, index: listIndex, extra, sparkline } = props
   const ruleIndex = props.index ?? listIndex
 
   const [isEnabled, setIsEnabled] = useState(!extra?.disabled)
@@ -28,69 +29,65 @@ const RuleItem: React.FC<RuleItemProps> = (props) => {
     }
   }
 
-  const formatRelativeTime = (timestamp: string): string => {
+  // 紧凑相对时间（语言无关单位）：3s / 5m / 2h / 4d，未命中显示 —
+  const formatCompactTime = (timestamp: string): string => {
     const time = new Date(timestamp).getTime()
-    if (time === 0) return t('rules.hitAt.never')
-    const now = Date.now()
-    const diff = Math.floor((now - time) / 1000)
-    if (diff < 60) return t('rules.hitAt.seconds')
-    if (diff < 3600) return t('rules.hitAt.minutes', { count: Math.floor(diff / 60) })
-    if (diff < 86400) return t('rules.hitAt.hours', { count: Math.floor(diff / 3600) })
-    return t('rules.hitAt.days', { count: Math.floor(diff / 86400) })
+    if (!time) return '—'
+    const diff = Math.floor((Date.now() - time) / 1000)
+    if (diff < 60) return `${Math.max(diff, 0)}s`
+    if (diff < 3600) return `${Math.floor(diff / 60)}m`
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h`
+    return `${Math.floor(diff / 86400)}d`
   }
 
-  return (
-    <div className={`w-full px-2 pb-2 ${listIndex === 0 ? 'pt-2' : ''}`}>
-      <Card className={!isEnabled ? 'opacity-50' : ''}>
-        <CardBody className="py-3 px-4">
-          <div className="flex justify-between items-center gap-4">
-            {/* 左侧：规则信息 */}
-            <div className="flex-1 min-w-0 flex items-center gap-3">
-              {/* 规则内容 */}
-              <div className="flex-1 min-w-0">
-                <div title={payload} className="text-sm font-medium truncate mb-1.5">
-                  {payload}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Chip size="sm" radius="sm" variant="bordered" className="text-xs">
-                    {type}
-                  </Chip>
-                  <Chip size="sm" radius="sm" variant="bordered" className="text-xs">
-                    {proxy}
-                  </Chip>
-                </div>
-              </div>
-            </div>
+  const total = extra ? extra.hitCount + extra.missCount : 0
+  const rate = total > 0 ? (extra ? (extra.hitCount / total) * 100 : 0) : 0
 
-            {extra &&
-              (() => {
-                const total = extra.hitCount + extra.missCount
-                const rate = total > 0 ? (extra.hitCount / total) * 100 : 0
-                return (
-                  <>
-                    <div className="flex items-center gap-3 text-xs shrink-0">
-                      <span className="text-foreground-500 whitespace-nowrap">
-                        {formatRelativeTime(extra.hitAt || extra.missAt)}
-                      </span>
-                      <span className="text-foreground-600 font-medium whitespace-nowrap">
-                        {extra.hitCount}/{total}
-                      </span>
-                      <Chip size="sm" variant="flat" color="primary" className="text-xs">
-                        {rate.toFixed(1)}%
-                      </Chip>
-                    </div>
-                    <Switch
-                      size="sm"
-                      isSelected={isEnabled}
-                      onValueChange={handleToggle}
-                      aria-label="Toggle rule"
-                    />
-                  </>
-                )
-              })()}
-          </div>
-        </CardBody>
-      </Card>
+  return (
+    <div className={`w-full px-2 pb-1 ${listIndex === 0 ? 'pt-1' : ''}`}>
+      <div
+        className={`flex items-center gap-3 h-9 px-3 rounded-medium hover:bg-default-100 transition-colors text-xs ${
+          !isEnabled ? 'opacity-50' : ''
+        }`}
+      >
+        <span className="w-12 shrink-0 text-foreground-400 tabular-nums">{ruleIndex}</span>
+        <Chip
+          size="sm"
+          radius="sm"
+          variant="bordered"
+          className="text-[10px] h-5 shrink-0 w-24 justify-center overflow-hidden"
+        >
+          <span className="truncate">{type}</span>
+        </Chip>
+        <span title={payload} className="flex-1 min-w-0 truncate font-medium">
+          {payload}
+        </span>
+        <span title={proxy} className="w-28 shrink-0 truncate text-foreground-600">
+          {proxy}
+        </span>
+        <span className="w-14 shrink-0 text-right tabular-nums font-medium">
+          {extra ? extra.hitCount : '—'}
+        </span>
+        <span className="w-14 shrink-0 text-right tabular-nums text-primary">
+          {extra && total > 0 ? `${rate.toFixed(1)}%` : '—'}
+        </span>
+        <span
+          className="w-12 shrink-0 text-right tabular-nums text-foreground-500"
+          title={extra ? formatCompactTime(extra.hitAt || extra.missAt) : undefined}
+        >
+          {extra ? formatCompactTime(extra.hitAt || extra.missAt) : '—'}
+        </span>
+        <span className="shrink-0 text-foreground-400">
+          <RuleSparkline values={sparkline ?? []} />
+        </span>
+        <Switch
+          size="sm"
+          isSelected={isEnabled}
+          onValueChange={handleToggle}
+          aria-label="Toggle rule"
+          classNames={{ wrapper: 'h-4 w-8', thumb: 'h-3 w-3 group-data-[selected=true]:ms-4' }}
+        />
+      </div>
     </div>
   )
 }

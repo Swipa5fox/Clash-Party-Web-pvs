@@ -35,10 +35,13 @@ mixed-port: 7890
 # LAN sharing: the whole point of this deployment.
 allow-lan: true
 bind-address: '*'
-# TCP controller for the cpx-gateway reverse proxy. Only reachable inside the
-# compose network (the port is not published to the host). CP itself keeps
-# talking to the core over its private unix socket regardless of this setting.
-external-controller: 0.0.0.0:9090
+# TCP controller for the cpx-gateway reverse proxy. The compose stack runs
+# network_mode: host, so 127.0.0.1 keeps the controller reachable by the
+# gateway over localhost while staying invisible to LAN clients — they must
+# use the gated panel on the gateway :8080. CP itself keeps talking to the
+# core over its private unix socket regardless of this setting. Volumes
+# seeded by older versions keep their old value; edit it in the Web UI.
+external-controller: 127.0.0.1:9090
 # Panel files served through the gateway at :8080/ui (zashboard, CP's default).
 # ui/ is pre-seeded from the image when the offline panel ships; the URL stays
 # as the mihomo-native update/refresh channel (used only when ui/ is deleted).

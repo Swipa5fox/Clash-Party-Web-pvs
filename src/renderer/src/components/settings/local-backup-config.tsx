@@ -71,7 +71,6 @@ const LocalBackupConfig: React.FC = () => {
       // 内容直传通道：读取 zip 为 base64 后交主进程恢复（web/桌面统一）
       await importLocalBackupFromContent(await readFileAsBase64(file))
       window.electron.ipcRenderer.send('updateAppConfig')
-      window.electron.ipcRenderer.send('updateTrayMenu')
       window.electron.ipcRenderer.send('appConfigUpdated')
       window.electron.ipcRenderer.send('controledMihomoConfigUpdated')
       window.electron.ipcRenderer.send('profileConfigUpdated')

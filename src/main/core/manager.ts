@@ -1,14 +1,14 @@
 import { ChildProcess, execFile, spawn } from 'child_process'
 import { randomUUID } from 'crypto'
-import { readFile, mkdir, rm, writeFile } from 'fs/promises'
+import { readFile, mkdir, rm } from 'fs/promises'
 import { promisify } from 'util'
 import { setTimeout as delay } from 'timers/promises'
 import path from 'path'
 import os from 'os'
 import { existsSync, watch, type FSWatcher as NodeFSWatcher } from 'fs'
 import chokidar, { type FSWatcher as ChokidarWatcher } from 'chokidar'
-import { app, ipcMain } from 'electron'
-import { mainWindow } from '../window'
+import { ipcMain } from 'electron'
+import { broadcastEvent } from '../resolve/broadcaster'
 import {
   getAppConfig,
   getControledMihomoConfig,
@@ -27,7 +27,6 @@ import {
   mihomoWorkDir
 } from '../utils/dirs'
 import { uploadRuntimeConfigIfChanged } from '../resolve/gistApi'
-import { startMonitor } from '../resolve/trafficMonitor'
 import { ensureRuntimeFiles, safeShowErrorBox } from '../utils/init'
 import { parseAgeSecretKeys } from '../utils/age'
 import i18next from '../../shared/i18n'
@@ -48,8 +47,7 @@ import {
 import { generateProfile } from './factory'
 import {
   checkAdminRestartForTun as checkAdminRestartForTunWithRestart,
-  getSessionAdminStatus,
-  setStopCoreBeforeAdminRestart
+  getSessionAdminStatus
 } from './permissions'
 import {
   cleanupSocketFile,
@@ -67,13 +65,7 @@ export {
   checkAdminPrivileges,
   checkMihomoCorePermissions,
   checkHighPrivilegeCore,
-  grantTunPermissions,
-  restartAsAdmin,
-  requestTunPermissions,
-  showTunPermissionDialog,
-  showErrorDialog,
-  checkTunPermissions,
-  manualGrantCorePermition
+  checkTunPermissions
 } from './permissions'
 
 export { getDefaultDevice } from './dns'
@@ -377,7 +369,7 @@ export function initCoreWatcher(): void {
   ipcMain.removeAllListeners('restartCore')
   ipcMain.on('restartCore', async () => {
     await restartCore()
-    mainWindow?.webContents.send('appConfigUpdated')
+    broadcastEvent('appConfigUpdated')
   })
 }
 
@@ -599,8 +591,8 @@ function setupCoreListeners(
 
   const completeCoreStartup = async (): Promise<void> => {
     try {
-      mainWindow?.webContents.send('groupsUpdated')
-      mainWindow?.webContents.send('rulesUpdated')
+      broadcastEvent('groupsUpdated')
+      broadcastEvent('rulesUpdated')
       await uploadRuntimeConfigIfChanged()
     } catch (error) {
       managerLogger.warn('Failed to sync runtime config to Gist', error)
@@ -648,8 +640,7 @@ function setupCoreListeners(
     // TUN 权限错误
     if (str.includes('configure tun interface: operation not permitted')) {
       patchControledMihomoConfig({ tun: { enable: false } })
-      mainWindow?.webContents.send('controledMihomoConfigUpdated')
-      ipcMain.emit('updateTrayMenu')
+      broadcastEvent('controledMihomoConfigUpdated')
       rejectStartup(i18next.t('tun.error.tunPermissionDenied'))
       return
     }
@@ -854,8 +845,6 @@ export async function stopCoreForExit(): Promise<void> {
   ])
 }
 
-setStopCoreBeforeAdminRestart(stopCore)
-
 async function restartCoreOnce(forceStop: boolean): Promise<void> {
   const startAttempt = await runCoreOperation(async () => {
     await stopCoreInternal(forceStop)
@@ -900,29 +889,6 @@ async function restartCoreAfterUnexpectedExit(): Promise<void> {
 export function restartCore(forceStop = false): Promise<void> {
   ensureCoreOperationAllowed()
   return trackCoreRestart(() => restartCoreOnce(forceStop))
-}
-
-// 保持核心运行
-export async function keepCoreAlive(): Promise<boolean> {
-  try {
-    await startCore(true)
-    if (child?.pid) {
-      await writeFile(path.join(dataDir(), 'core.pid'), child.pid.toString())
-    }
-    return Boolean(child?.pid)
-  } catch (e) {
-    safeShowErrorBox('mihomo.error.coreStartFailed', `${e}`)
-    return false
-  }
-}
-
-// 退出但保持核心运行
-export async function quitWithoutCore(): Promise<void> {
-  managerLogger.info(`Starting lightweight mode on platform: ${process.platform}`)
-  if (!(await keepCoreAlive())) return
-  await startMonitor(true)
-  managerLogger.info('Exiting main process, core will continue running in background')
-  app.exit()
 }
 
 // 检查配置文件

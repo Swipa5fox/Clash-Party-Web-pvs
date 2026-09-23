@@ -1,5 +1,4 @@
 import path from 'path'
-import v8 from 'v8'
 import { readFile } from 'fs/promises'
 import { app, ipcMain } from 'electron'
 import i18next from 'i18next'
@@ -19,7 +18,6 @@ import {
   mihomoUpdateRuleProviders,
   mihomoUpgrade,
   mihomoUpgradeGeo,
-  mihomoUpgradeUI,
   mihomoHotReloadConfig,
   mihomoVersion,
   patchMihomoConfig,
@@ -27,7 +25,6 @@ import {
   mihomoSmartFlushCache,
   mihomoRulesDisable
 } from '../core/mihomoApi'
-import { checkAutoRun, disableAutoRun, enableAutoRun } from '../sys/autoRun'
 import {
   getAppConfig,
   patchAppConfig,
@@ -57,30 +54,18 @@ import {
 } from '../config'
 import { getCustomLineGroupsConfig, setCustomLineGroupsConfig } from '../config/customLineGroups'
 import {
-  quitWithoutCore,
   restartCore,
   checkTunPermissions,
-  grantTunPermissions,
-  manualGrantCorePermition,
   checkAdminPrivileges,
-  restartAsAdmin,
   checkMihomoCorePermissions,
-  requestTunPermissions,
-  checkHighPrivilegeCore,
-  showTunPermissionDialog,
-  showErrorDialog
+  checkHighPrivilegeCore
 } from '../core/manager'
 import { triggerSysProxy } from '../sys/sysproxy'
-import { checkUpdate, downloadAndInstallUpdate } from '../resolve/autoUpdater'
 import {
-  getFilePath,
-  openFile,
-  openUWPTool,
-  readImageFileDataURL,
-  readTextFile,
-  resetAppConfig,
   setNativeTheme,
-  setupFirewall
+  setupFirewall,
+  buildEnvText,
+  type EnvType
 } from '../sys/misc'
 import { getRuntimeConfig, getRuntimeConfigStr } from '../core/factory'
 import {
@@ -96,33 +81,13 @@ import {
 } from '../resolve/backup'
 import { getInterfaces } from '../sys/interface'
 import {
-  closeTrayIcon,
-  copyEnv,
-  showTrayIcon,
-  updateTrayIcon,
-  updateTrayIconImmediate,
-  buildEnvText,
-  type EnvType
-} from '../resolve/tray'
-import { registerShortcut } from '../resolve/shortcut'
-import { closeMainWindow, mainWindow, showMainWindow, triggerMainWindow } from '../window'
-import {
-  applyTheme,
   fetchThemes,
-  importThemes,
   importThemesFromContents,
   readTheme,
   resolveThemes,
   writeTheme
 } from '../resolve/theme'
-import {
-  exportGistAgeSecretKey,
-  exportGistAgeSecretKeyText,
-  generateGistAgeKeyPair,
-  getGistUrl
-} from '../resolve/gistApi'
-import { startMonitor } from '../resolve/trafficMonitor'
-import { closeFloatingWindow, showContextMenu, showFloatingWindow } from '../resolve/floatingWindow'
+import { exportGistAgeSecretKeyText, generateGistAgeKeyPair, getGistUrl } from '../resolve/gistApi'
 import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
 import {
   previewPlugin,
@@ -133,12 +98,23 @@ import {
   patchPluginItem
 } from '../resolve/plugin'
 import { getPluginConfig } from '../config/plugin'
+import { broadcastEvent } from '../resolve/broadcaster'
+import {
+  getFileShareServerState,
+  restartFileShareServer,
+  listFileShareFiles,
+  addFileShareFile,
+  revokeFileShareFile,
+  getFileShareUrls,
+  setFileShareFileMeta,
+  renameFileShareGroup
+} from '../resolve/fileShare'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { getIconDataURL } from './icon'
 import { getAppName } from './appName'
 import { getDeploymentEnv } from './deployment'
-import { dataDir, logDir, rulePath } from './dirs'
+import { dataDir, rulePath } from './dirs'
 import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
 import { atomicWriteFile } from './safeFile'
 import { checkPortOccupied } from './portCheck'
@@ -197,10 +173,18 @@ async function saveCustomLineGroups(config: ICustomLineGroupsConfig): Promise<vo
   await setCustomLineGroupsConfig(config)
   try {
     await mihomoHotReloadConfig()
-    mainWindow?.webContents.send('groupsUpdated')
+    broadcastEvent('groupsUpdated')
   } catch {
     // 热重载失败时保留配置,下次内核重启生效
   }
+}
+
+// 渲染层 patchAppConfig 完成后广播 appConfigUpdated,驱动各页面 appConfig SWR 立即刷新;
+// 否则开关等受控组件要等 SWR 30s 轮询才反映新值,表现为"点击不立马生效"
+// (主进程内部调用 config/app.ts 的 patchAppConfig 不经此包装,不受影响)
+async function patchAppConfigAndBroadcast(patch: Partial<IAppConfig>): Promise<void> {
+  await patchAppConfig(patch)
+  broadcastEvent('appConfigUpdated')
 }
 
 async function setRuleStr(id: string, str: string): Promise<void> {
@@ -233,13 +217,6 @@ async function measureLatency(url: string): Promise<number | null> {
 
 async function changeLanguage(lng: string): Promise<void> {
   await i18next.changeLanguage(lng)
-  ipcMain.emit('updateTrayMenu')
-}
-
-async function setTitleBarOverlay(overlay: Electron.TitleBarOverlayOptions): Promise<void> {
-  if (mainWindow && typeof mainWindow.setTitleBarOverlay === 'function') {
-    mainWindow.setTitleBarOverlay(overlay)
-  }
 }
 
 // Web 模式判定（与 index.ts 保持一致）
@@ -281,19 +258,14 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   mihomoUnfixedProxy,
   mihomoUpgradeGeo,
   mihomoUpgrade,
-  mihomoUpgradeUI,
   mihomoProxyDelay,
   mihomoGroupDelay,
   patchMihomoConfig,
   mihomoSmartGroupWeights,
   mihomoSmartFlushCache,
-  // AutoRun
-  checkAutoRun,
-  enableAutoRun,
-  disableAutoRun,
   // Config
   getAppConfig,
-  patchAppConfig,
+  patchAppConfig: patchAppConfigAndBroadcast,
   getControledMihomoConfig,
   patchControledMihomoConfig,
   // Profile
@@ -331,31 +303,18 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   getSmartOverrideContent,
   getRuleStr,
   setRuleStr,
-  readTextFile,
   // Core
   restartCore,
   mihomoHotReloadConfig,
-  startMonitor,
-  quitWithoutCore,
   // System
   triggerSysProxy,
   checkTunPermissions,
-  grantTunPermissions,
-  manualGrantCorePermition,
   checkAdminPrivileges,
-  restartAsAdmin,
   checkMihomoCorePermissions,
-  requestTunPermissions,
   checkHighPrivilegeCore,
-  showTunPermissionDialog,
-  showErrorDialog,
-  openUWPTool,
   setupFirewall,
-  copyEnv,
   copyEnvText: async (type?: EnvType) => await buildEnvText(type),
   // Update
-  checkUpdate,
-  downloadAndInstallUpdate,
   fetchMihomoTags,
   installSpecificMihomoCore,
   clearMihomoVersionCache,
@@ -372,19 +331,9 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   // Theme
   resolveThemes,
   fetchThemes,
-  importThemes,
   importThemesFromContents,
   readTheme,
   writeTheme,
-  applyTheme,
-  // Tray
-  showTrayIcon,
-  closeTrayIcon,
-  updateTrayIcon,
-  // Floating Window
-  showFloatingWindow,
-  closeFloatingWindow,
-  showContextMenu,
   // Plugin
   getPluginConfig,
   previewPlugin,
@@ -396,41 +345,30 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   // Misc
   getGistUrl,
   generateGistAgeKeyPair,
-  exportGistAgeSecretKey,
   exportGistAgeSecretKeyText,
   fetchIPInfo,
   measureLatency,
   getImageDataURL,
-  readImageFileDataURL,
   getIconDataURL,
   getAppName,
   changeLanguage,
-  setTitleBarOverlay,
-  registerShortcut
+  // File Share
+  getFileShareServerState,
+  restartFileShareServer,
+  listFileShareFiles,
+  addFileShareFile,
+  revokeFileShareFile,
+  getFileShareUrls,
+  setFileShareFileMeta,
+  renameFileShareGroup
 }
 
 export const syncHandlers: Record<string, SyncFn> = {
-  resetAppConfig,
-  getFilePath,
-  openFile,
   getInterfaces,
   setNativeTheme,
   getVersion: () => app.getVersion(),
   platform: () => process.platform,
-  getDeploymentEnv,
-  updateTrayIconImmediate,
-  showMainWindow,
-  closeMainWindow,
-  triggerMainWindow,
-  setAlwaysOnTop: (alwaysOnTop: boolean) => mainWindow?.setAlwaysOnTop(alwaysOnTop),
-  isAlwaysOnTop: () => mainWindow?.isAlwaysOnTop(),
-  openDevTools: () => mainWindow?.webContents.openDevTools(),
-  createHeapSnapshot: () => v8.writeHeapSnapshot(path.join(logDir(), `${Date.now()}.heapsnapshot`)),
-  relaunchApp: () => {
-    app.relaunch()
-    app.quit()
-  },
-  quitApp: () => app.quit()
+  getDeploymentEnv
 }
 
 export function registerIpcMainHandlers(): void {

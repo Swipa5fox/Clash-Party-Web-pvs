@@ -131,8 +131,24 @@ function applyCustomLineGroups(
   const listeners = (profile.listeners as IMihomoListenerConfig[] | undefined) ?? []
   const groupNames = new Set(proxyGroups.map((g) => g?.name))
 
+  // 清理 pass: 停用(enabled === false)的组移除其入口组/子组与专属端口 listener,
+  // 避免热重载后旧配置残留(组配置本身保留在 customLineGroups 文件中)
+  const SUB_SUFFIXES = ['自动', '故障', '手动', '全局']
+  groups
+    .filter((g) => g.enabled === false)
+    .forEach((g) => {
+      const removeNames = [g.name, ...SUB_SUFFIXES.map((s) => `${g.name}·${s}`)]
+      for (let i = proxyGroups.length - 1; i >= 0; i--) {
+        if (removeNames.includes(String(proxyGroups[i]?.name))) proxyGroups.splice(i, 1)
+      }
+      const listenerIdx = listeners.findIndex((l) => l?.name === `${g.name}·入口`)
+      if (listenerIdx >= 0) listeners.splice(listenerIdx, 1)
+      removeNames.forEach((n) => groupNames.delete(n))
+    })
+
   groups.forEach((g) => {
     if (!g.name || !g.port || !Array.isArray(g.proxies)) return
+    if (g.enabled === false) return
     const proxies = g.proxies.filter(Boolean)
     if (proxies.length === 0) return
 
@@ -140,7 +156,9 @@ function applyCustomLineGroups(
     const subDefs: { suffix: string; type: string; enable: boolean }[] = [
       { suffix: '自动', type: 'url-test', enable: g.auto !== false },
       { suffix: '故障', type: 'fallback', enable: g.fallback !== false },
-      { suffix: '手动', type: 'select', enable: g.manual !== false }
+      { suffix: '手动', type: 'select', enable: g.manual !== false },
+      // 全局: select 直接包含全部线路, 可手选任意线路(不经过其他子组层级)
+      { suffix: '全局', type: 'select', enable: g.global !== false }
     ]
     subDefs.forEach((def) => {
       if (!def.enable) return
@@ -150,9 +168,12 @@ function applyCustomLineGroups(
       const sub: Record<string, any> = {
         name: subName,
         type: def.type,
-        proxies: [...proxies],
-        url: g.testUrl || 'https://www.gstatic.com/generate_204',
-        interval: g.interval && g.interval > 0 ? g.interval : 300
+        proxies: [...proxies]
+      }
+      // url/interval 仅对自动测速类子组有意义, select 类保持干净
+      if (def.type !== 'select') {
+        sub.url = g.testUrl || 'https://www.gstatic.com/generate_204'
+        sub.interval = g.interval && g.interval > 0 ? g.interval : 300
       }
       proxyGroups.push(sub)
       groupNames.add(subName)

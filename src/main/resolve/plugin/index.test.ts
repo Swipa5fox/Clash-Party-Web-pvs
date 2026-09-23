@@ -44,7 +44,7 @@ vi.mock('../../config/profile', () => ({
 vi.mock('../../config/app', () => ({
   getAppConfig: vi.fn(async () => ({ subscriptionTimeout: 5000 }))
 }))
-vi.mock('../../window', () => ({ mainWindow: null }))
+vi.mock('../broadcaster', () => ({ broadcastEvent: vi.fn() }))
 
 const discoverGateway = vi.fn()
 vi.mock('./discovery', () => ({ discoverGateway: (...a: unknown[]) => discoverGateway(...a) }))
