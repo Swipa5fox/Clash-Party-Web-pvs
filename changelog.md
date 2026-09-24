@@ -6,7 +6,7 @@
 
 ## Rebuild v1.1（2026-09-24）
 
-自 v1.0（`b1cb9e9c`）以来的变更：15 个文件，+89 / −172。
+自 v1.0（`b1cb9e9c`）以来的变更：38 个文件，+1079 / −642（含引入 pre-commit 钩子带来的全仓 prettier 格式化；实质源码变更 15 个文件）。
 
 ### 优化
 
@@ -15,9 +15,19 @@
 - **依赖精简**：`pubsub-js` → 原生 `CustomEvent`，`nanoid` → `crypto.randomUUID`，净减 2 个运行时依赖
 - `validate.ts` 合并重复的 `listenAddress` 验证器与 3 份 RegExp 验证器；`hash.ts` 删除零调用的 HashType 类，只留 `getHash`
 
+### 修复
+
+- **恢复 package.json 运行时依赖**：v1.1 原提交（`5b5c84d`）移除 pubsub-js/nanoid 时误删了整个 `dependencies` 块，源码包 `pnpm install` 无法装齐运行时依赖、tag CI 全平台构建失败；已恢复依赖清单并提交 lockfile 对应清理（`cee5fdd`）
+- `tools/mihomo-lines` 既有 lint 错误修复：空 catch 块补注释；`ad-filter.js`（mihomo 覆写沙箱消费的纯 JS，不能含 TS 语法）文件级豁免 TS 规则
+
 ### 验证
 
 - typecheck 与全部 193 项测试通过
+
+### 发布说明
+
+- Release 挂在 [tag v1.1.0](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases/tag/v1.1.0)（与 package.json 版本一致；git tag `v1.1` 同指向此提交）。仅提供 Windows x64 安装版与便携版
+- 已知问题：便携版 7z 内未包含 `PORTABLE` 标记文件（构建机无 7z 工具），解压版不会进入便携模式、数据仍写用户目录——下个版本修正
 
 ## Rebuild v1.0（2026-09-23）
 

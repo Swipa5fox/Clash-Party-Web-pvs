@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases">
-    <img src="https://img.shields.io/badge/release-v1.0-blue">
+    <img src="https://img.shields.io/badge/release-v1.1-blue">
   </a>
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs">
     <img src="https://img.shields.io/badge/upstream-Clash%20Party%20v2.0.2-green">
@@ -24,15 +24,15 @@
 
 > ⚠️ 本项目面向**可信内网**自用：为支持内网直连，移除了传输加密、SSRF 防护与设备签名，凭据改为明文落盘。**不要暴露到公网，也不要对外分发。**
 
-## 当前版本 v1.0（2026-09-23）
+## 当前版本 v1.1（2026-09-24）
 
-自 Rebuild v6.0 基线以来共 **156 个文件变更（+3650 / −10771）**，核心更新：
+自 v1.0 以来的核心更新（详见 [changelog.md](./changelog.md)）：
 
-- **新增**：Web UI 文件分享（局域网直链 / 二维码 / 别名分组 / ZeroOmega 备份安全校验）、规则命中统计（历史 + 迷你图）、代理子组面板重构（tab 容器合并）、Web 端账号密码登录（Cookie 会话）
-- **桌面壳彻底移除**：preload 桥、托盘、悬浮窗、快捷键、deeplink、自动更新等桌面专属代码（约 -1.1 万行）；语言包收敛为简中 / 英文
-- **修复**：Web 模式下文件分享「重命名 / 修改分组」报 `Invalid invoke channel`；插件状态徽标显示原始 key 等翻译缺失
-- **优化**：面板入口统一为网关 `:8080`；清理死图标 / 死脚本 / 死文案与 Windows 安装包冗余资产
-- **部署变更**：compose 切换 `network_mode: host` —— 自定义线路端口**即写即生效**，不再需要端口映射；mihomo 控制器收紧至 `127.0.0.1`
+- **配置热重载异步化**：保存订阅 / 覆写 / DNS / 嗅探器后不再被秒级重载卡住，失败才提示
+- **代理组递归解析**：嵌套子组可展开（3 层深度上限），修复子组展不开与页面卡死
+- **依赖精简**：移除 pubsub-js / nanoid，改用原生 `CustomEvent` 与 `crypto.randomUUID`
+- **修复**：v1.1 原提交误删 package.json `dependencies` 块导致源码构建失败，已恢复
+- 安装包见 [GitHub Release v1.1.0](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases/tag/v1.1.0)（仅 Windows x64）
 
 完整分类清单见 [changelog.md](./changelog.md) 与 [GitHub Release](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases)。
 
