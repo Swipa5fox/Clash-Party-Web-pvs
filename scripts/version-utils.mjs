@@ -66,9 +66,10 @@ export function getRepoSlug() {
   try {
     const pkg = readFileSync('package.json', 'utf-8')
     const { repository } = JSON.parse(pkg)
-    const url = String(
-      typeof repository === 'string' ? repository : repository?.url || ''
-    ).replace(/^git\+/, '')
+    const url = String(typeof repository === 'string' ? repository : repository?.url || '').replace(
+      /^git\+/,
+      ''
+    )
     const matched = /github\.com[/:]([^/]+\/[^/.]+)/.exec(url)
     if (matched) return matched[1]
   } catch {

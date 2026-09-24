@@ -44,16 +44,15 @@ const ProfileConfigContextWrapper: React.FC<{ children: ReactNode }> = ({ childr
   const pendingTask = useRef<Promise<void> | null>(null)
 
   const withErrorHandling = useCallback(
-    (action: () => Promise<void>, errorKey: string) =>
-      async () => {
-        try {
-          await action()
-        } catch (e) {
-          await showError(e, t(errorKey))
-        } finally {
-          mutate()
-        }
-      },
+    (action: () => Promise<void>, errorKey: string) => async () => {
+      try {
+        await action()
+      } catch (e) {
+        await showError(e, t(errorKey))
+      } finally {
+        mutate()
+      }
+    },
     [mutate, t]
   )
 

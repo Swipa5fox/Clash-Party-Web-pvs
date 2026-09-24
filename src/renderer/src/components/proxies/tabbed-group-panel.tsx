@@ -45,9 +45,10 @@ function lineSignature(sub: IMihomoMixedGroup): string {
  * 拆分同线路子组族: 若 subs 中开头存在 ≥2 个节点名集合完全相同的连续子组,
  * 视为一个族(自定义线路组形态), 其余子组照旧逐面板渲染。
  */
-export function splitUniformLineFamily(
-  subs: IMihomoMixedGroup[]
-): { family: IMihomoMixedGroup[] | null; rest: IMihomoMixedGroup[] } {
+export function splitUniformLineFamily(subs: IMihomoMixedGroup[]): {
+  family: IMihomoMixedGroup[] | null
+  rest: IMihomoMixedGroup[]
+} {
   if (subs.length < 2) return { family: null, rest: subs }
   const signature = lineSignature(subs[0])
   const family: IMihomoMixedGroup[] = [subs[0]]

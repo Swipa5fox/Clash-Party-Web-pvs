@@ -60,18 +60,18 @@
 
 ## 技术栈
 
-| 层 | 选型 |
-| --- | --- |
-| 运行时 | Electron 43（主进程 / 预加载 / 渲染层三进程模型） |
-| 内核 | mihomo（Clash Meta）、mihomo-alpha、mihomo-smart 三个 sidecar 可切换 |
-| 语言 | TypeScript 5.9 |
-| 界面 | React 19 + HeroUI + Tailwind CSS 4，配 react-virtuoso、Monaco、d3、chart.js |
-| 状态与国际化 | SWR、i18next / react-i18next |
-| 构建 | electron-vite 4（Vite 7）+ electron-builder，渲染层单入口 `web` |
-| 主进程与桥接 | Node 22、express（Web 模式静态服务）、ws（RPC 桥） |
-| 网关 | Node ≥ 22.5，零第三方依赖，使用内置 `node:sqlite` |
-| 容器 | Docker + Compose v2，多阶段构建，依赖默认走 npmmirror |
-| 质量保障 | vitest（单元 / 集成）、eslint + prettier、tsc 类型检查 |
+| 层           | 选型                                                                        |
+| ------------ | --------------------------------------------------------------------------- |
+| 运行时       | Electron 43（主进程 / 预加载 / 渲染层三进程模型）                           |
+| 内核         | mihomo（Clash Meta）、mihomo-alpha、mihomo-smart 三个 sidecar 可切换        |
+| 语言         | TypeScript 5.9                                                              |
+| 界面         | React 19 + HeroUI + Tailwind CSS 4，配 react-virtuoso、Monaco、d3、chart.js |
+| 状态与国际化 | SWR、i18next / react-i18next                                                |
+| 构建         | electron-vite 4（Vite 7）+ electron-builder，渲染层单入口 `web`             |
+| 主进程与桥接 | Node 22、express（Web 模式静态服务）、ws（RPC 桥）                          |
+| 网关         | Node ≥ 22.5，零第三方依赖，使用内置 `node:sqlite`                           |
+| 容器         | Docker + Compose v2，多阶段构建，依赖默认走 npmmirror                       |
+| 质量保障     | vitest（单元 / 集成）、eslint + prettier、tsc 类型检查                      |
 
 ## 实现方式
 
@@ -174,12 +174,12 @@ cd deploy/gateway
 
 无源码的新机器可用 `deploy/opt/bootstrap.sh`（用法见脚本头部注释）。完整选项、运维命令、账号管理与 FAQ 见 [`deploy/gateway/README.md`](deploy/gateway/README.md)。
 
-| 端口 | 用途 |
-| --- | --- |
-| `8080` | 网关：机场插件 API + 面板与控制器反代 |
-| `3999` | Clash Party Web UI（token 鉴权） |
-| `7890` | 局域网共享代理（HTTP + SOCKS5 混合口） |
-| 任意 | 自定义线路组端口：Web UI 即写即生效（host 网络模式直接绑宿主机，仅需放行防火墙） |
+| 端口   | 用途                                                                             |
+| ------ | -------------------------------------------------------------------------------- |
+| `8080` | 网关：机场插件 API + 面板与控制器反代                                            |
+| `3999` | Clash Party Web UI（token 鉴权）                                                 |
+| `7890` | 局域网共享代理（HTTP + SOCKS5 混合口）                                           |
+| 任意   | 自定义线路组端口：Web UI 即写即生效（host 网络模式直接绑宿主机，仅需放行防火墙） |
 
 ## 文档
 

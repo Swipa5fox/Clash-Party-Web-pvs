@@ -36,13 +36,7 @@ import {
 } from '@renderer/utils/ipc'
 import dayjs from '@renderer/utils/dayjs'
 import { calcTraffic } from '@renderer/utils/calc'
-import {
-  MdDeleteOutline,
-  MdEdit,
-  MdLink,
-  MdOutlineFileUpload,
-  MdQrCode2
-} from 'react-icons/md'
+import { MdDeleteOutline, MdEdit, MdLink, MdOutlineFileUpload, MdQrCode2 } from 'react-icons/md'
 import { IoCopy } from 'react-icons/io5'
 import { IoIosArrowBack } from 'react-icons/io'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -75,9 +69,10 @@ const FileShare: React.FC = () => {
   const [fileOver, setFileOver] = useState(false)
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null)
   const [qrUrl, setQrUrl] = useState<string | null>(null)
-  const [validation, setValidation] = useState<{ file: string; result: IFileShareValidation } | null>(
-    null
-  )
+  const [validation, setValidation] = useState<{
+    file: string
+    result: IFileShareValidation
+  } | null>(null)
   // 文件编辑弹窗: 目标文件 + 别名/分组草稿
   const [editTarget, setEditTarget] = useState<IFileShareFileInfo | null>(null)
   const [editAlias, setEditAlias] = useState('')
@@ -92,7 +87,10 @@ const FileShare: React.FC = () => {
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
-      const [nextState, nextFiles] = await Promise.all([getFileShareServerState(), listFileShareFiles()])
+      const [nextState, nextFiles] = await Promise.all([
+        getFileShareServerState(),
+        listFileShareFiles()
+      ])
       setState(nextState)
       setFiles(nextFiles)
     } catch (e) {
@@ -292,7 +290,9 @@ const FileShare: React.FC = () => {
 
   const lanIps = Object.values(interfaces)
     .flat()
-    .filter((info): info is NetworkInterfaceInfo => !!info && info.family === 'IPv4' && !info.internal)
+    .filter(
+      (info): info is NetworkInterfaceInfo => !!info && info.family === 'IPv4' && !info.internal
+    )
     .map((info) => info.address)
   const hostOptions = [...new Set(['0.0.0.0', '127.0.0.1', ...lanIps])]
 
@@ -448,7 +448,9 @@ const FileShare: React.FC = () => {
                               <Button
                                 size="sm"
                                 color="primary"
-                                isDisabled={!renameGroupInput.trim() || renameGroupInput.trim() === groupName}
+                                isDisabled={
+                                  !renameGroupInput.trim() || renameGroupInput.trim() === groupName
+                                }
                                 onPress={() => {
                                   void handleRenameGroup()
                                 }}
@@ -480,12 +482,16 @@ const FileShare: React.FC = () => {
                               className="flex items-center justify-between gap-2 rounded-medium px-2 py-1.5 hover:bg-default-100"
                             >
                               <div className="min-w-0 flex-1">
-                                <p className="truncate font-mono text-sm select-all" title={info.file}>
+                                <p
+                                  className="truncate font-mono text-sm select-all"
+                                  title={info.file}
+                                >
                                   {info.alias || info.file}
                                 </p>
                                 <p className="truncate text-xs text-foreground-500">
                                   {info.alias && <span className="font-mono">{info.file} · </span>}
-                                  {calcTraffic(info.size)} · {dayjs(info.mtime).format('YYYY-MM-DD HH:mm')}
+                                  {calcTraffic(info.size)} ·{' '}
+                                  {dayjs(info.mtime).format('YYYY-MM-DD HH:mm')}
                                 </p>
                               </div>
                               <div className="flex shrink-0 items-center gap-0.5">

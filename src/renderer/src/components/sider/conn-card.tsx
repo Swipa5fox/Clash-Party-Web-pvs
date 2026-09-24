@@ -255,4 +255,3 @@ const ConnCard: React.FC<Props> = (props) => {
 }
 
 export default ConnCard
-

@@ -239,7 +239,19 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
     }
     const ok = await onSave(
       drafts.map(
-        ({ id, name, port, proxies, testUrl, interval, auto, fallback, manual, global, enabled }) => ({
+        ({
+          id,
+          name,
+          port,
+          proxies,
+          testUrl,
+          interval,
+          auto,
+          fallback,
+          manual,
+          global,
+          enabled
+        }) => ({
           id,
           name: name.trim(),
           port,
@@ -373,9 +385,12 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
                     </Tooltip>
                   ))}
                 </div>
-                {d.auto === false && d.fallback === false && d.manual === false && d.global === false && (
-                  <div className="text-warning text-xs">{t('customLines.noSubGroup')}</div>
-                )}
+                {d.auto === false &&
+                  d.fallback === false &&
+                  d.manual === false &&
+                  d.global === false && (
+                    <div className="text-warning text-xs">{t('customLines.noSubGroup')}</div>
+                  )}
                 <Divider />
                 <div className="flex gap-2">
                   <Input

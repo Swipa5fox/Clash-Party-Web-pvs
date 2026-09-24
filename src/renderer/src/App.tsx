@@ -276,9 +276,7 @@ const App: React.FC = () => {
         style={{ width: `calc(100% - ${siderWidthValue + 1}px)` }}
         className="main grow h-full overflow-y-auto"
       >
-        <Suspense fallback={<div className="h-full w-full bg-content1" />}>
-          {page}
-        </Suspense>
+        <Suspense fallback={<div className="h-full w-full bg-content1" />}>{page}</Suspense>
       </div>
     </div>
   )

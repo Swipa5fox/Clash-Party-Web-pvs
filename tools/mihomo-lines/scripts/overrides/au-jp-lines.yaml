@@ -20,72 +20,72 @@
 
 # ---------- AU 子组(隐藏,入口组下拉展开) ----------
 proxy-groups+:
-  - name: "AU·自动"
+  - name: 'AU·自动'
     type: url-test
     include-all: true
-    filter: "(?i)澳洲|澳大利亚|Australia|Sydney|悉尼|🇦🇺"
+    filter: '(?i)澳洲|澳大利亚|Australia|Sydney|悉尼|🇦🇺'
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
     hidden: true
-  - name: "AU·故障"
+  - name: 'AU·故障'
     type: fallback
     include-all: true
-    filter: "(?i)澳洲|澳大利亚|Australia|Sydney|悉尼|🇦🇺"
+    filter: '(?i)澳洲|澳大利亚|Australia|Sydney|悉尼|🇦🇺'
     url: http://www.gstatic.com/generate_204
     interval: 300
     hidden: true
-  - name: "AU·手动"
+  - name: 'AU·手动'
     type: select
     include-all: true
-    filter: "(?i)澳洲|澳大利亚|Australia|Sydney|悉尼|🇦🇺"
+    filter: '(?i)澳洲|澳大利亚|Australia|Sydney|悉尼|🇦🇺'
     proxies: [DIRECT]
     hidden: true
   # ---------- AU 入口组 ----------
-  - name: "AU·通用[17890]"
+  - name: 'AU·通用[17890]'
     type: select
-    proxies: ["AU·自动", "AU·故障", "AU·手动"]
-  - name: "AU·全局[17891]"
+    proxies: ['AU·自动', 'AU·故障', 'AU·手动']
+  - name: 'AU·全局[17891]'
     type: select
-    proxies: ["AU·自动", "AU·故障", "AU·手动"]
+    proxies: ['AU·自动', 'AU·故障', 'AU·手动']
 
   # ---------- JP 子组 ----------
-  - name: "JP·自动"
+  - name: 'JP·自动'
     type: url-test
     include-all: true
-    filter: "(?i)日本|Japan|Tokyo|东京|大阪|🇯🇵"
+    filter: '(?i)日本|Japan|Tokyo|东京|大阪|🇯🇵'
     url: http://www.gstatic.com/generate_204
     interval: 300
     tolerance: 50
     hidden: true
-  - name: "JP·故障"
+  - name: 'JP·故障'
     type: fallback
     include-all: true
-    filter: "(?i)日本|Japan|Tokyo|东京|大阪|🇯🇵"
+    filter: '(?i)日本|Japan|Tokyo|东京|大阪|🇯🇵'
     url: http://www.gstatic.com/generate_204
     interval: 300
     hidden: true
-  - name: "JP·手动"
+  - name: 'JP·手动'
     type: select
     include-all: true
-    filter: "(?i)日本|Japan|Tokyo|东京|大阪|🇯🇵"
+    filter: '(?i)日本|Japan|Tokyo|东京|大阪|🇯🇵'
     proxies: [DIRECT]
     hidden: true
   # ---------- JP 入口组 ----------
-  - name: "JP·通用[8888]"
+  - name: 'JP·通用[8888]'
     type: select
-    proxies: ["JP·自动", "JP·故障", "JP·手动"]
-  - name: "JP·全局[8889]"
+    proxies: ['JP·自动', 'JP·故障', 'JP·手动']
+  - name: 'JP·全局[8889]'
     type: select
-    proxies: ["JP·自动", "JP·故障", "JP·手动"]
+    proxies: ['JP·自动', 'JP·故障', 'JP·手动']
 
 # ---------- 监听口 ----------
 # 全局口靠 listener.proxy 直接绑组,天然无规则;通用口靠下面 +rules 分流。
 listeners+:
   - { name: au-mix, type: mixed, listen: 0.0.0.0, port: 17890, udp: true }
-  - { name: au-glb, type: mixed, listen: 0.0.0.0, port: 17891, proxy: "AU·全局[17891]", udp: true }
+  - { name: au-glb, type: mixed, listen: 0.0.0.0, port: 17891, proxy: 'AU·全局[17891]', udp: true }
   - { name: jp-mix, type: mixed, listen: 0.0.0.0, port: 8888, udp: true }
-  - { name: jp-glb, type: mixed, listen: 0.0.0.0, port: 8889, proxy: "JP·全局[8889]", udp: true }
+  - { name: jp-glb, type: mixed, listen: 0.0.0.0, port: 8889, proxy: 'JP·全局[8889]', udp: true }
 
 # ---------- 分流规则(前置) ----------
 # 对本线路入口: 国内直连 → 剩余落本国池。AND+IN-NAME 只圈定本口,

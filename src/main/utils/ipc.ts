@@ -61,12 +61,7 @@ import {
   checkHighPrivilegeCore
 } from '../core/manager'
 import { triggerSysProxy } from '../sys/sysproxy'
-import {
-  setNativeTheme,
-  setupFirewall,
-  buildEnvText,
-  type EnvType
-} from '../sys/misc'
+import { setNativeTheme, setupFirewall, buildEnvText, type EnvType } from '../sys/misc'
 import { getRuntimeConfig, getRuntimeConfigStr } from '../core/factory'
 import {
   listWebdavBackups,

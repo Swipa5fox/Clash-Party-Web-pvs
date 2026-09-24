@@ -1,144 +1,435 @@
 <!doctype html>
 <html lang="zh">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>线路面板 · Lines</title>
-<style>
-:root{
-  --bg:#0d1117;--card:#161b22;--card2:#1c2129;--bd:#2d333b;--fg:#e6edf3;--dim:#8b949e;
-  --ac:#3fb950;--au:#d29922;--gl:#a371f7;--hd:#58a6ff;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--fg);font:14px/1.5 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;padding:24px}
-h1{font-size:18px;margin-bottom:4px}
-.sub{color:var(--dim);font-size:12px;margin-bottom:20px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px;max-width:1200px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:hidden}
-.chead{display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer;user-select:none}
-.chead:hover{background:var(--card2)}
-.flag{font-size:26px;line-height:1}
-.cname{font-weight:600;font-size:15px}
-.cmeta{color:var(--dim);font-size:12px}
-.arrow{margin-left:auto;transition:transform .2s;color:var(--dim)}
-.card.open .arrow{transform:rotate(90deg)}
-.cbody{display:none;border-top:1px solid var(--bd)}
-.card.open .cbody{display:block}
-/* 入口行 */
-.grow{padding:10px 16px;border-bottom:1px solid var(--bd)}
-.grow:last-child{border-bottom:none}
-.gtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.ptag{font-family:Consolas,monospace;font-size:12px;padding:2px 8px;border-radius:6px;font-weight:600}
-.ptag.mix{background:#12261e;color:var(--ac)}
-.ptag.glb{background:#241a35;color:var(--gl)}
-.gname{font-weight:600;font-size:13px}
-.now{color:var(--dim);font-size:12px;margin-left:auto}
-.seg{display:flex;gap:6px;margin-top:8px}
-.seg button{flex:1;padding:5px 0;border:1px solid var(--bd);background:transparent;color:var(--dim);border-radius:8px;cursor:pointer;font-size:12px}
-.seg button.on{border-color:var(--hd);color:var(--hd);background:#11213a}
-/* 子组 */
-.subg{margin:8px 0 4px;border:1px solid var(--bd);border-radius:8px;overflow:hidden}
-.subg>.shead{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;background:var(--card2);font-size:12px}
-.subg>.shead:hover{filter:brightness(1.15)}
-.sarrow{transition:transform .2s;color:var(--dim);font-size:10px}
-.subg.open .sarrow{transform:rotate(90deg)}
-.sname{font-weight:600}
-.stype{color:var(--dim);font-size:11px}
-.snow{margin-left:auto;color:var(--dim);font-size:11px;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nodes{display:none;flex-wrap:wrap;gap:6px;padding:8px 10px}
-.subg.open .nodes{display:flex}
-.node{padding:4px 10px;border:1px solid var(--bd);border-radius:999px;cursor:pointer;font-size:12px;color:var(--dim)}
-.node:hover{border-color:var(--hd);color:var(--fg)}
-.node.on{border-color:var(--ac);color:var(--ac);background:#12261e}
-.node .dly{font-size:10px;margin-left:4px;color:var(--au)}
-.empty{color:var(--dim);padding:40px;text-align:center}
-#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#2d333b;padding:8px 18px;border-radius:8px;opacity:0;transition:opacity .3s;pointer-events:none}
-#toast.show{opacity:1}
-.bar{display:flex;gap:10px;align-items:center;margin-bottom:18px}
-.bar input{background:var(--card);border:1px solid var(--bd);color:var(--fg);padding:6px 10px;border-radius:8px;width:240px;font-size:13px}
-.bar button{background:var(--card);border:1px solid var(--bd);color:var(--fg);padding:6px 14px;border-radius:8px;cursor:pointer}
-</style>
-</head>
-<body>
-<h1>国家线路面板</h1>
-<div class="sub">大卡片 = 国家线路 · 点卡片展开子组 · 点子组展开节点 · 点节点即切换</div>
-<div class="bar">
-  <input id="api" placeholder="API 地址">
-  <button onclick="load()">刷新</button>
-  <span class="sub" id="hint" style="margin:0"></span>
-</div>
-<div class="grid" id="grid"></div>
-<div id="toast"></div>
-<script>
-const $ = s => document.querySelector(s)
-const flagOf = p => ({AU:'🇦🇺',JP:'🇯🇵',KR:'🇰🇷',US:'🇺🇸',HK:'🇭🇰',SG:'🇸🇬',TW:'🇹🇼',UK:'🇬🇧',DE:'🇩🇪'})[p] || '🌐'
-let API = localStorage.getItem('lines-api') || location.search.match(/host=([\d.]+)/)?.[1] && 'http://' + location.search.match(/host=([\d.]+)/)[1] + ':8080' || 'http://192.168.1.100:8080'
-$('#api').value = API
-const api = path => API + path
-const toast = m => { const t=$('#toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600) }
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>线路面板 · Lines</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --card: #161b22;
+        --card2: #1c2129;
+        --bd: #2d333b;
+        --fg: #e6edf3;
+        --dim: #8b949e;
+        --ac: #3fb950;
+        --au: #d29922;
+        --gl: #a371f7;
+        --hd: #58a6ff;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px/1.5 -apple-system,
+          'Segoe UI',
+          'Microsoft YaHei',
+          sans-serif;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 18px;
+        margin-bottom: 4px;
+      }
+      .sub {
+        color: var(--dim);
+        font-size: 12px;
+        margin-bottom: 20px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+        gap: 16px;
+        max-width: 1200px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--bd);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .chead {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 16px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .chead:hover {
+        background: var(--card2);
+      }
+      .flag {
+        font-size: 26px;
+        line-height: 1;
+      }
+      .cname {
+        font-weight: 600;
+        font-size: 15px;
+      }
+      .cmeta {
+        color: var(--dim);
+        font-size: 12px;
+      }
+      .arrow {
+        margin-left: auto;
+        transition: transform 0.2s;
+        color: var(--dim);
+      }
+      .card.open .arrow {
+        transform: rotate(90deg);
+      }
+      .cbody {
+        display: none;
+        border-top: 1px solid var(--bd);
+      }
+      .card.open .cbody {
+        display: block;
+      }
+      /* 入口行 */
+      .grow {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--bd);
+      }
+      .grow:last-child {
+        border-bottom: none;
+      }
+      .gtop {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .ptag {
+        font-family: Consolas, monospace;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+      }
+      .ptag.mix {
+        background: #12261e;
+        color: var(--ac);
+      }
+      .ptag.glb {
+        background: #241a35;
+        color: var(--gl);
+      }
+      .gname {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .now {
+        color: var(--dim);
+        font-size: 12px;
+        margin-left: auto;
+      }
+      .seg {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .seg button {
+        flex: 1;
+        padding: 5px 0;
+        border: 1px solid var(--bd);
+        background: transparent;
+        color: var(--dim);
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .seg button.on {
+        border-color: var(--hd);
+        color: var(--hd);
+        background: #11213a;
+      }
+      /* 子组 */
+      .subg {
+        margin: 8px 0 4px;
+        border: 1px solid var(--bd);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .subg > .shead {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 10px;
+        cursor: pointer;
+        background: var(--card2);
+        font-size: 12px;
+      }
+      .subg > .shead:hover {
+        filter: brightness(1.15);
+      }
+      .sarrow {
+        transition: transform 0.2s;
+        color: var(--dim);
+        font-size: 10px;
+      }
+      .subg.open .sarrow {
+        transform: rotate(90deg);
+      }
+      .sname {
+        font-weight: 600;
+      }
+      .stype {
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .snow {
+        margin-left: auto;
+        color: var(--dim);
+        font-size: 11px;
+        max-width: 55%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .nodes {
+        display: none;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 10px;
+      }
+      .subg.open .nodes {
+        display: flex;
+      }
+      .node {
+        padding: 4px 10px;
+        border: 1px solid var(--bd);
+        border-radius: 999px;
+        cursor: pointer;
+        font-size: 12px;
+        color: var(--dim);
+      }
+      .node:hover {
+        border-color: var(--hd);
+        color: var(--fg);
+      }
+      .node.on {
+        border-color: var(--ac);
+        color: var(--ac);
+        background: #12261e;
+      }
+      .node .dly {
+        font-size: 10px;
+        margin-left: 4px;
+        color: var(--au);
+      }
+      .empty {
+        color: var(--dim);
+        padding: 40px;
+        text-align: center;
+      }
+      #toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #2d333b;
+        padding: 8px 18px;
+        border-radius: 8px;
+        opacity: 0;
+        transition: opacity 0.3s;
+        pointer-events: none;
+      }
+      #toast.show {
+        opacity: 1;
+      }
+      .bar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 18px;
+      }
+      .bar input {
+        background: var(--card);
+        border: 1px solid var(--bd);
+        color: var(--fg);
+        padding: 6px 10px;
+        border-radius: 8px;
+        width: 240px;
+        font-size: 13px;
+      }
+      .bar button {
+        background: var(--card);
+        border: 1px solid var(--bd);
+        color: var(--fg);
+        padding: 6px 14px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>国家线路面板</h1>
+    <div class="sub">大卡片 = 国家线路 · 点卡片展开子组 · 点子组展开节点 · 点节点即切换</div>
+    <div class="bar">
+      <input id="api" placeholder="API 地址" />
+      <button onclick="load()">刷新</button>
+      <span class="sub" id="hint" style="margin: 0"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div id="toast"></div>
+    <script>
+      const $ = (s) => document.querySelector(s)
+      const flagOf = (p) =>
+        ({
+          AU: '🇦🇺',
+          JP: '🇯🇵',
+          KR: '🇰🇷',
+          US: '🇺🇸',
+          HK: '🇭🇰',
+          SG: '🇸🇬',
+          TW: '🇹🇼',
+          UK: '🇬🇧',
+          DE: '🇩🇪'
+        })[p] || '🌐'
+      let API =
+        localStorage.getItem('lines-api') ||
+        (location.search.match(/host=([\d.]+)/)?.[1] &&
+          'http://' + location.search.match(/host=([\d.]+)/)[1] + ':8080') ||
+        'http://192.168.1.100:8080'
+      $('#api').value = API
+      const api = (path) => API + path
+      const toast = (m) => {
+        const t = $('#toast')
+        t.textContent = m
+        t.classList.add('show')
+        setTimeout(() => t.classList.remove('show'), 1600)
+      }
 
-async function getJSON(u){ const r = await fetch(u); if(!r.ok) throw new Error(r.status); return r.json() }
-async function put(name, node){ await fetch(api('/proxies/'+encodeURIComponent(name)), {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:node})}) }
+      async function getJSON(u) {
+        const r = await fetch(u)
+        if (!r.ok) throw new Error(r.status)
+        return r.json()
+      }
+      async function put(name, node) {
+        await fetch(api('/proxies/' + encodeURIComponent(name)), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: node })
+        })
+      }
 
-const dly = h => { const a=(h||[]).filter(x=>x>0); return a.length?Math.round(a.reduce((s,x)=>s+x,0)/a.length):0 }
+      const dly = (h) => {
+        const a = (h || []).filter((x) => x > 0)
+        return a.length ? Math.round(a.reduce((s, x) => s + x, 0) / a.length) : 0
+      }
 
-async function load(){
-  API = $('#api').value.trim().replace(/\/$/,''); localStorage.setItem('lines-api',API)
-  // 记住展开状态(卡片+子组),自动刷新不折叠
-  const openCards = new Set([...document.querySelectorAll('.card.open')].map(e=>e.dataset.pre))
-  const openSubs = new Set([...document.querySelectorAll('.subg.open')].map(e=>e.dataset.g))
-  let data
-  try { data = await getJSON(api('/proxies')) } catch(e){ $('#grid').innerHTML='<div class="empty">连不上 '+API+' — 网关开着吗?</div>'; return }
-  const P = data.proxies, lines = new Map()
-  for(const [n,g] of Object.entries(P)){
-    const m = /^(.+?)·(通用|全局)\[(\d+)\]$/.exec(n); if(!m||!g.all) continue
-    const [,pre,kind,port]=m, key=pre+'-'+port
-    if(!lines.has(pre)) lines.set(pre,{pre,mix:null,glb:null})
-    lines.get(pre)[kind==='通用'?'mix':'glb']={name:n,now:g.now,port}
-  }
-  const arr=[...lines.values()].filter(l=>l.mix||l.glb).sort((a,b)=>(a.mix?.port||a.glb?.port)-(b.mix?.port||b.glb?.port))
-  $('#hint').textContent = arr.length+' 条线路 · '+new Date().toLocaleTimeString()
-  $('#grid').innerHTML = arr.map(l=>{
-    const subs = [...new Set([...P[l.mix?.name]?.all||[], ...P[l.glb?.name]?.all||[]])].filter(n=>n.startsWith(l.pre+'·'))
-    return `<div class="card ${openCards.has(l.pre)?'open':''}" data-pre="${l.pre}">
+      async function load() {
+        API = $('#api').value.trim().replace(/\/$/, '')
+        localStorage.setItem('lines-api', API)
+        // 记住展开状态(卡片+子组),自动刷新不折叠
+        const openCards = new Set(
+          [...document.querySelectorAll('.card.open')].map((e) => e.dataset.pre)
+        )
+        const openSubs = new Set(
+          [...document.querySelectorAll('.subg.open')].map((e) => e.dataset.g)
+        )
+        let data
+        try {
+          data = await getJSON(api('/proxies'))
+        } catch (e) {
+          $('#grid').innerHTML = '<div class="empty">连不上 ' + API + ' — 网关开着吗?</div>'
+          return
+        }
+        const P = data.proxies,
+          lines = new Map()
+        for (const [n, g] of Object.entries(P)) {
+          const m = /^(.+?)·(通用|全局)\[(\d+)\]$/.exec(n)
+          if (!m || !g.all) continue
+          const [, pre, kind, port] = m,
+            key = pre + '-' + port
+          if (!lines.has(pre)) lines.set(pre, { pre, mix: null, glb: null })
+          lines.get(pre)[kind === '通用' ? 'mix' : 'glb'] = { name: n, now: g.now, port }
+        }
+        const arr = [...lines.values()]
+          .filter((l) => l.mix || l.glb)
+          .sort((a, b) => (a.mix?.port || a.glb?.port) - (b.mix?.port || b.glb?.port))
+        $('#hint').textContent = arr.length + ' 条线路 · ' + new Date().toLocaleTimeString()
+        $('#grid').innerHTML = arr
+          .map((l) => {
+            const subs = [
+              ...new Set([...(P[l.mix?.name]?.all || []), ...(P[l.glb?.name]?.all || [])])
+            ].filter((n) => n.startsWith(l.pre + '·'))
+            return `<div class="card ${openCards.has(l.pre) ? 'open' : ''}" data-pre="${l.pre}">
       <div class="chead" onclick="this.parentNode.classList.toggle('open')">
         <span class="flag">${flagOf(l.pre)}</span>
         <div><div class="cname">${l.pre} 线路</div>
-        <div class="cmeta">${[l.mix,l.glb].filter(Boolean).map(g=>g.port).join(' / ')} 端口 · ${subs.length} 个子组</div></div>
+        <div class="cmeta">${[l.mix, l.glb]
+          .filter(Boolean)
+          .map((g) => g.port)
+          .join(' / ')} 端口 · ${subs.length} 个子组</div></div>
         <span class="arrow">▶</span>
       </div>
       <div class="cbody">
-        ${[l.mix,l.glb].filter(Boolean).map(g=>grow(g,l)).join('')}
+        ${[l.mix, l.glb]
+          .filter(Boolean)
+          .map((g) => grow(g, l))
+          .join('')}
       </div>
-    </div>`}).join('')
-  function grow(g,l){
-    const grp=P[g.name], cur=grp.now
-    const seg = grp.all.map(n=>`<button class="${n===cur?'on':''}" onclick="pick('${esc(g.name)}','${esc(n)}')">${n.replace(l.pre+'·','')}</button>`).join('')
-    const subg = grp.all.map(sn=>{
-      const sg=P[sn]; if(!sg) return ''
-      const scur=sg.now
-      const nodes=(sg.all||[]).map(nn=>{
-        const np=P[nn], d=dly(np?.history)
-        return `<span class="node ${nn===scur?'on':''}" onclick="event.stopPropagation();pick('${esc(sn)}','${esc(nn)}')">${nn}<span class="dly">${d?d+'ms':''}</span></span>`
-      }).join('')
-      const ty={Selector:'手动',URLTest:'自动',Fallback:'故障'}[sg.type]||sg.type
-      return `<div class="subg ${openSubs.has(sn)?'open':''}" data-g="${esc(sn)}">
+    </div>`
+          })
+          .join('')
+        function grow(g, l) {
+          const grp = P[g.name],
+            cur = grp.now
+          const seg = grp.all
+            .map(
+              (n) =>
+                `<button class="${n === cur ? 'on' : ''}" onclick="pick('${esc(g.name)}','${esc(n)}')">${n.replace(l.pre + '·', '')}</button>`
+            )
+            .join('')
+          const subg = grp.all
+            .map((sn) => {
+              const sg = P[sn]
+              if (!sg) return ''
+              const scur = sg.now
+              const nodes = (sg.all || [])
+                .map((nn) => {
+                  const np = P[nn],
+                    d = dly(np?.history)
+                  return `<span class="node ${nn === scur ? 'on' : ''}" onclick="event.stopPropagation();pick('${esc(sn)}','${esc(nn)}')">${nn}<span class="dly">${d ? d + 'ms' : ''}</span></span>`
+                })
+                .join('')
+              const ty = { Selector: '手动', URLTest: '自动', Fallback: '故障' }[sg.type] || sg.type
+              return `<div class="subg ${openSubs.has(sn) ? 'open' : ''}" data-g="${esc(sn)}">
         <div class="shead" onclick="this.parentNode.classList.toggle('open')">
-          <span class="sarrow">▶</span><span class="sname">${sn.replace(l.pre+'·','')}</span>
-          <span class="stype">${ty}</span><span class="snow">→ ${scur||''}</span>
+          <span class="sarrow">▶</span><span class="sname">${sn.replace(l.pre + '·', '')}</span>
+          <span class="stype">${ty}</span><span class="snow">→ ${scur || ''}</span>
         </div><div class="nodes">${nodes}</div></div>`
-    }).join('')
-    return `<div class="grow"><div class="gtop">
-      <span class="ptag ${g===l.glb?'glb':'mix'}">${g.port}</span>
-      <span class="gname">${g.name.replace(/\[\d+\]/,'')}</span>
-      <span class="now">${cur||''}</span></div>
+            })
+            .join('')
+          return `<div class="grow"><div class="gtop">
+      <span class="ptag ${g === l.glb ? 'glb' : 'mix'}">${g.port}</span>
+      <span class="gname">${g.name.replace(/\[\d+\]/, '')}</span>
+      <span class="now">${cur || ''}</span></div>
       <div class="seg">${seg}</div>
       <div style="margin-top:8px">${subg}</div></div>`
-  }
-  function esc(s){return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;')}
-  window.pick = async (g,n)=>{ try{ await put(g,n); toast(g.split('·')[0]+' → '+n); setTimeout(load,400) }catch(e){ toast('切换失败: '+e.message) } }
-}
-load(); setInterval(load, 8000)
-</script>
-</body>
+        }
+        function esc(s) {
+          return String(s).replace(/'/g, "\\'").replace(/"/g, '&quot;')
+        }
+        window.pick = async (g, n) => {
+          try {
+            await put(g, n)
+            toast(g.split('·')[0] + ' → ' + n)
+            setTimeout(load, 400)
+          } catch (e) {
+            toast('切换失败: ' + e.message)
+          }
+        }
+      }
+      load()
+      setInterval(load, 8000)
+    </script>
+  </body>
 </html>

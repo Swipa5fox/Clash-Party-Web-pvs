@@ -71,7 +71,10 @@ function newToken(): string {
 
 // 名称清洗：只留 URL 安全字符（对应 issue.sh 的 tr -dc 'A-Za-z0-9._-'）
 function cleanName(name: string): string {
-  return name.replace(/[^A-Za-z0-9._-]/g, '').replace(/^[-.]+/, '').replace(/[-.]+$/, '')
+  return name
+    .replace(/[^A-Za-z0-9._-]/g, '')
+    .replace(/^[-.]+/, '')
+    .replace(/[-.]+$/, '')
 }
 
 export function isValidShareFileName(file: string): boolean {
@@ -111,7 +114,13 @@ function handleRequest(req: http.IncomingMessage, res: http.ServerResponse): voi
   }
 
   // 防路径穿越 / 隐藏文件 / 目录探测
-  if (!name || name.startsWith('.') || name.includes('/') || name.includes('\\') || name.includes('..')) {
+  if (
+    !name ||
+    name.startsWith('.') ||
+    name.includes('/') ||
+    name.includes('\\') ||
+    name.includes('..')
+  ) {
     sendNotFound(res)
     return
   }
@@ -235,7 +244,10 @@ export function validateShareContent(fileName: string, content: Buffer): IFileSh
     try {
       parsed = JSON.parse(text)
     } catch (e) {
-      issues.push({ level: 'fatal', message: t('fileShare.validation.notJson', { error: String((e as Error).message || e) }) })
+      issues.push({
+        level: 'fatal',
+        message: t('fileShare.validation.notJson', { error: String((e as Error).message || e) })
+      })
       return { ok: false, issues }
     }
 
@@ -264,8 +276,20 @@ export function validateShareContent(fileName: string, content: Buffer): IFileSh
     for (const key of real) {
       const profile = parsed[key] as {
         name?: string
-        fallbackProxy?: { host?: string; port?: number; scheme?: string; authUser?: string; authPass?: string }
-        proxy?: { host?: string; port?: number; scheme?: string; authUser?: string; authPass?: string }
+        fallbackProxy?: {
+          host?: string
+          port?: number
+          scheme?: string
+          authUser?: string
+          authPass?: string
+        }
+        proxy?: {
+          host?: string
+          port?: number
+          scheme?: string
+          authUser?: string
+          authPass?: string
+        }
         bypassList?: { pattern: string }[]
       }
       const proxy = profile.fallbackProxy || profile.proxy || {}
@@ -291,7 +315,10 @@ export function validateShareContent(fileName: string, content: Buffer): IFileSh
           })
         }
         if (proxy.authUser || proxy.authPass) {
-          issues.push({ level: 'fatal', message: t('fileShare.validation.proxyAuth', { profile: label }) })
+          issues.push({
+            level: 'fatal',
+            message: t('fileShare.validation.proxyAuth', { profile: label })
+          })
         }
       }
       for (const bypass of profile.bypassList || []) {
@@ -313,13 +340,18 @@ export function validateShareContent(fileName: string, content: Buffer): IFileSh
     const hosts = [...new Set(text.match(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g) || [])]
     const routable = hosts.filter((h) => !isPrivateIp(h) && h !== '127.0.0.1')
     if (routable.length) {
-      issues.push({ level: 'fatal', message: t('fileShare.validation.routableIp', { ips: routable.join(', ') }) })
+      issues.push({
+        level: 'fatal',
+        message: t('fileShare.validation.routableIp', { ips: routable.join(', ') })
+      })
     }
 
     if (parsed['-startupProfileName']) {
       issues.push({
         level: 'info',
-        message: t('fileShare.validation.startupProfile', { name: String(parsed['-startupProfileName']) })
+        message: t('fileShare.validation.startupProfile', {
+          name: String(parsed['-startupProfileName'])
+        })
       })
     } else {
       issues.push({ level: 'warn', message: t('fileShare.validation.noStartupProfile') })
@@ -439,7 +471,13 @@ export async function listFileShareFiles(): Promise<IFileShareFileInfo[]> {
     const stats = await stat(filePath).catch(() => null)
     if (!stats?.isFile()) continue
     const m = meta.files[entry]
-    infos.push({ file: entry, size: stats.size, mtime: stats.mtimeMs, alias: m?.alias, group: m?.group })
+    infos.push({
+      file: entry,
+      size: stats.size,
+      mtime: stats.mtimeMs,
+      alias: m?.alias,
+      group: m?.group
+    })
   }
   infos.sort((a, b) => b.mtime - a.mtime)
   return infos
@@ -451,7 +489,9 @@ export async function addFileShareFile(
 ): Promise<IFileShareAddResult> {
   const ext = path.extname(fileName).slice(1).toLowerCase()
   if (!(FILE_SHARE_EXTS as readonly string[]).includes(ext)) {
-    throw new Error(i18next.t('fileShare.error.unsupportedExt', { exts: FILE_SHARE_EXTS.join(', ') }))
+    throw new Error(
+      i18next.t('fileShare.error.unsupportedExt', { exts: FILE_SHARE_EXTS.join(', ') })
+    )
   }
 
   const content = Buffer.from(contentBase64, 'base64')
@@ -459,13 +499,20 @@ export async function addFileShareFile(
     throw new Error(i18next.t('fileShare.error.emptyFile'))
   }
   if (content.length > MAX_UPLOAD_BYTES) {
-    throw new Error(i18next.t('fileShare.error.tooLarge', { size: (MAX_UPLOAD_BYTES / 1048576).toFixed(0) }))
+    throw new Error(
+      i18next.t('fileShare.error.tooLarge', { size: (MAX_UPLOAD_BYTES / 1048576).toFixed(0) })
+    )
   }
 
   const validation = validateShareContent(fileName, content)
   if (!validation.ok) {
     // 致命问题（可路由 IP / 代理凭据 / 坏 JSON / 空备份）：不投放
-    logger.warn(`rejected ${fileName}: ${validation.issues.filter((i) => i.level === 'fatal').map((i) => i.message).join('; ')}`)
+    logger.warn(
+      `rejected ${fileName}: ${validation.issues
+        .filter((i) => i.level === 'fatal')
+        .map((i) => i.message)
+        .join('; ')}`
+    )
     return { added: false, file: null, validation }
   }
 

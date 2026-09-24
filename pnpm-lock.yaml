@@ -120,9 +120,6 @@ importers:
       '@types/plist':
         specifier: ^3.0.5
         version: 3.0.5
-      '@types/pubsub-js':
-        specifier: ^1.8.6
-        version: 1.8.6
       '@types/react':
         specifier: ^19.2.18
         version: 19.2.18
@@ -177,18 +174,12 @@ importers:
       monaco-yaml:
         specifier: ^5.5.1
         version: 5.5.1(monaco-editor@0.52.2)
-      nanoid:
-        specifier: ^6.0.1
-        version: 6.0.1
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
-      pubsub-js:
-        specifier: ^1.9.5
-        version: 1.9.5
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -2699,9 +2690,6 @@ packages:
   '@types/plist@3.0.5':
     resolution: {integrity: sha512-E6OCaRmAe4WDmWNsL/9RMqdkkzDCY1etutkflWk4c+AcjDU07Pcz1fQwTX0TQz+Pxqn9i4L1TU3UFpjnrcDgxA==}
 
-  '@types/pubsub-js@1.8.6':
-    resolution: {integrity: sha512-Kwug5cwV0paUDm/NfwDx1sp9xI0bGIvmWJjJWCU8NngkCCMt3EIC7oPDvb6fV7BR8kPpFyyBu4D11bda/2MdPA==}
-
   '@types/qs@6.15.1':
     resolution: {integrity: sha512-GZHUBZR9hckSUhrxmp1nG6NwdpM9fCunJwyThLW1X3AyHgd9IlHb6VANpQQqDr2o/qQp6McZ3y/IA2rVzKzSbw==}
 
@@ -4508,11 +4496,6 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
-  nanoid@6.0.1:
-    resolution: {integrity: sha512-3wVS3i51pE2pi1k5FFL/95BGfVS0kSsvDVuGXHOtxox/TywUmtgq+3qiTOTbs9J7KfHaXPiN171k/A6dBnaXFw==}
-    engines: {node: ^22 || ^24 || >=26}
-    hasBin: true
-
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
@@ -4765,9 +4748,6 @@ packages:
   proxy-from-env@2.1.0:
     resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
     engines: {node: '>=10'}
-
-  pubsub-js@1.9.5:
-    resolution: {integrity: sha512-5MZ0I9i5JWVO7SizvOviKvZU2qaBbl2KQX150FAA+fJBwYpwOUId7aNygURWSdPzlsA/xZ/InUKXqBbzM0czTA==}
 
   pump@3.0.4:
     resolution: {integrity: sha512-VS7sjc6KR7e1ukRFhQSY5LM2uBWAUPiOPa/A3mkKmiMwSmRFUITt0xuj+/lesgnCv+dPIEYlkzrcyXgquIHMcA==}
@@ -8960,8 +8940,6 @@ snapshots:
       '@types/node': 26.2.0
       xmlbuilder: 15.1.1
 
-  '@types/pubsub-js@1.8.6': {}
-
   '@types/qs@6.15.1': {}
 
   '@types/range-parser@1.2.7': {}
@@ -11112,8 +11090,6 @@ snapshots:
 
   nanoid@3.3.18: {}
 
-  nanoid@6.0.1: {}
-
   natural-compare@1.4.0: {}
 
   negotiator@1.0.0: {}
@@ -11355,8 +11331,6 @@ snapshots:
   proxy-disposable@1.0.0: {}
 
   proxy-from-env@2.1.0: {}
-
-  pubsub-js@1.9.5: {}
 
   pump@3.0.4:
     dependencies:

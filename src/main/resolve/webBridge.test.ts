@@ -66,10 +66,7 @@ afterAll(async () => {
 })
 
 // 登录（默认凭据 admin/admin123）并返回 Set-Cookie 中的会话串
-async function login(
-  username = 'admin',
-  password = 'admin123'
-): Promise<Response> {
+async function login(username = 'admin', password = 'admin123'): Promise<Response> {
   return fetch(`${httpOrigin}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -78,9 +75,7 @@ async function login(
 }
 
 function connect(url = wsUrl, cookie?: string): WebSocket {
-  const ws = cookie
-    ? new WebSocket(url, { headers: { cookie } })
-    : new WebSocket(url)
+  const ws = cookie ? new WebSocket(url, { headers: { cookie } }) : new WebSocket(url)
   ws.on('error', () => {})
   return ws
 }

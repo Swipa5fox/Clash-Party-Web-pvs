@@ -7,9 +7,7 @@ import { atomicWriteFile, WriteQueue } from '../utils/safeFile'
 let customLineGroupsConfig: ICustomLineGroupsConfig
 const customLineGroupsWriteQueue = new WriteQueue()
 
-export async function getCustomLineGroupsConfig(
-  force = false
-): Promise<ICustomLineGroupsConfig> {
+export async function getCustomLineGroupsConfig(force = false): Promise<ICustomLineGroupsConfig> {
   if (force || !customLineGroupsConfig) {
     if (existsSync(customLineGroupsConfigPath())) {
       const data = await readFile(customLineGroupsConfigPath(), 'utf-8')
@@ -23,9 +21,7 @@ export async function getCustomLineGroupsConfig(
   return JSON.parse(JSON.stringify(customLineGroupsConfig)) as ICustomLineGroupsConfig
 }
 
-export async function setCustomLineGroupsConfig(
-  config: ICustomLineGroupsConfig
-): Promise<void> {
+export async function setCustomLineGroupsConfig(config: ICustomLineGroupsConfig): Promise<void> {
   await customLineGroupsWriteQueue.run(async () => {
     const nextConfig = JSON.parse(JSON.stringify(config)) as ICustomLineGroupsConfig
     if (!Array.isArray(nextConfig.items)) nextConfig.items = []

@@ -1,9 +1,6 @@
 export { getAppConfig, patchAppConfig } from './app'
 export { getControledMihomoConfig, patchControledMihomoConfig } from './controledMihomo'
-export {
-  getCustomLineGroupsConfig,
-  setCustomLineGroupsConfig
-} from './customLineGroups'
+export { getCustomLineGroupsConfig, setCustomLineGroupsConfig } from './customLineGroups'
 export {
   getProfile,
   getCurrentProfileItem,

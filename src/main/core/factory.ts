@@ -121,13 +121,9 @@ function ensureSmartProxyServerTunExclude(profile: IMihomoConfig, enabled: boole
  * 注入自定义线路组: 每组生成 入口组(自动/故障/手动子组) 与专属端口 listener。
  * 入口组名即线路组名, 子组名为 `${name}·自动|故障|手动`, listener 名为 `${name}·入口`。
  */
-function applyCustomLineGroups(
-  profile: IMihomoConfig,
-  groups: ICustomLineGroup[]
-): void {
+function applyCustomLineGroups(profile: IMihomoConfig, groups: ICustomLineGroup[]): void {
   if (groups.length === 0) return
-  const proxyGroups =
-    (profile['proxy-groups'] as Record<string, unknown>[] | undefined) ?? []
+  const proxyGroups = (profile['proxy-groups'] as Record<string, unknown>[] | undefined) ?? []
   const listeners = (profile.listeners as IMihomoListenerConfig[] | undefined) ?? []
   const groupNames = new Set(proxyGroups.map((g) => g?.name))
 

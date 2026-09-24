@@ -74,12 +74,12 @@ NPM_REGISTRY=https://registry.npmjs.org ./deploy.sh  # 覆盖默认 npm 镜像�
 
 ### 部署完成后
 
-| 访问项                   | 地址                                                                                                                            |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| Clash Party Web UI       | `http://<IP>:3999/?token=<CP_WEB_TOKEN>`（token 首开后自动存 sessionStorage）                                                   |
-| 控制面板（zashboard）    | `http://<IP>:8080/`（首次输入 `PANEL_TOKEN` 验证，之后自动配置后端）                                                            |
-| 网关发现文件             | `curl http://<IP>:8080/.well-known/cpx-gateway`                                                                                 |
-| LAN 代理（设备手动配置） | `http://<IP>:7890`（HTTP+SOCKS5 混合口）                                                                                        |
+| 访问项                   | 地址                                                                                                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Clash Party Web UI       | `http://<IP>:3999/?token=<CP_WEB_TOKEN>`（token 首开后自动存 sessionStorage）                                                                        |
+| 控制面板（zashboard）    | `http://<IP>:8080/`（首次输入 `PANEL_TOKEN` 验证，之后自动配置后端）                                                                                 |
+| 网关发现文件             | `curl http://<IP>:8080/.well-known/cpx-gateway`                                                                                                      |
+| LAN 代理（设备手动配置） | `http://<IP>:7890`（HTTP+SOCKS5 混合口）                                                                                                             |
 | 国家专线（可选）         | `:17890` AU 通用 / `:17891` AU 全局 / `:8888` JP 通用 / `:8889` JP 全局（host 网络模式直接绑宿主机；先在 Web UI 加订阅，再用 `mihomo-lines` 写覆写） |
 
 忘记 token 时：`grep CP_WEB_TOKEN .env` 或 `docker compose logs party | grep 'Web UI'`。
@@ -180,13 +180,13 @@ docker compose up -d party     # 改 .env 后生效（compose 会重建容器）
 
 构建与运行对 github.com 的全部依赖已消除或可选化：
 
-| 依赖             | 来源                                                                                 | 兜底                             |
-| ---------------- | ------------------------------------------------------------------------------------ | -------------------------------- |
-| npm 依赖         | `NPM_REGISTRY`（默认 npmmirror）                                                      | 换源重跑                         |
-| Electron 二进制  | `ELECTRON_MIRROR`（默认 npmmirror 镜像）                                              | 换镜像重跑                       |
-| mihomo/geo 资源  | `/opt/cpx-core-assets/extra`（从已构建镜像提取，deploy.sh 自动同步进上下文）         | `scripts/prepare.mjs` 联网下载   |
-| GitHub 直连      | `GITHUB_MIRROR`（如 `https://gh-proxy.com/`，默认空=直连 github.com）                | 云主机无 GitHub 出口时**必须设** |
-| zashboard 面板   | core-assets 里的 `extra/panel-ui`（entrypoint 首启落位 `work/ui`）                   | 内核首启按 `external-ui-url` 下载 |
+| 依赖            | 来源                                                                         | 兜底                              |
+| --------------- | ---------------------------------------------------------------------------- | --------------------------------- |
+| npm 依赖        | `NPM_REGISTRY`（默认 npmmirror）                                             | 换源重跑                          |
+| Electron 二进制 | `ELECTRON_MIRROR`（默认 npmmirror 镜像）                                     | 换镜像重跑                        |
+| mihomo/geo 资源 | `/opt/cpx-core-assets/extra`（从已构建镜像提取，deploy.sh 自动同步进上下文） | `scripts/prepare.mjs` 联网下载    |
+| GitHub 直连     | `GITHUB_MIRROR`（如 `https://gh-proxy.com/`，默认空=直连 github.com）        | 云主机无 GitHub 出口时**必须设**  |
+| zashboard 面板  | core-assets 里的 `extra/panel-ui`（entrypoint 首启落位 `work/ui`）           | 内核首启按 `external-ui-url` 下载 |
 
 > 云服务器（尤其境内/受限网络）常常**直连 github.com 完全不通**（`curl` 返回 000），此时
 > `prepare.mjs` 的内核/geo 下载会卡死重试。两个解法：拷 `/opt/cpx-core-assets` 过去（最快），
@@ -244,12 +244,12 @@ docker compose up -d
 
 ### 常见问题
 
-| 现象                                               | 原因与处理                                                                          |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| 首次构建磁盘写满                                   | 构建缓存 + 双镜像峰值大，`docker builder prune -af` 后重试，保留 ≥8GB 空间          |
-| party 容器起不来，日志有 `xauth command not found` | 镜像残缺（旧版构建），`./deploy.sh --services party` 重建                           |
-| electron 不启动、Xvfb 起了但无输出                 | compose 已内置 `init: true`（tini 转发 SIGUSR1）；若自改过 compose 移除了该行会复现 |
-| npm 依赖下载极慢/超时                              | 默认已走 npmmirror；也可 `NPM_REGISTRY=... ./deploy.sh` 覆盖                        |
+| 现象                                               | 原因与处理                                                                                                                             |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 首次构建磁盘写满                                   | 构建缓存 + 双镜像峰值大，`docker builder prune -af` 后重试，保留 ≥8GB 空间                                                             |
+| party 容器起不来，日志有 `xauth command not found` | 镜像残缺（旧版构建），`./deploy.sh --services party` 重建                                                                              |
+| electron 不启动、Xvfb 起了但无输出                 | compose 已内置 `init: true`（tini 转发 SIGUSR1）；若自改过 compose 移除了该行会复现                                                    |
+| npm 依赖下载极慢/超时                              | 默认已走 npmmirror；也可 `NPM_REGISTRY=... ./deploy.sh` 覆盖                                                                           |
 | 面板 `:8080/` 打不开或循环                         | 确认 party 容器健康（`docker compose ps`）；面板文件优先由镜像离线预置（core-assets 含 `panel-ui` 时），否则由内核首启时从 GitHub 下载 |
 
 ---

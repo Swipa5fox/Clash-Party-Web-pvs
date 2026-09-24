@@ -4,6 +4,21 @@
 
 该文件同时是发布流水线的发布说明来源：`scripts/updater.mjs` 读取它生成 `latest.yml`（应用内更新弹窗展示），`scripts/telegram.mjs` 读取它发布到频道。因此最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
+## Rebuild v1.1（2026-09-24）
+
+自 v1.0（`b1cb9e9c`）以来的变更：15 个文件，+89 / −172。
+
+### 优化
+
+- **配置热重载异步化**：保存订阅 / 覆写 / DNS / 嗅探器后触发的 mihomo 热重载改为 fire-and-forget，失败才 toast 提示——弹窗与开关不再被秒级重载卡住
+- **代理组递归解析**：`mihomoApi` 代理组解析支持嵌套子组展开（3 层深度上限），修复子组展不开与页面卡死
+- **依赖精简**：`pubsub-js` → 原生 `CustomEvent`，`nanoid` → `crypto.randomUUID`，净减 2 个运行时依赖
+- `validate.ts` 合并重复的 `listenAddress` 验证器与 3 份 RegExp 验证器；`hash.ts` 删除零调用的 HashType 类，只留 `getHash`
+
+### 验证
+
+- typecheck 与全部 193 项测试通过
+
 ## Rebuild v1.0（2026-09-23）
 
 自 Rebuild v6.0 基线（`5405588c`）以来的变更：156 个文件，+3650 / −10771。

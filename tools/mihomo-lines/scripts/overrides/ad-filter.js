@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/explicit-function-return-type -- 本文件由 mihomo-party 覆写沙箱(vm.runInContext 拼接调用 main)消费, 不能含 TS 语法或模块导出 */
 // 广告占位节点过滤 —— 全局覆写, 覆写 id: ad-filter
 //
 // 为什么需要它:
@@ -16,6 +17,11 @@
 // 推送(在 scripts/ 目录下执行):
 //   node lines.mjs push overrides/ad-filter.js ad-filter '广告节点过滤'
 // 撤销: Web UI 的「覆写」页删掉 ad-filter, 或 node lines.mjs push 一个空壳 (不推荐)。
+
+/**
+ * @param {Record<string, unknown>} config
+ * @returns {Record<string, unknown>} 处理后的 mihomo 配置
+ */
 function main(config) {
   const LOOPBACK = /^(127\.\d|::1$|localhost$|0\.0\.0\.0$)/i
   const NAME_HINT = /官址|TG群/i

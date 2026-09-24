@@ -103,7 +103,11 @@ const NestedGroupPanelBase: React.FC<Props> = (props) => {
         fullWidth
         shadow="sm"
         radius="sm"
-        className={selected ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary' : 'bg-content2'}
+        className={
+          selected
+            ? 'bg-primary/30 border-r-2 border-r-primary border-l-2 border-l-primary'
+            : 'bg-content2'
+        }
         onPress={() => onSelect(parentGroup.name, subproxy.name)}
       >
         <CardBody className="p-1">
@@ -113,7 +117,10 @@ const NestedGroupPanelBase: React.FC<Props> = (props) => {
                 {typeLabel}
               </Chip>
               <div className="text-ellipsis overflow-hidden whitespace-nowrap">
-                <div className={`flag-emoji inline ${depth > 0 ? 'text-xs' : 'text-sm'}`} title={subproxy.name}>
+                <div
+                  className={`flag-emoji inline ${depth > 0 ? 'text-xs' : 'text-sm'}`}
+                  title={subproxy.name}
+                >
                   {displayName}
                 </div>
               </div>
