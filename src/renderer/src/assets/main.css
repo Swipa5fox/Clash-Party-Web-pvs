@@ -81,8 +81,13 @@
   user-select: none;
 }
 
+/* Tailwind 的 select-* 工具类位于 @layer utilities，会被上面无层的 * 规则压掉，只能 !important */
 .select-text {
   user-select: text !important;
+}
+
+.select-all {
+  user-select: all !important;
 }
 
 *:focus {

@@ -19,7 +19,7 @@ const BaseConfirmModal: React.FC<Props> = (props) => {
       <ModalContent>
         <ModalHeader className="flex app-drag">{title}</ModalHeader>
         <ModalBody>
-          <p>{content}</p>
+          <p className="select-text">{content}</p>
         </ModalBody>
         <ModalFooter>
           <Button size="sm" variant="light" onPress={onCancel}>

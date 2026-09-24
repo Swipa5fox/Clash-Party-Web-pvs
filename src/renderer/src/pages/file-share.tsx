@@ -36,6 +36,7 @@ import {
 } from '@renderer/utils/ipc'
 import dayjs from '@renderer/utils/dayjs'
 import { calcTraffic } from '@renderer/utils/calc'
+import { copyText } from '@renderer/utils/clipboard'
 import { MdDeleteOutline, MdEdit, MdLink, MdOutlineFileUpload, MdQrCode2 } from 'react-icons/md'
 import { IoCopy } from 'react-icons/io5'
 import { IoIosArrowBack } from 'react-icons/io'
@@ -165,8 +166,18 @@ const FileShare: React.FC = () => {
             }
             const urls = await getFileShareUrls(result.file)
             if (urls[0]) {
-              await navigator.clipboard.writeText(urls[0]).catch(() => {})
-              toast.success(t('fileShare.add.success', { url: urls[0] }), file.name)
+              let copied = true
+              try {
+                await copyText(urls[0])
+              } catch {
+                copied = false
+              }
+              toast.success(
+                t(copied ? 'fileShare.add.success' : 'fileShare.add.successNotCopied', {
+                  url: urls[0]
+                }),
+                file.name
+              )
             } else {
               toast.success(t('fileShare.add.successNoUrl'), file.name)
             }
@@ -198,7 +209,7 @@ const FileShare: React.FC = () => {
     try {
       const urls = await getFileShareUrls(file)
       if (urls[0]) {
-        await navigator.clipboard.writeText(urls[0])
+        await copyText(urls[0])
         toast.success(t('common.copied'))
       }
     } catch (e) {
@@ -488,7 +499,7 @@ const FileShare: React.FC = () => {
                                 >
                                   {info.alias || info.file}
                                 </p>
-                                <p className="truncate text-xs text-foreground-500">
+                                <p className="truncate text-xs text-foreground-500 select-text">
                                   {info.alias && <span className="font-mono">{info.file} · </span>}
                                   {calcTraffic(info.size)} ·{' '}
                                   {dayjs(info.mtime).format('YYYY-MM-DD HH:mm')}
@@ -593,7 +604,7 @@ const FileShare: React.FC = () => {
           <ModalContent>
             <ModalHeader className="flex flex-col gap-1">
               <span>{t('fileShare.edit.title')}</span>
-              <span className="break-all font-mono text-xs font-normal text-foreground-500">
+              <span className="break-all font-mono text-xs font-normal text-foreground-500 select-all">
                 {editTarget.file}
               </span>
             </ModalHeader>
@@ -647,7 +658,7 @@ const FileShare: React.FC = () => {
         >
           <ModalContent>
             <ModalHeader className="flex flex-col gap-1">
-              <span>
+              <span className="select-text">
                 {t('fileShare.validation.title', {
                   file: validation.file,
                   status: validation.result.ok
@@ -669,7 +680,7 @@ const FileShare: React.FC = () => {
                             : 'bg-success'
                       }`}
                     />
-                    <span className="break-all">{issue.message}</span>
+                    <span className="break-all select-text">{issue.message}</span>
                   </div>
                 ))}
               </div>

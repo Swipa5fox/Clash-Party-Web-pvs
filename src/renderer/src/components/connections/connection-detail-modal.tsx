@@ -13,8 +13,10 @@ import {
 import React from 'react'
 import { calcTraffic } from '@renderer/utils/calc'
 import dayjs from '@renderer/utils/dayjs'
+import { copyText } from '@renderer/utils/clipboard'
 import { BiCopy } from 'react-icons/bi'
 import { useTranslation } from 'react-i18next'
+import { toast } from '@renderer/components/base/toast'
 import SettingItem from '../base/base-setting-item'
 
 interface Props {
@@ -107,11 +109,11 @@ const CopyableSettingItem: React.FC<{
             </Button>
           </DropdownTrigger>
           <DropdownMenu
-            onAction={(key) =>
-              navigator.clipboard.writeText(
+            onAction={(key) => {
+              const text =
                 key === 'raw' ? (Array.isArray(value) ? value.join(', ') : value) : (key as string)
-              )
-            }
+              void copyText(text).catch(() => toast.error(t('common.error.copyFailed')))
+            }}
           >
             {menuItems
               .filter((item) => item !== null)

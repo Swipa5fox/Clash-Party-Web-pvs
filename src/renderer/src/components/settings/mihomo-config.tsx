@@ -3,6 +3,7 @@ import { toast } from '@renderer/components/base/toast'
 import { Button, Input, Select, SelectItem, Switch, Tooltip } from '@heroui/react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import debounce from '@renderer/utils/debounce'
+import { copyText } from '@renderer/utils/clipboard'
 import {
   exportGistAgeSecretKeyText,
   generateGistAgeKeyPair,
@@ -92,8 +93,12 @@ const MihomoConfig: React.FC = () => {
   }
   const handleCopyGistAgeSecretKey = async (): Promise<void> => {
     if (!gistAgeSecretKey) return
-    await navigator.clipboard.writeText(gistAgeSecretKey)
-    toast.success(t('mihomo.gist.copyPrivateKeySuccess'))
+    try {
+      await copyText(gistAgeSecretKey)
+      toast.success(t('mihomo.gist.copyPrivateKeySuccess'))
+    } catch (e) {
+      toast.error(String(e))
+    }
   }
   return (
     <SettingCard>
@@ -178,7 +183,7 @@ const MihomoConfig: React.FC = () => {
               try {
                 const url = await getGistUrl()
                 if (url !== '') {
-                  await navigator.clipboard.writeText(`${url}/raw/clash-party.yaml`)
+                  await copyText(`${url}/raw/clash-party.yaml`)
                 }
               } catch (e) {
                 toast.error(String(e))

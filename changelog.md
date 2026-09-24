@@ -4,7 +4,20 @@
 
 该文件同时是发布流水线的发布说明来源：`scripts/updater.mjs` 读取它生成 `latest.yml`（应用内更新弹窗展示），`scripts/telegram.mjs` 读取它发布到频道。因此最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
-## Unreleased
+## Rebuild v1.2（2026-09-25）
+
+自 v1.1.0（`cee5fdd`）以来的变更：78 个文件，+365 / −2429（不含 README / changelog / 版本号）。
+
+### 修复
+
+- **局域网 http 下剪贴板失效**：页面经 `http://<内网IP>:3999` 访问时不是安全上下文，浏览器不暴露 `navigator.clipboard`（`127.0.0.1` 访问正常）。新增 `@renderer/utils/clipboard`：`copyText` 写入退化为隐藏 textarea + `execCommand`，失败抛 i18n 错误；`readClipboardText` 无等价兜底，不可用时引导用户手动粘贴。全仓 13 处调用点（11 处写入 / 2 处读取）统一改走该模块，文件分享「自动复制链接失败」时改为提示链接文本
+- **便携版 PORTABLE 标记**（v1.1 遗留）：新增 `scripts/mark-portable.mjs`，`build:win` 收尾自动把 `PORTABLE` 标记写入 `portable.7z`（7za 取自 electron-builder 缓存，无需另装 7-Zip）——解压版进入便携模式、数据落 exe 同级 `data/`；CI 中重复的 Add Portable Flag 步骤移除
+- 本地产物被套娃打进 asar 的问题随 `files` 排除 `dist/`、`release/` 一并解决
+
+### 优化
+
+- **可选中文本补齐**：桌面化样式对 `<body>` 全局 `user-select: none`，弹窗正文 / 报错信息与堆栈 / toast 标题正文 / 文件分享校验详情等补 `select-text`（长文件名 `select-all`），复制不再只能靠按钮
+- 「复制环境变量」提示从硬编码中文改为 i18n（`common.copied` 与 `common.error.*`），并复用剪贴板兜底
 
 ### 桌面化残留全面清除（收窄为 Windows x64 Web 服务）
 
@@ -16,11 +29,6 @@
 - **删除**：`deploy/aur/`（5 套 PKGBUILD）、mac 打包资产（entitlements / background / pkg-scripts / icon.icns）
 - README：目录树与快速开始同步；「桌面端能力」→「代理核心能力」
 
-### 修复（v1.1 遗留）
-
-- **便携版 PORTABLE 标记**：新增 `scripts/mark-portable.mjs`，`build:win` 收尾自动把 `PORTABLE` 标记写入 `portable.7z`（7za 取自 electron-builder 缓存，无需另装 7-Zip）——解压版进入便携模式、数据落 exe 同级 `data/`；CI 中重复的 Add Portable Flag 步骤移除
-- 本地产物被套娃打进 asar 的问题随 `files` 排除 `dist/`、`release/` 一并解决
-
 ### 桌面化残留补遗清除（核心代码与脚本）
 
 - **macOS 专属代码**：删整个 `dns.ts`（networksetup 公共 DNS 管理，约 100 行）及 manager 调用点；`stopCore` / `restartCore` 的 `forceStop` 参数链（唯一用途是跳过 mac DNS 恢复）；`sysproxy` 的 mac helper 整套（launchd 提权 / osascript / unix socket）与 `helperTimeout` 选项；`lifecycle` 的 `fixUserDataPermissions` 与退出清理 darwin 分支；`ssid` 的 airport/networksetup 探测；`init` 的 `fixDataDirPermissions` 与 tun 设备 darwin 分支；`permissions` 的 darwin 判定（保留容器所需的 linux 分支）；`github` 的 darwin 内核映射
@@ -28,6 +36,15 @@
 - **renderer**：连接页图标裁剪守卫、`base-page` 的 darwin 判断（`platform` 来自服务端，恒非 darwin）、`validate` 的 `<local>` 判定收敛为 win32
 - **构建脚本**：`prepare.mjs` 删除 darwin 内核映射、`party.mihomo.helper` 下载任务与 win7（`LEGACY_BUILD`）sysproxy 分支；`version-utils.mjs` 下载链接生成收窄为 Windows x64（不再生成 Win7 / macOS / Linux 死链）
 - **.github 模板**：OS 下拉（含 MacOS / Linux）移除，「GUI 程序」措辞改为 Clash Party Web
+
+### 验证
+
+- typecheck 与全部 195 项测试通过
+
+### 发布说明
+
+- Release 挂在 [tag v1.2.0](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases/tag/v1.2.0)（与 package.json 版本一致），仅 Windows x64 安装版与便携版
+- v1.1 已知问题（便携版 7z 缺 `PORTABLE` 标记）已随本版修复
 
 ## Rebuild v1.1（2026-09-24）
 

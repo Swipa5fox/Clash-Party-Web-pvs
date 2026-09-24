@@ -18,6 +18,7 @@ import EditInfoModal from '@renderer/components/profiles/edit-info-modal'
 import { useProfileConfig } from '@renderer/hooks/use-profile-config'
 import { usePluginConfig } from '@renderer/hooks/use-plugin-config'
 import { updatePluginProfile } from '@renderer/utils/ipc'
+import { readClipboardText } from '@renderer/utils/clipboard'
 import type { KeyboardEvent } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MdContentPaste, MdUnfoldMore, MdUnfoldLess } from 'react-icons/md'
@@ -291,9 +292,11 @@ const Profiles: React.FC = () => {
                     isIconOnly
                     variant="light"
                     onPress={() => {
-                      navigator.clipboard.readText().then((text) => {
-                        setUrl(text)
-                      })
+                      void readClipboardText()
+                        .then((text) => {
+                          setUrl(text)
+                        })
+                        .catch(() => toast.error(t('common.error.pasteFailed')))
                     }}
                     className="mr-2"
                   >

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { IoCheckmark, IoClose, IoAlertSharp, IoInformationSharp, IoCopy } from 'react-icons/io5'
 import i18next from 'i18next'
+import { copyText } from '@renderer/utils/clipboard'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 
@@ -103,7 +104,11 @@ const ToastItem: React.FC<{
 
   const [copied, setCopied] = useState(false)
   const handleCopy = async (): Promise<void> => {
-    await navigator.clipboard.writeText(data.message)
+    try {
+      await copyText(data.message)
+    } catch {
+      return
+    }
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
@@ -185,7 +190,9 @@ const ToastItem: React.FC<{
         {icon}
       </div>
       <div className="flex-1 min-w-0">
-        {data.title && <p className="text-sm font-medium text-foreground">{data.title}</p>}
+        {data.title && (
+          <p className="text-sm font-medium text-foreground select-text">{data.title}</p>
+        )}
         <p className="text-sm text-foreground-500 break-words select-text">{data.message}</p>
       </div>
       <button

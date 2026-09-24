@@ -22,6 +22,7 @@ import {
 import { SortableContext } from '@dnd-kit/sortable'
 import { useOverrideConfig } from '@renderer/hooks/use-override-config'
 import OverrideItem from '@renderer/components/override/override-item'
+import { readClipboardText } from '@renderer/utils/clipboard'
 import { FaPlus } from 'react-icons/fa6'
 import { HiOutlineDocumentText } from 'react-icons/hi'
 import { RiArchiveLine } from 'react-icons/ri'
@@ -216,9 +217,11 @@ const Override: React.FC = () => {
                 isIconOnly
                 variant="light"
                 onPress={() => {
-                  navigator.clipboard.readText().then((text) => {
-                    setUrl(text)
-                  })
+                  void readClipboardText()
+                    .then((text) => {
+                      setUrl(text)
+                    })
+                    .catch(() => toast.error(t('common.error.pasteFailed')))
                 }}
               >
                 <MdContentPaste className="text-lg" />

@@ -24,15 +24,15 @@
 
 > ⚠️ 本项目面向**可信内网**自用：为支持内网直连，移除了传输加密、SSRF 防护与设备签名，凭据改为明文落盘。**不要暴露到公网，也不要对外分发。**
 
-## 当前版本 v1.1（2026-09-24）
+## 当前版本 v1.2（2026-09-25）
 
-自 v1.0 以来的核心更新（详见 [changelog.md](./changelog.md)）：
+自 v1.1 以来的核心更新（详见 [changelog.md](./changelog.md)）：
 
-- **配置热重载异步化**：保存订阅 / 覆写 / DNS / 嗅探器后不再被秒级重载卡住，失败才提示
-- **代理组递归解析**：嵌套子组可展开（3 层深度上限），修复子组展不开与页面卡死
-- **依赖精简**：移除 pubsub-js / nanoid，改用原生 `CustomEvent` 与 `crypto.randomUUID`
-- **修复**：v1.1 原提交误删 package.json `dependencies` 块导致源码构建失败，已恢复
-- 安装包见 [GitHub Release v1.1.0](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases/tag/v1.1.0)（仅 Windows x64）
+- **收窄为 Windows x64 Web 服务**：安装器不再注册 URI 协议 / `.cpx` 关联与桌面快捷方式；删除 mac / Linux 打包目标、AUR 包与 macOS 专属代码，CI 只留 Windows 流水线
+- **修复局域网 http 下剪贴板失效**：非安全上下文不暴露 `navigator.clipboard`，复制改走 `execCommand` 兜底（读取端引导手动粘贴），全仓 13 处调用点统一走 `@renderer/utils/clipboard`
+- **修复便携版标记**：`portable.7z` 解压后进入便携模式，数据落 exe 同级 `data/`
+- **可选中文本补齐**：弹窗正文、报错堆栈、toast、文件分享校验详情等不再禁止选中
+- 安装包见 [GitHub Release v1.2.0](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases/tag/v1.2.0)（仅 Windows x64）
 
 完整分类清单见 [changelog.md](./changelog.md) 与 [GitHub Release](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases)。
 

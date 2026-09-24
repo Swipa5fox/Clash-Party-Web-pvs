@@ -42,6 +42,7 @@ import { IoIosArrowBack } from 'react-icons/io'
 import { useGroups } from '@renderer/hooks/use-groups'
 import CollapseInput from '@renderer/components/base/collapse-input'
 import { includesIgnoreCase } from '@renderer/utils/includes'
+import { copyText } from '@renderer/utils/clipboard'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useTranslation } from 'react-i18next'
 import { HiOutlineAdjustmentsHorizontal } from 'react-icons/hi2'
@@ -556,10 +557,9 @@ const Proxies: React.FC = () => {
                             e.stopPropagation()
                             const host = location.hostname || '127.0.0.1'
                             const addr = `${host}:${portByGroupName[groups[index].name]}`
-                            navigator.clipboard
-                              .writeText(addr)
+                            void copyText(addr)
                               .then(() => toast.success(t('proxies.portCopied', { addr })))
-                              .catch(() => {})
+                              .catch(() => toast.error(t('common.error.copyFailed')))
                           }}
                         >
                           :{portByGroupName[groups[index].name]}

@@ -18,6 +18,7 @@ import {
 import BasePage from '@renderer/components/base/base-page'
 import { toast } from '@renderer/components/base/toast'
 import { showError } from '@renderer/utils/error-display'
+import { copyText } from '@renderer/utils/clipboard'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import { isValidListenAddress, getError, isValid } from '@renderer/utils/validate'
@@ -625,10 +626,9 @@ const Mihomo: React.FC = () => {
                     onPress={() => {
                       const host = location.hostname || '127.0.0.1'
                       const addr = `${host}:${cg.port}`
-                      navigator.clipboard
-                        .writeText(addr)
+                      void copyText(addr)
                         .then(() => toast.success(t('proxies.portCopied', { addr })))
-                        .catch(() => {})
+                        .catch(() => toast.error(t('common.error.copyFailed')))
                     }}
                   >
                     <IoMdOpen className="text-lg" />

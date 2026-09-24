@@ -2,6 +2,7 @@ import { Button } from '@heroui/react'
 import { ReactNode } from 'react'
 import { ErrorBoundary, FallbackProps } from 'react-error-boundary'
 import { useTranslation } from 'react-i18next'
+import { copyText } from '@renderer/utils/clipboard'
 
 const ErrorFallback = ({ error }: FallbackProps): React.ReactElement => {
   const { t } = useTranslation()
@@ -34,18 +35,18 @@ const ErrorFallback = ({ error }: FallbackProps): React.ReactElement => {
         size="sm"
         variant="flat"
         className="ml-2"
-        onPress={() =>
-          navigator.clipboard.writeText('```\n' + errorMessage + '\n' + errorStack + '\n```')
-        }
+        onPress={() => {
+          void copyText('```\n' + errorMessage + '\n' + errorStack + '\n```').catch(() => {})
+        }}
       >
         {t('common.error.copyErrorMessage')}
       </Button>
 
-      <p className="my-2">{errorMessage}</p>
+      <p className="my-2 select-text">{errorMessage}</p>
 
       <details title="Error Stack">
         <summary>Error Stack</summary>
-        <pre>{errorStack}</pre>
+        <pre className="select-text">{errorStack}</pre>
       </details>
     </div>
   )

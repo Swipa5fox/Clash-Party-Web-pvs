@@ -1,5 +1,6 @@
 import BasePage from '@renderer/components/base/base-page'
 import NetworkTopologyCard from '@renderer/components/network/network-topology'
+import { toast } from '@renderer/components/base/toast'
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Button, Select, SelectItem, Chip, Tooltip, Input } from '@heroui/react'
 import {
@@ -24,6 +25,7 @@ import {
 import { IoMdGlobe, IoMdPulse } from 'react-icons/io'
 import { useTranslation } from 'react-i18next'
 import { fetchIPInfo, measureLatency } from '@renderer/utils/ipc'
+import { copyText } from '@renderer/utils/clipboard'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { DEFAULT_NETWORK_INFO_CARD_ORDER } from '../../../shared/appConfig'
 
@@ -486,10 +488,13 @@ const IPPage: React.FC = () => {
 
   const handleCopy = useCallback(() => {
     if (!ipInfo?.ip) return
-    navigator.clipboard.writeText(ipInfo.ip)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }, [ipInfo?.ip])
+    void copyText(ipInfo.ip)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      })
+      .catch(() => toast.error(t('common.error.copyFailed')))
+  }, [ipInfo?.ip, t])
 
   return (
     <BasePage title={t('network.title')}>

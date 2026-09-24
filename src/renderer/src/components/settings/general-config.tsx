@@ -11,6 +11,7 @@ import {
   writeTheme
 } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { copyText } from '@renderer/utils/clipboard'
 import { platform } from '@renderer/utils/init'
 import { useTheme } from 'next-themes'
 import { IoMdCloudDownload } from 'react-icons/io'
@@ -168,10 +169,10 @@ const GeneralConfig: React.FC = () => {
                 // copyEnv 通道已随桌面壳移除，统一经 copyEnvText 取回文本，由前端写入浏览器剪贴板
                 try {
                   const text = await copyEnvText(type)
-                  await navigator.clipboard.writeText(text)
-                  toast.success('已复制到剪贴板')
-                } catch {
-                  toast.error('复制失败，剪贴板不可用')
+                  await copyText(text)
+                  toast.success(t('common.copied'))
+                } catch (e) {
+                  toast.error(String(e))
                 }
               }}
             >
