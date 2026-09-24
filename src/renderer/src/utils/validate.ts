@@ -84,10 +84,7 @@ const sysProxyBypassValidator = (
 
   if (targetPlatform !== 'win32' && validator.isIPRange(entry)) return true
 
-  if (
-    (targetPlatform === 'win32' || targetPlatform === 'darwin') &&
-    entry.toLowerCase() === '<local>'
-  ) {
+  if (targetPlatform === 'win32' && entry.toLowerCase() === '<local>') {
     return true
   }
 

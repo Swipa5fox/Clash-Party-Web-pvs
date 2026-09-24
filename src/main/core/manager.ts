@@ -56,7 +56,6 @@ import {
   waitForCoreReady,
   verifyProcessOwner
 } from './process'
-import { setPublicDNS, recoverDNS } from './dns'
 
 // 重新导出权限相关函数
 export {
@@ -67,8 +66,6 @@ export {
   checkHighPrivilegeCore,
   checkTunPermissions
 } from './permissions'
-
-export { getDefaultDevice } from './dns'
 
 const execFilePromise = promisify(execFile)
 const ctlParam = process.platform === 'win32' ? '-ext-ctl-pipe' : '-ext-ctl-unix'
@@ -359,7 +356,7 @@ export function initCoreWatcher(): void {
     // 等待核心自我更新完成，避免与核心自动重启产生竞态
     await new Promise((resolve) => setTimeout(resolve, 3000))
     try {
-      await restartCore(true)
+      await restartCore()
     } catch (e) {
       safeShowErrorBox('mihomo.error.coreStartFailed', `${e}`)
     }
@@ -406,7 +403,6 @@ interface CoreConfig {
   ipcPath: string
   logLevel: LogLevel
   tunEnabled: boolean
-  autoSetDNS: boolean
   cpuPriority: string
   ageSecretKey?: string
   detached: boolean
@@ -437,7 +433,6 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   const {
     core = 'mihomo',
-    autoSetDNS = true,
     diffWorkDir = false,
     mihomoCpuPriority = 'PRIORITY_NORMAL',
     coreStartupMode = 'log',
@@ -463,17 +458,6 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   }
   await cleanupSocketFile()
 
-  // 设置 DNS
-  if (tun?.enable && autoSetDNS) {
-    ensureNotShuttingDown()
-    try {
-      await setPublicDNS()
-    } catch (error) {
-      managerLogger.error('set dns failed', error)
-    }
-    ensureNotShuttingDown()
-  }
-
   // 获取动态 IPC 路径
   const ipcPath = getMihomoIpcPath()
   managerLogger.info(`Using IPC path: ${ipcPath}`)
@@ -493,7 +477,6 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     ipcPath,
     logLevel,
     tunEnabled: tun?.enable ?? false,
-    autoSetDNS,
     cpuPriority: mihomoCpuPriority,
     ageSecretKey,
     detached,
@@ -784,15 +767,7 @@ export function startCoreForStartup(): Promise<Promise<void>[]> {
   return queueCoreStart()
 }
 
-async function stopCoreInternal(force = false, cancelStartup = true): Promise<void> {
-  if (!force && process.platform === 'darwin') {
-    try {
-      await recoverDNS()
-    } catch (error) {
-      managerLogger.error('recover dns failed', error)
-    }
-  }
-
+async function stopCoreInternal(cancelStartup = true): Promise<void> {
   stopCoreProcessAndStreams(cancelStartup)
 
   await cleanupStoppedCoreResources()
@@ -828,10 +803,10 @@ async function cleanupStoppedCoreResources(): Promise<void> {
   await cleanupSocketFile()
 }
 
-export async function stopCore(force = false): Promise<void> {
+export async function stopCore(): Promise<void> {
   ensureCoreOperationAllowed()
   cancelAutomaticRestart()
-  return runCoreOperation(() => stopCoreInternal(force))
+  return runCoreOperation(() => stopCoreInternal())
 }
 
 // 退出不排队等待启动/重启完成：先同步终止子进程，再做有界清理。
@@ -839,15 +814,12 @@ export async function stopCoreForExit(): Promise<void> {
   coreOperationPhase = 'shutting-down'
   cancelAutomaticRestart()
   stopCoreProcessAndStreams()
-  await Promise.allSettled([
-    recoverDNS({ force: true, timeout: 750 }),
-    cleanupStoppedCoreResources()
-  ])
+  await cleanupStoppedCoreResources()
 }
 
-async function restartCoreOnce(forceStop: boolean): Promise<void> {
+async function restartCoreOnce(): Promise<void> {
   const startAttempt = await runCoreOperation(async () => {
-    await stopCoreInternal(forceStop)
+    await stopCoreInternal()
     return startCoreInternal(false, true)
   })
   await startAttempt.readiness
@@ -872,13 +844,13 @@ async function restartCoreAfterUnexpectedExit(): Promise<void> {
   try {
     await trackCoreRestart(async () => {
       try {
-        await restartCoreOnce(true)
+        await restartCoreOnce()
       } catch (error) {
         if (controller.signal.aborted || coreOperationPhase === 'shutting-down') throw error
 
         managerLogger.warn('Automatic core restart failed (attempt 1/2), retrying', error)
         await delay(automaticRestartDelay, undefined, { signal: controller.signal })
-        await restartCoreOnce(true)
+        await restartCoreOnce()
       }
     })
   } finally {
@@ -886,9 +858,9 @@ async function restartCoreAfterUnexpectedExit(): Promise<void> {
   }
 }
 
-export function restartCore(forceStop = false): Promise<void> {
+export function restartCore(): Promise<void> {
   ensureCoreOperationAllowed()
-  return trackCoreRestart(() => restartCoreOnce(forceStop))
+  return trackCoreRestart(() => restartCoreOnce())
 }
 
 // 检查配置文件

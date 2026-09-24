@@ -44,8 +44,6 @@ const MIHOMO_ALPHA_MAP = {
   'win32-x64': 'mihomo-windows-amd64-compatible',
   'win32-ia32': 'mihomo-windows-386',
   'win32-arm64': 'mihomo-windows-arm64',
-  'darwin-x64': 'mihomo-darwin-amd64-compatible',
-  'darwin-arm64': 'mihomo-darwin-arm64',
   'linux-x64': 'mihomo-linux-amd64-compatible',
   'linux-arm64': 'mihomo-linux-arm64'
 }
@@ -91,8 +89,6 @@ const MIHOMO_SMART_MAP = {
   'win32-x64': 'mihomo-windows-amd64-v2-go120',
   'win32-ia32': 'mihomo-windows-386-go120',
   'win32-arm64': 'mihomo-windows-arm64',
-  'darwin-x64': 'mihomo-darwin-amd64-v2-go120',
-  'darwin-arm64': 'mihomo-darwin-arm64',
   'linux-x64': 'mihomo-linux-amd64-v2-go120',
   'linux-arm64': 'mihomo-linux-arm64'
 }
@@ -120,8 +116,6 @@ const MIHOMO_MAP = {
   'win32-x64': 'mihomo-windows-amd64-compatible',
   'win32-ia32': 'mihomo-windows-386',
   'win32-arm64': 'mihomo-windows-arm64',
-  'darwin-x64': 'mihomo-darwin-amd64-compatible',
-  'darwin-arm64': 'mihomo-darwin-arm64',
   'linux-x64': 'mihomo-linux-amd64-compatible',
   'linux-arm64': 'mihomo-linux-arm64'
 }
@@ -399,19 +393,11 @@ function getSysproxyNodeName() {
     }
   })()
 
-  const isWin7Build = process.env.LEGACY_BUILD === 'true'
-
   switch (platform) {
     case 'win32':
-      if (arch === 'x64')
-        return isWin7Build ? 'sysproxy.win32-x64-msvc-win7.node' : 'sysproxy.win32-x64-msvc.node'
+      if (arch === 'x64') return 'sysproxy.win32-x64-msvc.node'
       if (arch === 'arm64') return 'sysproxy.win32-arm64-msvc.node'
-      if (arch === 'ia32')
-        return isWin7Build ? 'sysproxy.win32-ia32-msvc-win7.node' : 'sysproxy.win32-ia32-msvc.node'
-      break
-    case 'darwin':
-      if (arch === 'x64') return 'sysproxy.darwin-x64.node'
-      if (arch === 'arm64') return 'sysproxy.darwin-arm64.node'
+      if (arch === 'ia32') return 'sysproxy.win32-ia32-msvc.node'
       break
     case 'linux':
       if (isMusl) {
@@ -454,11 +440,6 @@ const resolveSysproxy = async () => {
   console.log(`[INFO]: ${nodeName} finished`)
 }
 
-const resolveHelper = () =>
-  resolveResource({
-    file: 'party.mihomo.helper',
-    downloadURL: `https://github.com/mihomo-party-org/mihomo-party-helper/releases/download/${arch}/party.mihomo.helper`
-  })
 const resolveFont = async () => {
   const targetPath = path.join(cwd, 'src', 'renderer', 'src', 'assets', 'NotoColorEmoji.ttf')
 
@@ -509,12 +490,6 @@ const tasks = [
     name: 'sysproxy',
     func: resolveSysproxy,
     retry: 5
-  },
-  {
-    name: 'helper',
-    func: resolveHelper,
-    retry: 5,
-    darwinOnly: true
   }
 ]
 
@@ -524,7 +499,6 @@ async function runTask() {
   if (task.winOnly && platform !== 'win32') return runTask()
   if (task.linuxOnly && platform !== 'linux') return runTask()
   if (task.unixOnly && platform === 'win32') return runTask()
-  if (task.darwinOnly && platform !== 'darwin') return runTask()
 
   for (let i = 0; i < task.retry; i++) {
     try {

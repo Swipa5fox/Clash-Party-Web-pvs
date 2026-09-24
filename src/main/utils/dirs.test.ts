@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // 断言里不能写死 POSIX 字面量，否则整个用例只在类 Unix 平台通过。
 const APP_DATA = path.join(path.sep, 'tmp', 'app-data')
 const HOME = path.join(path.sep, 'tmp', 'home')
-const EXE_DIR = path.join(path.sep, 'tmp', 'runtime', 'Electron.app', 'Contents', 'MacOS')
-const EXE = path.join(EXE_DIR, 'Electron')
+const EXE_DIR = path.join(path.sep, 'tmp', 'runtime')
+const EXE = path.join(EXE_DIR, 'Clash Party.exe')
 
 let packaged = false
 let portable = false

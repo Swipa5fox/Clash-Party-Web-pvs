@@ -1,5 +1,4 @@
 import { Divider } from '@heroui/react'
-import { platform } from '@renderer/utils/init'
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 
 interface Props {
@@ -13,19 +12,17 @@ const BasePage = forwardRef<HTMLDivElement, Props>((props, ref) => {
   const [overlayWidth, setOverlayWidth] = React.useState(0)
 
   useEffect(() => {
-    if (platform !== 'darwin') {
-      try {
-        // @ts-ignore windowControlsOverlay
-        const windowControlsOverlay = window.navigator.windowControlsOverlay
-        // 浏览器（非 PWA）中该 API 存在但矩形宽度为 0，会把避让宽度算成整个窗口宽度，
-        // 导致标题栏右侧溢出、标题被压缩成竖排；仅在 overlay 真实可见时才采用测量值。
-        if (windowControlsOverlay?.visible) {
-          const width = window.innerWidth - windowControlsOverlay.getTitlebarAreaRect().width
-          setOverlayWidth(width > 0 && width < window.innerWidth / 2 ? width : 0)
-        }
-      } catch {
-        // ignore
+    try {
+      // @ts-ignore windowControlsOverlay
+      const windowControlsOverlay = window.navigator.windowControlsOverlay
+      // 浏览器（非 PWA）中该 API 存在但矩形宽度为 0，会把避让宽度算成整个窗口宽度，
+      // 导致标题栏右侧溢出、标题被压缩成竖排；仅在 overlay 真实可见时才采用测量值。
+      if (windowControlsOverlay?.visible) {
+        const width = window.innerWidth - windowControlsOverlay.getTitlebarAreaRect().width
+        setOverlayWidth(width > 0 && width < window.innerWidth / 2 ? width : 0)
       }
+    } catch {
+      // ignore
     }
   }, [])
 

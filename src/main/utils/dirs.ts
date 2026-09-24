@@ -13,9 +13,8 @@ function portableDataDir(): string {
   return path.join(exeDir(), 'data')
 }
 
-// 本地 Electron.app 使用独立的应用名和数据目录，避免开发时访问正式版的
-// `mihomo-party Safe Storage` Keychain item 或修改正式配置。已打包的 dev 预发行版
-// 仍与正式版共享身份和数据，保持原有滚动升级路径。
+// 本地开发使用独立的应用名和数据目录，避免开发过程读写正式版的配置与凭据存储。
+// 已打包的 dev 预发行版仍与正式版共享身份和数据，保持原有滚动升级路径。
 export function configureAppPaths(): void {
   if (!app.isPackaged) {
     app.setName('mihomo-party-dev')

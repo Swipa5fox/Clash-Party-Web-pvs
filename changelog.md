@@ -21,6 +21,14 @@
 - **便携版 PORTABLE 标记**：新增 `scripts/mark-portable.mjs`，`build:win` 收尾自动把 `PORTABLE` 标记写入 `portable.7z`（7za 取自 electron-builder 缓存，无需另装 7-Zip）——解压版进入便携模式、数据落 exe 同级 `data/`；CI 中重复的 Add Portable Flag 步骤移除
 - 本地产物被套娃打进 asar 的问题随 `files` 排除 `dist/`、`release/` 一并解决
 
+### 桌面化残留补遗清除（核心代码与脚本）
+
+- **macOS 专属代码**：删整个 `dns.ts`（networksetup 公共 DNS 管理，约 100 行）及 manager 调用点；`stopCore` / `restartCore` 的 `forceStop` 参数链（唯一用途是跳过 mac DNS 恢复）；`sysproxy` 的 mac helper 整套（launchd 提权 / osascript / unix socket）与 `helperTimeout` 选项；`lifecycle` 的 `fixUserDataPermissions` 与退出清理 darwin 分支；`ssid` 的 airport/networksetup 探测；`init` 的 `fixDataDirPermissions` 与 tun 设备 darwin 分支；`permissions` 的 darwin 判定（保留容器所需的 linux 分支）；`github` 的 darwin 内核映射
+- **配置字段**：`autoSetDNS`、`originDNS`（均仅 mac 生效）从 appConfig 类型与消费点移除
+- **renderer**：连接页图标裁剪守卫、`base-page` 的 darwin 判断（`platform` 来自服务端，恒非 darwin）、`validate` 的 `<local>` 判定收敛为 win32
+- **构建脚本**：`prepare.mjs` 删除 darwin 内核映射、`party.mihomo.helper` 下载任务与 win7（`LEGACY_BUILD`）sysproxy 分支；`version-utils.mjs` 下载链接生成收窄为 Windows x64（不再生成 Win7 / macOS / Linux 死链）
+- **.github 模板**：OS 下拉（含 MacOS / Linux）移除，「GUI 程序」措辞改为 Clash Party Web
+
 ## Rebuild v1.1（2026-09-24）
 
 自 v1.0（`b1cb9e9c`）以来的变更：38 个文件，+1079 / −642（含引入 pre-commit 钩子带来的全仓 prettier 格式化；实质源码变更 15 个文件）。

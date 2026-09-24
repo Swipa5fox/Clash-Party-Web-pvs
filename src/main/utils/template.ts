@@ -92,7 +92,7 @@ export const defaultControledMihomoConfig: Partial<IMihomoConfig> = {
   'skip-auth-prefixes': DEFAULT_MIHOMO_SKIP_AUTH_PREFIXES,
   tun: {
     ...DEFAULT_MIHOMO_TUN_CONFIG,
-    device: getDefaultMihomoTunDevice(process.platform)
+    device: getDefaultMihomoTunDevice()
   },
   dns: DEFAULT_MIHOMO_DNS_CONFIG,
   sniffer: DEFAULT_MIHOMO_SNIFFER_CONFIG,

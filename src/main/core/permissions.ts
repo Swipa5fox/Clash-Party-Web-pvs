@@ -38,7 +38,7 @@ export async function checkMihomoCorePermissions(): Promise<boolean> {
       return await checkAdminPrivileges()
     }
 
-    if (process.platform === 'darwin' || process.platform === 'linux') {
+    if (process.platform === 'linux') {
       const stats = await stat(corePath)
       return (stats.mode & 0o4000) !== 0 && stats.uid === 0
     }
@@ -73,7 +73,7 @@ export async function checkHighPrivilegeCore(): Promise<boolean> {
       return isAdmin
     }
 
-    if (process.platform === 'darwin' || process.platform === 'linux') {
+    if (process.platform === 'linux') {
       managerLogger.info('Non-Windows platform, skipping high privilege core check')
       return false
     }

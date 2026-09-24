@@ -22,12 +22,7 @@ import { init, initBasic, safeShowErrorBox } from './utils/init'
 import { initProfileUpdater } from './core/profileUpdater'
 import { createLogger } from './utils/logger'
 import { initWebdavBackupScheduler } from './resolve/backup'
-import {
-  fixUserDataPermissions,
-  setupPlatformSpecifics,
-  setupAppLifecycle,
-  getSystemLanguage
-} from './lifecycle'
+import { setupPlatformSpecifics, setupAppLifecycle, getSystemLanguage } from './lifecycle'
 import { configureAppPaths } from './utils/dirs'
 
 // Web-Only 启动编排：仍以 Electron 运行时承载（app.whenReady 等），
@@ -50,7 +45,7 @@ async function getWindowsPowerShellMajorVersion(): Promise<number | null> {
     const major = version ? parseInt(version.split('.')[0], 10) : NaN
     return isNaN(major) ? null : major
   } catch (error) {
-    // 退出码 1 = 键不存在（Win7 仅 PS 2.0）；超时被杀或其他异常视为未知，不阻断。
+    // 退出码 1 = 键不存在（老旧系统仅 PS 2.0）；超时被杀或其他异常视为未知，不阻断。
     const err = error as { killed?: boolean; code?: number | string }
     return !err.killed && err.code === 1 ? 2 : null
   }
@@ -83,15 +78,6 @@ const gotTheLock = app.requestSingleInstanceLock()
 if (!gotTheLock) {
   app.quit()
 }
-
-async function initApp(): Promise<void> {
-  await fixUserDataPermissions()
-}
-
-initApp().catch((e) => {
-  safeShowErrorBox('common.error.initFailed', `${e}`)
-  app.quit()
-})
 
 setupPlatformSpecifics()
 setupAppLifecycle()

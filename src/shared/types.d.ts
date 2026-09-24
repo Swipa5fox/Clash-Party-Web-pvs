@@ -346,8 +346,6 @@ interface IAppConfig {
   mihomoCpuPriority?: Priority
   coreStartupMode?: 'log' | 'post-up'
   diffWorkDir?: boolean
-  autoSetDNS?: boolean
-  originDNS?: string
   enableTrafficLogger?: boolean
   siderOrder: string[]
   lastSelectedSiderCard?: SiderCardKey

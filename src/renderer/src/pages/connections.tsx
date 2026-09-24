@@ -38,7 +38,6 @@ import { useTranslation } from 'react-i18next'
 import { IoMdPause, IoMdPlay } from 'react-icons/io'
 import { saveIconToCache, getIconFromCache } from '@renderer/utils/icon-cache'
 import { cropAndPadTransparent } from '@renderer/utils/image'
-import { platform } from '@renderer/utils/init'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 
 let cachedConnections: IMihomoConnectionDetail[] = []
@@ -249,10 +248,7 @@ const Connections: React.FC = () => {
           ? rawBase64
           : `data:image/png;base64,${rawBase64}`
 
-        let processedDataURL = fullDataURL
-        if (platform !== 'darwin') {
-          processedDataURL = await cropAndPadTransparent(fullDataURL)
-        }
+        const processedDataURL = await cropAndPadTransparent(fullDataURL)
 
         saveIconToCache(path, processedDataURL)
 

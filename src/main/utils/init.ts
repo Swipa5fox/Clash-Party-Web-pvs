@@ -1,6 +1,6 @@
 import { mkdir, rm, readdir, cp, stat } from 'fs/promises'
 import { existsSync } from 'fs'
-import { exec, execFile } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
 import { app, dialog } from 'electron'
@@ -74,29 +74,6 @@ export function safeShowErrorBox(titleKey: string, message: string): void {
   dialog.showErrorBox(title, message)
 }
 
-async function fixDataDirPermissions(): Promise<void> {
-  if (process.platform !== 'darwin') return
-
-  const dataDirPath = dataDir()
-  if (!existsSync(dataDirPath)) return
-
-  try {
-    const stats = await stat(dataDirPath)
-    const currentUid = process.getuid?.() || 0
-
-    if (stats.uid === 0 && currentUid !== 0) {
-      const execPromise = promisify(exec)
-      const username = process.env.USER || process.env.LOGNAME
-      if (username) {
-        await execPromise(`chown -R "${username}:staff" "${dataDirPath}"`)
-        await execPromise(`chmod -R u+rwX "${dataDirPath}"`)
-      }
-    }
-  } catch {
-    // ignore
-  }
-}
-
 async function isSourceNewer(sourcePath: string, targetPath: string): Promise<boolean> {
   try {
     const [sourceStats, targetStats] = await Promise.all([stat(sourcePath), stat(targetPath)])
@@ -107,8 +84,6 @@ async function isSourceNewer(sourcePath: string, targetPath: string): Promise<bo
 }
 
 async function initDirs(): Promise<void> {
-  await fixDataDirPermissions()
-
   const dirsToCreate = [
     dataDir(),
     themesDir(),
@@ -354,10 +329,10 @@ async function migrateMihomoConfig(): Promise<void> {
   if (!config['lan-disallowed-ips']) patches['lan-disallowed-ips'] = []
 
   // tun device
-  if (!config.tun?.device || (process.platform === 'darwin' && config.tun.device === 'Mihomo')) {
+  if (!config.tun?.device) {
     patches.tun = {
       ...config.tun,
-      device: getDefaultMihomoTunDevice(process.platform)
+      device: getDefaultMihomoTunDevice()
     }
   }
 

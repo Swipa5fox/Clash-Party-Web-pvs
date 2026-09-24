@@ -49,8 +49,6 @@ const PLATFORM_MAP: Record<string, string> = {
   'win32-x64': 'mihomo-windows-amd64-compatible',
   'win32-ia32': 'mihomo-windows-386',
   'win32-arm64': 'mihomo-windows-arm64',
-  'darwin-x64': 'mihomo-darwin-amd64-compatible',
-  'darwin-arm64': 'mihomo-darwin-arm64',
   'linux-x64': 'mihomo-linux-amd64-compatible',
   'linux-arm64': 'mihomo-linux-arm64'
 }
@@ -186,7 +184,7 @@ export async function installMihomoCore(version: string): Promise<void> {
     if (existsSync(targetPath)) {
       log.debug('Stopping core before extracting new core file')
       // 先停止核心
-      await stopCore(true)
+      await stopCore()
     }
 
     // 下载文件

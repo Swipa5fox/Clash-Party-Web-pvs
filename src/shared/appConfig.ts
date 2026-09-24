@@ -38,8 +38,8 @@ export const DEFAULT_MIHOMO_SKIP_AUTH_PREFIXES = ['127.0.0.1/32', '::1/128']
 
 export const DEFAULT_MIHOMO_LAN_ALLOWED_IPS = ['0.0.0.0/0', '::/0']
 
-export function getDefaultMihomoTunDevice(platform: NodeJS.Platform | string): string {
-  return platform === 'darwin' ? 'utun1500' : 'Mihomo'
+export function getDefaultMihomoTunDevice(): string {
+  return 'Mihomo'
 }
 
 type DefaultMihomoTunConfig = {
