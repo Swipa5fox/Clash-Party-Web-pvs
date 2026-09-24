@@ -35,7 +35,6 @@ import {
   IoMdEyeOff
 } from 'react-icons/io'
 import { useCustomLineGroups } from '@renderer/hooks/use-custom-line-groups'
-import PubSub from 'pubsub-js'
 import {
   mihomoUpgrade,
   mihomoHotReloadConfig,
@@ -153,7 +152,7 @@ const Mihomo: React.FC = () => {
 
       await showError(errorMessage, t('mihomo.error.profileCheckFailed'))
     } finally {
-      PubSub.publish('mihomo-core-changed')
+      window.dispatchEvent(new CustomEvent('mihomo-core-changed'))
     }
   }
 
@@ -293,7 +292,8 @@ const Mihomo: React.FC = () => {
                   color="primary"
                   onValueChange={async (v) => {
                     await patchAppConfig({ enableSmartOverride: v })
-                    await mihomoHotReloadConfig()
+                    // 热重载后台执行,不阻塞开关响应,失败才提示
+                    mihomoHotReloadConfig().catch((e) => toast.error(String(e)))
                   }}
                 />
               </SettingItem>
@@ -323,7 +323,7 @@ const Mihomo: React.FC = () => {
                         setUpgrading(true)
                         await mihomoUpgrade()
                         setTimeout(() => {
-                          PubSub.publish('mihomo-core-changed')
+                          window.dispatchEvent(new CustomEvent('mihomo-core-changed'))
                         }, 2000)
                         if (platform !== 'win32') {
                           new Notification(t('mihomo.coreAuthLost'), {
@@ -405,7 +405,8 @@ const Mihomo: React.FC = () => {
                     isSelected={smartCoreUseLightGBM}
                     onValueChange={async (v) => {
                       await patchAppConfig({ smartCoreUseLightGBM: v })
-                      await mihomoHotReloadConfig()
+                      // 热重载后台执行,不阻塞开关响应,失败才提示
+                      mihomoHotReloadConfig().catch((e) => toast.error(String(e)))
                     }}
                   />
                 </SettingItem>
@@ -431,7 +432,8 @@ const Mihomo: React.FC = () => {
                     isSelected={smartCoreCollectData}
                     onValueChange={async (v) => {
                       await patchAppConfig({ smartCoreCollectData: v })
-                      await mihomoHotReloadConfig()
+                      // 热重载后台执行,不阻塞开关响应,失败才提示
+                      mihomoHotReloadConfig().catch((e) => toast.error(String(e)))
                     }}
                   />
                 </SettingItem>
@@ -468,7 +470,8 @@ const Mihomo: React.FC = () => {
                         if (isNaN(num)) num = 100
                         if (num < 1) num = 1
                         await patchAppConfig({ smartCollectorSize: num })
-                        await mihomoHotReloadConfig()
+                        // 热重载后台执行,不阻塞输入响应,失败才提示
+                        mihomoHotReloadConfig().catch((er) => toast.error(String(er)))
                       }}
                     />
                     <span className="text-default-500">MB</span>
@@ -488,7 +491,8 @@ const Mihomo: React.FC = () => {
                     onSelectionChange={async (v) => {
                       const strategy = v.currentKey as 'sticky-sessions' | 'round-robin'
                       await patchAppConfig({ smartCoreStrategy: strategy })
-                      await mihomoHotReloadConfig()
+                      // 热重载后台执行,不阻塞下拉响应,失败才提示
+                      mihomoHotReloadConfig().catch((e) => toast.error(String(e)))
                     }}
                   >
                     <SelectItem key="sticky-sessions">
@@ -575,11 +579,7 @@ const Mihomo: React.FC = () => {
             const draftPort = customPortDrafts[cg.id]
             const dirty = draftPort !== undefined && draftPort !== cg.port && draftPort > 0
             return (
-              <SettingItem
-                key={cg.id}
-                title={`${cg.name} ${t('customLines.port')}`}
-                divider
-              >
+              <SettingItem key={cg.id} title={`${cg.name} ${t('customLines.port')}`} divider>
                 <div className="flex">
                   {dirty && (
                     <Button

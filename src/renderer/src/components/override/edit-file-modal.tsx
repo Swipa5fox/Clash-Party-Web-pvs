@@ -58,8 +58,9 @@ const EditFileModal: React.FC<Props> = (props) => {
             onPress={async () => {
               try {
                 await setOverride(id, language === 'javascript' ? 'js' : 'yaml', currData)
-                await mihomoHotReloadConfig()
                 onClose()
+                // 热重载需重新生成完整配置(大订阅时秒级),后台执行不阻塞弹窗关闭,失败才提示
+                mihomoHotReloadConfig().catch((e) => toast.error(String(e)))
               } catch (e) {
                 toast.error(String(e))
               }

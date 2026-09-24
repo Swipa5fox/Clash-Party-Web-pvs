@@ -57,13 +57,15 @@ const EditInfoModal: React.FC<Props> = (props) => {
       if (isImportMode) {
         if (!addProfileItem) throw new Error('Missing profile import handler')
         await addProfileItem(updatedItem)
+        onClose()
       } else {
         if (!updateProfileItem) throw new Error('Missing profile update handler')
         await updateProfileItem(updatedItem)
         await addProfileUpdater(updatedItem)
-        await mihomoHotReloadConfig()
+        onClose()
+        // 热重载需重新生成完整配置(大订阅时秒级),后台执行不阻塞弹窗关闭,失败才提示
+        mihomoHotReloadConfig().catch((e) => toast.error(String(e)))
       }
-      onClose()
     } catch (e) {
       toast.error(String(e))
     }

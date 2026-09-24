@@ -178,7 +178,8 @@ const OverrideItem: React.FC<Props> = (props) => {
                       setUpdating(true)
                       try {
                         await addOverrideItem(info)
-                        await mihomoHotReloadConfig()
+                        // 热重载需重新生成完整配置(大订阅时秒级),后台执行不阻塞刷新按钮,失败才提示
+                        mihomoHotReloadConfig().catch((e) => toast.error(String(e)))
                       } catch (e) {
                         toast.error(String(e))
                       } finally {

@@ -25,34 +25,18 @@ interface MihomoStreamState {
   reconnectTimer: NodeJS.Timeout | null
 }
 
-const trafficStream: MihomoStreamState = {
+// ponytail: 4 个结构相同的 stream 状态字面量换成一个工厂
+const makeStream = (): MihomoStreamState => ({
   ws: null,
   retry: MAX_RETRY,
   active: false,
   generation: 0,
   reconnectTimer: null
-}
-const memoryStream: MihomoStreamState = {
-  ws: null,
-  retry: MAX_RETRY,
-  active: false,
-  generation: 0,
-  reconnectTimer: null
-}
-const logsStream: MihomoStreamState = {
-  ws: null,
-  retry: MAX_RETRY,
-  active: false,
-  generation: 0,
-  reconnectTimer: null
-}
-const connectionsStream: MihomoStreamState = {
-  ws: null,
-  retry: MAX_RETRY,
-  active: false,
-  generation: 0,
-  reconnectTimer: null
-}
+})
+const trafficStream = makeStream()
+const memoryStream = makeStream()
+const logsStream = makeStream()
+const connectionsStream = makeStream()
 
 function clearStreamReconnect(stream: MihomoStreamState): void {
   if (!stream.reconnectTimer) return
@@ -305,8 +289,7 @@ export const mihomoGroups = async (includeHidden = false): Promise<IMihomoMixedG
     if (!isMihomoGroup(p) || p.name === 'GLOBAL') return
     ;(p.all || []).forEach((n) => referencedNames.add(n))
   })
-  const isNested = (name: string): boolean =>
-    referencedNames.has(name) || name === 'GLOBAL'
+  const isNested = (name: string): boolean => referencedNames.has(name) || name === 'GLOBAL'
 
   // 候选组(按 runtime 配置顺序): 收集全部组,含被收纳组
   const candidates: { group: IMihomoGroup; providers: string[] }[] = []
@@ -451,7 +434,28 @@ export const mihomoUpgrade = async (): Promise<void> => {
   return await instance.post('/upgrade', undefined, { timeout: 90000 })
 }
 
+// 渲染层保存(覆写/订阅等)后不再 await 热重载,改为 fire-and-forget 并发触发;
+// 运行中再来请求时尾部合并:当前重载完成后用最新配置再跑一次,避免交错执行导致旧结果后落覆盖新保存
+let hotReloadRunning = false
+let hotReloadQueued = false
+
 export const mihomoHotReloadConfig = async (): Promise<void> => {
+  if (hotReloadRunning) {
+    hotReloadQueued = true
+    return
+  }
+  hotReloadRunning = true
+  try {
+    do {
+      hotReloadQueued = false
+      await runHotReload()
+    } while (hotReloadQueued)
+  } finally {
+    hotReloadRunning = false
+  }
+}
+
+const runHotReload = async (): Promise<void> => {
   mihomoApiLogger.info('mihomoHotReloadConfig called')
   if (!hasCoreProcess()) {
     mihomoApiLogger.warn('Core is not running, restarting core instead of hot reload')
@@ -660,5 +664,3 @@ const mihomoConnections = async (): Promise<void> => {
     closeErroredStreamSocket(connectionsStream, generation, ws)
   }
 }
-
-

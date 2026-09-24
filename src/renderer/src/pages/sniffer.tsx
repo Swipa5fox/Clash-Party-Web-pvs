@@ -54,7 +54,10 @@ const Sniffer: React.FC = () => {
       await patchControledMihomoConfig(patch)
 
       if (controlSniff) {
-        await mihomoHotReloadConfig()
+        // 热重载后台执行,不阻塞保存响应,失败才提示
+        mihomoHotReloadConfig().catch((e) =>
+          showErrorSync(e, t('common.error.snifferConfigSaveFailed'))
+        )
       }
     } catch (e) {
       showErrorSync(e, t('common.error.snifferConfigSaveFailed'))

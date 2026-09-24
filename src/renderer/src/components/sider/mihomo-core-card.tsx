@@ -7,7 +7,6 @@ import { IoMdRefresh } from 'react-icons/io'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useLocation, useNavigate } from 'react-router-dom'
-import PubSub from 'pubsub-js'
 import useSWR from 'swr'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { LuCpu } from 'react-icons/lu'
@@ -41,16 +40,18 @@ const MihomoCoreCard: React.FC<Props> = (props) => {
   const { t } = useTranslation()
 
   useEffect(() => {
-    const token = PubSub.subscribe('mihomo-core-changed', () => {
+    // ponytail: pubsub-js 只为发这一个事件,换成原生 CustomEvent
+    const onCoreChanged = (): void => {
       mutate()
-    })
+    }
+    window.addEventListener('mihomo-core-changed', onCoreChanged)
     const onMemory = (_e: unknown, ...args: unknown[]): void => {
       const info = args[0] as IMihomoMemoryInfo
       setMem(info.inuse)
     }
     window.electron.ipcRenderer.on('mihomoMemory', onMemory)
     return (): void => {
-      PubSub.unsubscribe(token)
+      window.removeEventListener('mihomo-core-changed', onCoreChanged)
       window.electron.ipcRenderer.removeListener('mihomoMemory', onMemory)
     }
   }, [mutate])

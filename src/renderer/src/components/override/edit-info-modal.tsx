@@ -11,6 +11,7 @@ import {
 import React, { useState } from 'react'
 import { mihomoHotReloadConfig } from '@renderer/utils/ipc'
 import { useTranslation } from 'react-i18next'
+import { toast } from '@renderer/components/base/toast'
 import SettingItem from '../base/base-setting-item'
 
 interface Props {
@@ -25,8 +26,9 @@ const EditInfoModal: React.FC<Props> = (props) => {
 
   const onSave = async (): Promise<void> => {
     await updateOverrideItem(values)
-    await mihomoHotReloadConfig()
     onClose()
+    // 热重载需重新生成完整配置(大订阅时秒级),后台执行不阻塞弹窗关闭,失败才提示
+    mihomoHotReloadConfig().catch((e) => toast.error(String(e)))
   }
 
   return (

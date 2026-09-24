@@ -167,7 +167,10 @@ const DNS: React.FC = () => {
         dns: patch.dns ? { ...patch.dns, 'nameserver-policy': nextNameserverPolicy } : patch.dns
       })
       if (controlDns) {
-        await mihomoHotReloadConfig()
+        // 热重载后台执行,不阻塞保存响应,失败才提示
+        mihomoHotReloadConfig().catch((e) =>
+          showErrorSync(e, t('common.error.dnsConfigSaveFailed'))
+        )
       }
     } catch (e) {
       showErrorSync(e, t('common.error.dnsConfigSaveFailed'))

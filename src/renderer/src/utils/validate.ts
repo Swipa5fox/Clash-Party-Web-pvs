@@ -26,7 +26,8 @@ const domainKeywordValidator = (value: string): boolean => {
   )
 }
 
-const domainRegexValidator = (value: string): boolean => {
+// 正则语法检查（DOMAIN-REGEX / PROCESS-PATH-REGEX / PROCESS-NAME-REGEX 共用）
+const regexSyntaxValidator = (value: string): boolean => {
   try {
     new RegExp(value)
     return true
@@ -34,6 +35,8 @@ const domainRegexValidator = (value: string): boolean => {
     return false
   }
 }
+
+const domainRegexValidator = regexSyntaxValidator
 
 const portValidator = (value: string): boolean => {
   return validator.isPort(value)
@@ -169,14 +172,7 @@ const processPathWildcardValidator = (value: string): boolean => {
 }
 
 // 进程路径正则验证器
-const processPathRegexValidator = (value: string): boolean => {
-  try {
-    new RegExp(value)
-    return true
-  } catch {
-    return false
-  }
-}
+const processPathRegexValidator = regexSyntaxValidator
 
 // 进程名称验证器
 const processNameValidator = (value: string): boolean => {
@@ -196,14 +192,7 @@ const processNameWildcardValidator = (value: string): boolean => {
 }
 
 // 进程名称正则验证器
-const processNameRegexValidator = (value: string): boolean => {
-  try {
-    new RegExp(value)
-    return true
-  } catch {
-    return false
-  }
-}
+const processNameRegexValidator = regexSyntaxValidator
 
 // IN-TYPE 验证器 - 入站类型验证
 const inTypeValidator = (value: string): boolean => {
@@ -374,50 +363,13 @@ export const isValidListenAddress = (s: string | undefined): ValidationResult =>
   return { ok: false, error: '主机名包含非法字符' }
 }
 
-// 验证监听地址（完整版，包含 0.0.0.0 和 ::）
+// 验证监听地址（完整版，包含 0.0.0.0 和 ::）：在基础版之上放行两个通配监听地址
 export const isValidListenAddressFull = (s: string | undefined): ValidationResult => {
-  if (!s || s.trim() === '') return { ok: true }
+  const base = isValidListenAddress(s)
+  if (base.ok) return base
 
-  const v = s.trim()
+  const host = (s ?? '').trim().slice(0, (s ?? '').trim().lastIndexOf(':'))
+  if (host === '0.0.0.0' || host === '::') return { ok: true }
 
-  // 格式：:port (仅端口)
-  if (v.startsWith(':')) {
-    return isValidPort(v.slice(1))
-  }
-
-  const idx = v.lastIndexOf(':')
-  if (idx === -1) return { ok: false, error: '应包含端口号' }
-
-  const host = v.slice(0, idx)
-  const port = v.slice(idx + 1)
-
-  // 验证端口
-  const portResult = isValidPort(port)
-  if (!portResult.ok) return portResult
-
-  // 格式：[IPv6]:port
-  if (host.startsWith('[') && host.endsWith(']')) {
-    const inner = host.slice(1, -1)
-    return isIPv6(inner)
-  }
-
-  // 特殊地址：0.0.0.0 (监听所有 IPv4) 或 :: (监听所有 IPv6)
-  if (host === '0.0.0.0' || host === '::') {
-    return { ok: true }
-  }
-
-  // IPv4 地址
-  if (validator.isIP(host, 4)) {
-    return { ok: true }
-  }
-
-  // 域名或主机名 (使用宽松的 FQDN 验证)
-  if (
-    validator.isFQDN(host, { require_tld: false }) ||
-    validator.isAlphanumeric(host, 'en-US', { ignore: '-.' })
-  ) {
-    return { ok: true }
-  }
-
-  return { ok: false, error: '主机名包含非法字符' }
+  return base
 }

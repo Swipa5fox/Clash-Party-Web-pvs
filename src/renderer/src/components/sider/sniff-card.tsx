@@ -40,7 +40,8 @@ const SniffCard: React.FC<Props> = (props) => {
   const onChange = async (controlSniff: boolean): Promise<void> => {
     try {
       await patchAppConfig({ controlSniff })
-      await mihomoHotReloadConfig()
+      // 热重载后台执行,不阻塞开关响应,失败才提示
+      mihomoHotReloadConfig().catch((e) => toast.error(String(e)))
     } catch (e) {
       toast.error(String(e))
     }

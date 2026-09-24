@@ -5,7 +5,6 @@ import { configureMonacoYaml } from 'monaco-yaml'
 import metaSchema from 'meta-json-schema/schemas/meta-json-schema.json'
 import pac from 'types-pac/pac.d.ts?raw'
 import { useTheme } from 'next-themes'
-import { nanoid } from 'nanoid'
 type Language = 'yaml' | 'javascript' | 'css' | 'json' | 'text'
 
 interface Props {
@@ -97,7 +96,10 @@ export const BaseEditor: React.FC<Props> = (props) => {
   const editorDidMount = (editor: monaco.editor.IStandaloneCodeEditor): void => {
     editorRef.current = editor
 
-    const uri = monaco.Uri.parse(`${nanoid()}.${language === 'yaml' ? 'clash' : ''}.${language}`)
+    // ponytail: nanoid 只为生成一个不重复的 monaco URI 后缀,crypto.randomUUID 原生等效
+    const uri = monaco.Uri.parse(
+      `${crypto.randomUUID()}.${language === 'yaml' ? 'clash' : ''}.${language}`
+    )
     const model = monaco.editor.createModel(value, language, uri)
     editorRef.current?.setModel(model)
   }
