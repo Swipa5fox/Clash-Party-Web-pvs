@@ -22,7 +22,6 @@ extra/sidecar/*win32*.node
 extra/sidecar/*darwin*.node
 
 # Desktop packaging assets — the linux container never uses them.
-deploy/aur
 deploy/build
 
 # Local deployment state / secrets

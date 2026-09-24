@@ -4,6 +4,23 @@
 
 该文件同时是发布流水线的发布说明来源：`scripts/updater.mjs` 读取它生成 `latest.yml`（应用内更新弹窗展示），`scripts/telegram.mjs` 读取它发布到频道。因此最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
+## Unreleased
+
+### 桌面化残留全面清除（收窄为 Windows x64 Web 服务）
+
+- **安装器**：不再注册 `clash://` / `mihomo://` URI 协议（deeplink 处理代码 v1.0 已删，属死配置）与 `.cpx` 文件关联（同样无处理代码）；不创建桌面快捷方式与开始菜单项；安装后即为无窗口后台服务，浏览器访问 `:3999`
+- **构建脚本**：删除 `build:mac` / `build:linux`（及 dev 变体），仅保留 `build:win`
+- **打包配置**：electron-builder 移除 mac（pkg / 公证 / entitlements）与 linux（deb / rpm / pacman / desktop entry）全部目标；`files` 排除 `dist/`、`release/` 构建产物，避免本地产物被套娃打进 asar
+- **CI**：workflow 收窄为 `cleanup-dev-release → windows (x64) → updater`，删除 windows7 / linux / macos / macos10 / AUR / winget 流水线；tag 推送不再触发 CI（发布以本机手工 Windows x64 为准），保留 workflow_dispatch 供 dev 构建
+- **代码**：删除 macOS 专属 `appName`（NSFileManager 显示名，Windows / Linux 恒为空）IPC 全链路与连接页排队逻辑；`getIconDataURL` 仅保留 Windows 分支（`file-icon-info`），非 Windows 回退默认图标；移除 `file-icon` / `plist` / `@types/plist` 依赖与 `file-icon` 的 `asarUnpack`
+- **删除**：`deploy/aur/`（5 套 PKGBUILD）、mac 打包资产（entitlements / background / pkg-scripts / icon.icns）
+- README：目录树与快速开始同步；「桌面端能力」→「代理核心能力」
+
+### 修复（v1.1 遗留）
+
+- **便携版 PORTABLE 标记**：新增 `scripts/mark-portable.mjs`，`build:win` 收尾自动把 `PORTABLE` 标记写入 `portable.7z`（7za 取自 electron-builder 缓存，无需另装 7-Zip）——解压版进入便携模式、数据落 exe 同级 `data/`；CI 中重复的 Add Portable Flag 步骤移除
+- 本地产物被套娃打进 asar 的问题随 `files` 排除 `dist/`、`release/` 一并解决
+
 ## Rebuild v1.1（2026-09-24）
 
 自 v1.0（`b1cb9e9c`）以来的变更：38 个文件，+1079 / −642（含引入 pre-commit 钩子带来的全仓 prettier 格式化；实质源码变更 15 个文件）。

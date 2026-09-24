@@ -1,6 +1,7 @@
 node_modules
 extra
 dist
+release
 out
 .DS_Store
 *.log*

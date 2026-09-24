@@ -38,13 +38,13 @@
 
 ## 重要功能
 
-### 桌面端能力（继承上游）
+### 代理核心能力（继承上游）
 
 - 开箱即用、无需服务模式的 TUN
 - Smart Core 规则覆写，基于 AI 模型自动选择最优节点（详见 [官方文档](https://clashparty.org/docs/guide/smart-core)）
 - 订阅管理、节点选择、连接与日志、DNS/嗅探配置
 - 覆写系统：任意修订配置文件，支持 JS 脚本与 YAML 补丁、age 加密、Smart 覆写独立时序
-- WebDAV 备份恢复、多种配色主题、多语言（简中 / 繁中 / 英）
+- WebDAV 备份恢复、多种配色主题、多语言（简中 / 英）
 
 ### 重建版新增
 
@@ -145,8 +145,7 @@ src/
   renderer/     React 界面（index / floating / web 三入口）
   shared/       主进程与渲染层共用的类型、i18n 资源
 deploy/
-  aur/          AUR 打包定义（PKGBUILD ×5，CI tag 发布时更新）
-  build/        electron-builder 打包资源（图标、安装器脚本、entitlements）
+  build/        electron-builder 打包资源（Windows 图标、安装器脚本）
   gateway/      cpx-gateway：机场插件网关 + 面板反代（零依赖 Node）
   party/        cpx-party：Clash Party Web 容器（Dockerfile + entrypoint）
   opt/          bootstrap.sh 新机器构筑脚本、订阅备份脚本
@@ -157,13 +156,15 @@ scripts/        构建期资源准备与打包脚本
 
 ## 快速开始
 
-### 桌面端
+### Windows 安装版 / 便携版
 
 ```bash
 pnpm install
 pnpm run dev          # 开发（Web 模式，浏览器访问 :3999）
-pnpm run build:win    # 打包（另有 build:mac / build:linux）
+pnpm run build:win    # 打包（Windows x64）
 ```
+
+安装后为无窗口后台服务，浏览器访问 `http://127.0.0.1:3999`；安装器不创建桌面快捷方式、不注册 `clash://` 协议与 `.cpx` 文件关联。
 
 ### 容器部署（内网推荐）
 

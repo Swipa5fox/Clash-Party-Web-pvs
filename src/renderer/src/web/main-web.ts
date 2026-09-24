@@ -119,7 +119,6 @@ const validInvokeChannels: readonly string[] = [
   'measureLatency',
   'getImageDataURL',
   'getIconDataURL',
-  'getAppName',
   'changeLanguage',
   // File Share
   'getFileShareServerState',

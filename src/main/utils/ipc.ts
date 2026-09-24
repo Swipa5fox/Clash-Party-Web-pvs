@@ -107,7 +107,6 @@ import {
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { getIconDataURL } from './icon'
-import { getAppName } from './appName'
 import { getDeploymentEnv } from './deployment'
 import { dataDir, rulePath } from './dirs'
 import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
@@ -345,7 +344,6 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   measureLatency,
   getImageDataURL,
   getIconDataURL,
-  getAppName,
   changeLanguage,
   // File Share
   getFileShareServerState,

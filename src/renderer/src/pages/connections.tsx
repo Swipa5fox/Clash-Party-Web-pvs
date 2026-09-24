@@ -2,8 +2,7 @@ import BasePage from '@renderer/components/base/base-page'
 import {
   mihomoCloseAllConnections,
   mihomoCloseConnection,
-  getIconDataURL,
-  getAppName
+  getIconDataURL
 } from '@renderer/utils/ipc'
 import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -46,7 +45,6 @@ let cachedConnections: IMihomoConnectionDetail[] = []
 const MAX_QUEUE_SIZE = 100
 // 按进程路径累积的内存缓存封顶，避免长时间运行无界增长
 const MAX_ICON_CACHE_SIZE = 256
-const MAX_APP_NAME_CACHE_SIZE = 512
 const CONNECTIONS_FILTER_KEY = 'connections-filter'
 
 function putCappedRecord<T>(
@@ -83,8 +81,7 @@ const Connections: React.FC = () => {
     connectionTableColumnWidths,
     connectionTableSortColumn,
     connectionTableSortDirection,
-    displayIcon = true,
-    displayAppName = true
+    displayIcon = true
   } = appConfigValues
   const [connectionsInfo, setConnectionsInfo] = useState<IMihomoConnectionsInfo>()
   const [allConnections, setAllConnections] = useState<IMihomoConnectionDetail[]>(cachedConnections)
@@ -98,7 +95,6 @@ const Connections: React.FC = () => {
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set(connectionTableColumns))
 
   const [iconMap, setIconMap] = useState<Record<string, string>>({})
-  const [appNameCache, setAppNameCache] = useState<Record<string, string>>({})
   const [firstItemRefreshTrigger, setFirstItemRefreshTrigger] = useState(0)
 
   const activeConnectionsRef = useRef(activeConnections)
@@ -109,9 +105,6 @@ const Connections: React.FC = () => {
   const processIconTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const processIconIdleCallback = useRef<number | null>(null)
 
-  const appNameRequestQueue = useRef(new Set<string>())
-  const processingAppNames = useRef(new Set<string>())
-  const processAppNameTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     activeConnectionsRef.current = activeConnections
     allConnectionsRef.current = allConnections
@@ -238,35 +231,6 @@ const Connections: React.FC = () => {
     setClosedConnections((closedConns) => closedConns.filter((conn) => conn.id !== id))
   }
 
-  const processAppNameQueue = useCallback(async () => {
-    if (processingAppNames.current.size >= 3 || appNameRequestQueue.current.size === 0) return
-
-    const pathsToProcess = Array.from(appNameRequestQueue.current).slice(0, 3)
-    pathsToProcess.forEach((path) => appNameRequestQueue.current.delete(path))
-
-    const promises = pathsToProcess.map(async (path) => {
-      if (processingAppNames.current.has(path)) return
-      processingAppNames.current.add(path)
-
-      try {
-        const appName = await getAppName(path)
-        if (appName) {
-          setAppNameCache((prev) => putCappedRecord(prev, path, appName, MAX_APP_NAME_CACHE_SIZE))
-        }
-      } catch {
-        // ignore
-      } finally {
-        processingAppNames.current.delete(path)
-      }
-    })
-
-    await Promise.all(promises)
-
-    if (appNameRequestQueue.current.size > 0) {
-      processAppNameTimer.current = setTimeout(processAppNameQueue, 100)
-    }
-  }, [])
-
   const processIconQueue = useCallback(async () => {
     if (processingIcons.current.size >= 5 || iconRequestQueue.current.size === 0) return
 
@@ -359,22 +323,14 @@ const Connections: React.FC = () => {
       iconRequestQueue.current.add(path)
     }
 
-    const loadAppName = (path: string): void => {
-      if (appNameCache[path] || processingAppNames.current.has(path)) return
-      if (appNameRequestQueue.current.size >= MAX_QUEUE_SIZE) return
-      appNameRequestQueue.current.add(path)
-    }
-
     visiblePaths.forEach((path) => {
       loadIcon(path, true)
-      if (displayAppName) loadAppName(path)
     })
 
     if (otherPaths.size > 0) {
       const loadOtherPaths = () => {
         otherPaths.forEach((path) => {
           loadIcon(path, false)
-          if (displayAppName) loadAppName(path)
         })
       }
 
@@ -383,27 +339,19 @@ const Connections: React.FC = () => {
 
     if (processIconTimer.current) clearTimeout(processIconTimer.current)
     if (processIconIdleCallback.current) cancelIdleCallback(processIconIdleCallback.current)
-    if (processAppNameTimer.current) clearTimeout(processAppNameTimer.current)
 
     processIconTimer.current = setTimeout(processIconQueue, 10)
-    if (displayAppName) {
-      processAppNameTimer.current = setTimeout(processAppNameQueue, 10)
-    }
 
     return (): void => {
       if (processIconTimer.current) clearTimeout(processIconTimer.current)
       if (processIconIdleCallback.current) cancelIdleCallback(processIconIdleCallback.current)
-      if (processAppNameTimer.current) clearTimeout(processAppNameTimer.current)
     }
   }, [
     activeConnections,
     closedConnections,
     iconMap,
-    appNameCache,
     displayIcon,
     processIconQueue,
-    processAppNameQueue,
-    displayAppName,
     findProcessMode,
     filteredConnections
   ])
@@ -469,10 +417,6 @@ const Connections: React.FC = () => {
       const path = connection.metadata.processPath || ''
       const iconUrl = (displayIcon && findProcessMode !== 'off' && iconMap[path]) || ''
       const itemKey = i === 0 ? `${connection.id}-${firstItemRefreshTrigger}` : connection.id
-      const displayName =
-        displayAppName && connection.metadata.processPath
-          ? appNameCache[connection.metadata.processPath]
-          : undefined
 
       return (
         <ConnectionItem
@@ -481,7 +425,6 @@ const Connections: React.FC = () => {
           selected={selected}
           iconUrl={iconUrl}
           displayIcon={displayIcon && findProcessMode !== 'off'}
-          displayName={displayName}
           close={closeConnection}
           index={i}
           key={itemKey}
@@ -489,16 +432,7 @@ const Connections: React.FC = () => {
         />
       )
     },
-    [
-      displayIcon,
-      iconMap,
-      firstItemRefreshTrigger,
-      selected,
-      closeConnection,
-      appNameCache,
-      findProcessMode,
-      displayAppName
-    ]
+    [displayIcon, iconMap, firstItemRefreshTrigger, selected, closeConnection, findProcessMode]
   )
 
   return (

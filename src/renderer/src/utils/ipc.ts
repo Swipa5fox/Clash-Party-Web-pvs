@@ -319,11 +319,6 @@ export async function applyTheme(theme: string): Promise<void> {
   }
 }
 
-// getAppName: 获取应用程序名称
-export async function getAppName(appPath: string): Promise<string> {
-  return invoke<string>('getAppName', appPath)
-}
-
 // getIconDataURL: 获取应用图标的 Base64 数据
 export async function getIconDataURL(appPath: string): Promise<string> {
   return invoke<string>('getIconDataURL', appPath)

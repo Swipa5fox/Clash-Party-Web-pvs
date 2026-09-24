@@ -5,7 +5,6 @@ directories:
 files:
   - '!**/.vscode/*'
   - '!src/*'
-  - '!deploy/aur/*'
   - '!images/*'
   - '!scripts/*'
   - '!extra/*'
@@ -15,22 +14,13 @@ files:
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-asarUnpack:
-  - 'node_modules/file-icon/file-icon'
+  # 本地/CI 构建产物绝不入包
+  - '!dist/*'
+  - '!release/*'
 extraResources:
   - from: './extra/'
     to: ''
-protocols:
-  name: 'Clash Party URI Scheme'
-  schemes:
-    - 'clash'
-    - 'mihomo'
-fileAssociations:
-  - ext: 'cpx'
-    name: 'Clash Party Plugin'
-    description: 'Clash Party airport plugin descriptor'
-    mimeType: 'application/x-clash-party-plugin'
-    role: 'Viewer'
+# Web-Only：无窗口后台服务，不注册 URI 协议 / .cpx 文件关联 / 桌面快捷方式
 win:
   target:
     - nsis
@@ -42,81 +32,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   oneClick: false
   perMachine: true
-  createDesktopShortcut: always
-mac:
-  target:
-    - pkg
-  extraResources:
-    - from: './deploy/build/pkg-scripts/party.mihomo.helper.plist'
-      to: 'files/party.mihomo.helper.plist'
-  entitlementsInherit: deploy/build/entitlements.mac.plist
-  hardenedRuntime: true
-  gatekeeperAssess: false
-  extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
-  artifactName: clash-party-macos-${version}-${arch}.${ext}
-pkg:
-  allowAnywhere: false
-  allowCurrentUserHome: false
-  isRelocatable: false
-  background:
-    alignment: bottomleft
-    file: deploy/build/background.png
-linux:
-  executableName: mihomo-party
-  icon: deploy/build/icon.png
-  desktop:
-    entry:
-      Name: Clash Party
-      GenericName: Proxy Client
-      Comment: A GUI client based on Mihomo
-      MimeType: 'x-scheme-handler/clash;x-scheme-handler/mihomo'
-      Keywords: proxy;clash;mihomo;vpn;
-      StartupWMClass: mihomo-party
-      Icon: mihomo-party
-  target:
-    - deb
-    - rpm
-    - pacman
-  maintainer: Swipa5fox
-  category: Utility
-  artifactName: clash-party-linux-${version}-${arch}.${ext}
-deb:
-  afterInstall: 'deploy/build/linux/postinst'
-  afterRemove: 'deploy/build/linux/postuninst'
-  fpm:
-    - --depends
-    - wl-clipboard
-rpm:
-  afterInstall: 'deploy/build/linux/postinst'
-  afterRemove: 'deploy/build/linux/postuninst'
-  fpm:
-    - --depends
-    - wl-clipboard
-    - '--rpm-rpmbuild-define'
-    - '_build_id_links none'
-pacman:
-  afterInstall: 'deploy/build/linux/postinst'
-  afterRemove: 'deploy/build/linux/postuninst'
-  fpm:
-    - --pacman-compression
-    - zstd
-  depends:
-    - alsa-lib
-    - gtk3
-    - libnotify
-    - nss
-    - libxss
-    - libxtst
-    - xdg-utils
-    - at-spi2-core
-    - util-linux-libs
-    - libsecret
-    - wl-clipboard
-  artifactName: clash-party-linux-${version}-${arch}.pkg.tar.zst
+  createDesktopShortcut: false
+  createStartMenuShortcut: false
 npmRebuild: true
 publish: []

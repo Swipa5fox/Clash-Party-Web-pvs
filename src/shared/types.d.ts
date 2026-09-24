@@ -316,7 +316,6 @@ interface IAppConfig {
   connectionTableSortColumn?: string
   connectionTableSortDirection?: 'asc' | 'desc'
   displayIcon?: boolean
-  displayAppName?: boolean
   connectionCardStatus?: CardStatus
   dnsCardStatus?: CardStatus
   logCardStatus?: CardStatus
