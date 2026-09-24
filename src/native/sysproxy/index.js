@@ -1,18 +1,10 @@
 const { existsSync } = require('fs')
 const { join, dirname } = require('path')
-const os = require('os')
 
 const { platform, arch } = process
 
 let nativeBinding = null
 let loadError = null
-
-function isWindows7() {
-  if (platform !== 'win32') return false
-  const release = os.release()
-  // Windows 7 is NT 6.1
-  return release.startsWith('6.1')
-}
 
 function isMusl() {
   // 优先使用 process.report（Node.js 12+，最可靠）
@@ -31,18 +23,11 @@ function isMusl() {
 }
 
 function getBindingName() {
-  const win7 = isWindows7()
   switch (platform) {
     case 'win32':
-      if (arch === 'x64')
-        return win7 ? 'sysproxy.win32-x64-msvc-win7.node' : 'sysproxy.win32-x64-msvc.node'
-      if (arch === 'ia32')
-        return win7 ? 'sysproxy.win32-ia32-msvc-win7.node' : 'sysproxy.win32-ia32-msvc.node'
+      if (arch === 'x64') return 'sysproxy.win32-x64-msvc.node'
+      if (arch === 'ia32') return 'sysproxy.win32-ia32-msvc.node'
       if (arch === 'arm64') return 'sysproxy.win32-arm64-msvc.node'
-      break
-    case 'darwin':
-      if (arch === 'x64') return 'sysproxy.darwin-x64.node'
-      if (arch === 'arm64') return 'sysproxy.darwin-arm64.node'
       break
     case 'linux':
       if (isMusl()) {
