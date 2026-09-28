@@ -37,7 +37,7 @@ vi.mock('../../config/profile', () => ({
   upsertPluginProfile: vi.fn(async (meta: { profileId: string }, content: string) => {
     profiles[meta.profileId] = content
   }),
-  removePluginProfileContent: vi.fn(async (pid: string) => {
+  removeProfileItem: vi.fn(async (pid: string) => {
     delete profiles[pid]
   })
 }))

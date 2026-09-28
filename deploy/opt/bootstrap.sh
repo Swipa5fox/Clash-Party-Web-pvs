@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# bootstrap.sh — 在 /opt 下从零构筑 cpx-gateway + Clash Party Web UI。
+# bootstrap.sh — 在 /opt 下从零构筑 clash-party-gateway + Clash Party Web UI。
 #
 # 服务器端用法(解压后执行):
 #   bash /opt/Clash-Party-Web-pvs/deploy/opt/bootstrap.sh 192.168.1.100
@@ -10,8 +10,9 @@
 # 环境变量:
 #   TARBALL=/opt/cpx-src.tar.gz   源码包路径(仓库目录已存在时忽略)
 #   OPT_ROOT=/opt                 解压根目录
-#   CP_TOKEN=<令牌>               Web UI 令牌(不传则随机生成,并在部署结果里打印)
 #   FORCE=true                    外网自检不通过时仍然继续构建
+#
+# Web UI 鉴权是账号密码(v1.3+): 初始 admin/admin123, 首次登录后在 UI 改密。
 #
 # 做四件事: 解压 → 预检(docker/外网) → 写 .env 与线路端口门 → deploy.sh 构建并启动。
 set -euo pipefail
@@ -25,8 +26,7 @@ HOST_IP="${1:-${HOST_IP:-}}"
 TARBALL="${TARBALL:-/opt/cpx-src.tar.gz}"
 OPT_ROOT="${OPT_ROOT:-/opt}"
 REPO_NAME="${REPO_NAME:-Clash-Party-Web-pvs}"
-# Web UI 令牌: 显式传入则使用;否则随机生成(仓库/源码里不留任何固定令牌)。
-CP_TOKEN="${CP_TOKEN:-$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')}"
+# Web UI 鉴权是账号密码(见上),不再有 CP_TOKEN 环境变量。
 FORCE="${FORCE:-false}"
 WEB_PORT="${PARTY_WEB_PORT:-3999}"
 
@@ -124,16 +124,11 @@ if [ ! -f .env ]; then
   cp .env.example .env
   log "由 .env.example 生成 .env"
 else
-  warn ".env 已存在(非新建),将只覆盖 PUBLIC_ORIGIN 与 CP_WEB_TOKEN。当前生效项:"
+  warn ".env 已存在(非新建),将只覆盖 PUBLIC_ORIGIN。当前生效项:"
   grep -vE '^[[:space:]]*(#|$)' .env | sed 's/^/      /'
 fi
-# 显式给定 PUBLIC_ORIGIN 与 CP_WEB_TOKEN,避免 deploy.sh 走交互/落回 change-me 默认值。
+# 显式给定 PUBLIC_ORIGIN,避免 deploy.sh 走交互/落回 change-me 默认值。
 sed -i "s|^PUBLIC_ORIGIN=.*|PUBLIC_ORIGIN=http://${HOST_IP}:8080|" .env
-if grep -q '^CP_WEB_TOKEN=' .env; then
-  sed -i "s|^CP_WEB_TOKEN=.*|CP_WEB_TOKEN=${CP_TOKEN}|" .env
-else
-  printf '\nCP_WEB_TOKEN=%s\n' "$CP_TOKEN" >> .env
-fi
 log ".env 就绪 (PUBLIC_ORIGIN=http://${HOST_IP}:8080)"
 
 # 线路端口: compose 已改为 network_mode: host——所有线路口(17890/17891/8888/8889
@@ -163,28 +158,21 @@ if [ -f "$OPT_ROOT/party_data.tgz" ]; then
 fi
 
 # ------------------------------------------------------------- 6. 汇总 ---
-log "Stage 5/5: 汇总"
-TOKEN="$(grep -E '^CP_WEB_TOKEN=' .env | cut -d= -f2-)"
 cat <<EOF
 
 ==================== 构筑完成 ====================
-Web UI   : http://${HOST_IP}:${WEB_PORT}/?token=${TOKEN}
-网关面板 : http://${HOST_IP}:8080/
+Web UI   : http://${HOST_IP}:${WEB_PORT}/  (账号密码登录, 初始 admin/admin123, 首次登录后改密)
+网关面板 : http://${HOST_IP}:8080/         (PANEL_TOKEN, 见 deploy/gateway/.env)
 代理口   : http://${HOST_IP}:7890 (HTTP+SOCKS5 混合口)
-线路口   : host 模式即写即生效(示例: 17890 AU·通用 / 17891 AU·全局 / 8888 JP·通用 / 8889 JP·全局)
+线路口   : host 模式即写即生效(Web UI「代理组」页自定义线路组,或全局覆写 listeners)
 源码位置 : $ROOT
 
 下一步(host 网络模式: 线路口无需开「门」,写覆写即生效):
-  1) 浏览器打开上面的 Web UI,在「订阅」里添加订阅(全新盘需要重新加;搬迁盘已自带)
-  2) 本地准备线路工具配置(工具在 tools/mihomo-lines/scripts/,存为同目录 lines.config.json):
-       { "host": "${HOST_IP}", "token": "${TOKEN}" }
-  3) 推送线路覆写(幂等; AU/JP 四口线路定义在 tools/mihomo-lines/scripts/overrides/):
-       node lines.mjs push overrides/au-jp-lines.yaml au-jp-lines 'AU/JP 双口线路'
-       node lines.mjs verify
-  4) 出问题看日志: cd $ROOT/deploy/gateway && docker compose logs -f party
+  1) 浏览器打开上面的 Web UI,admin 登录并改密,在「订阅」里添加订阅(全新盘需要重新加;搬迁盘已自带)
+  2) 出问题看日志: cd $ROOT/deploy/gateway && docker compose logs -f party
 
 不用源码构建的备选(旧机还在时最快,零外网依赖):
-  旧机: docker save cpx-party:local cpx-gateway:local | ssh 新机 'docker load'
+  旧机: docker save clash-party:latest clash-party-gateway:latest | ssh 新机 'docker load'
         然后新机只跑本脚本的 Stage 3~4 前两步 + docker compose up -d
 ==================================================
 EOF

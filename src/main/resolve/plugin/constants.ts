@@ -1,1 +1,0 @@
-export const MAX_PLUGIN_FILE_BYTES = 1024 * 1024

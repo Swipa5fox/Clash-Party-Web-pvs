@@ -293,14 +293,6 @@ export interface ValidationResult {
   error?: string
 }
 
-// 验证 IPv4 地址
-export const isIPv4 = (ip: string): ValidationResult => {
-  if (!validator.isIP(ip, 4)) {
-    return { ok: false, error: '不是有效的 IPv4 地址' }
-  }
-  return { ok: true }
-}
-
 // 验证 IPv6 地址
 export const isIPv6 = (ip: string): ValidationResult => {
   if (!validator.isIP(ip, 6)) {
@@ -310,7 +302,7 @@ export const isIPv6 = (ip: string): ValidationResult => {
 }
 
 // 验证端口
-export const isValidPort = (port: string): ValidationResult => {
+const isValidPort = (port: string): ValidationResult => {
   if (!validator.isPort(port)) {
     return { ok: false, error: '端口号必须在 1-65535 范围内' }
   }

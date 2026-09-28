@@ -18,12 +18,12 @@ export async function getCustomLineGroupsConfig(force = false): Promise<ICustomL
   }
   if (typeof customLineGroupsConfig !== 'object') customLineGroupsConfig = { items: [] }
   if (!Array.isArray(customLineGroupsConfig.items)) customLineGroupsConfig.items = []
-  return JSON.parse(JSON.stringify(customLineGroupsConfig)) as ICustomLineGroupsConfig
+  return structuredClone(customLineGroupsConfig)
 }
 
 export async function setCustomLineGroupsConfig(config: ICustomLineGroupsConfig): Promise<void> {
   await customLineGroupsWriteQueue.run(async () => {
-    const nextConfig = JSON.parse(JSON.stringify(config)) as ICustomLineGroupsConfig
+    const nextConfig = structuredClone(config)
     if (!Array.isArray(nextConfig.items)) nextConfig.items = []
     nextConfig.items.forEach((item) => {
       if (!Array.isArray(item.proxies)) item.proxies = []

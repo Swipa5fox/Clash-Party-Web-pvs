@@ -37,24 +37,25 @@ import {
 import dayjs from '@renderer/utils/dayjs'
 import { calcTraffic } from '@renderer/utils/calc'
 import { copyText } from '@renderer/utils/clipboard'
-import { MdDeleteOutline, MdEdit, MdLink, MdOutlineFileUpload, MdQrCode2 } from 'react-icons/md'
+import { MdDeleteOutline, MdEdit, MdOutlineFileUpload, MdQrCode2 } from 'react-icons/md'
 import { IoCopy } from 'react-icons/io5'
 import { IoIosArrowBack } from 'react-icons/io'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { fileToBase64 } from '@renderer/utils/file'
 
 const ACCEPT_EXTS = ['.yaml', '.yml', '.json', '.conf', '.txt', '.bak']
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (): void => {
-      const dataUrl = String(reader.result)
-      resolve(dataUrl.slice(dataUrl.indexOf(',') + 1))
-    }
-    reader.onerror = (): void => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
+// 上传结果弹窗里的一份文件: 已投放的带默认名称与链接
+interface UploadResult {
+  source: string
+  ok: boolean
+  file?: string
+  url?: string
+  // 未投放原因(fatal 校验或报错的第一条消息)
+  reason?: string
+  // 名称草稿, 默认原文件名
+  name: string
 }
 
 const FileShare: React.FC = () => {
@@ -70,10 +71,8 @@ const FileShare: React.FC = () => {
   const [fileOver, setFileOver] = useState(false)
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null)
   const [qrUrl, setQrUrl] = useState<string | null>(null)
-  const [validation, setValidation] = useState<{
-    file: string
-    result: IFileShareValidation
-  } | null>(null)
+  // 上传结果弹窗: 逐文件展示投放结果，默认名称可改，确定时保存为显示名
+  const [uploadResults, setUploadResults] = useState<UploadResult[] | null>(null)
   // 文件编辑弹窗: 目标文件 + 别名/分组草稿
   const [editTarget, setEditTarget] = useState<IFileShareFileInfo | null>(null)
   const [editAlias, setEditAlias] = useState('')
@@ -81,8 +80,8 @@ const FileShare: React.FC = () => {
   // 组内联重命名: 目标组名 + 草稿
   const [renameGroup, setRenameGroup] = useState<string | null>(null)
   const [renameGroupInput, setRenameGroupInput] = useState('')
-  // 折叠的分组名集合(含未分组哨兵 '')
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  // 展开的分组名集合(含未分组哨兵 ''); 默认空 = 全部收起, 单击组头展开
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -146,49 +145,75 @@ const FileShare: React.FC = () => {
     const list = Array.from(fileList)
     if (list.length === 0) return
     setUploading(true)
+    const results: UploadResult[] = []
     try {
       for (const file of list) {
         const lower = file.name.toLowerCase()
         if (!ACCEPT_EXTS.some((ext) => lower.endsWith(ext))) {
-          toast.warning(t('fileShare.error.unsupportedExtToast', { name: file.name }))
+          results.push({
+            source: file.name,
+            ok: false,
+            reason: t('fileShare.error.unsupportedExtToast', { name: file.name }),
+            name: file.name
+          })
           continue
         }
         try {
           const content = await fileToBase64(file)
           const result = await addFileShareFile(file.name, content)
           if (!result.added || result.file === null) {
-            // 致命校验失败：未投放，展示完整校验结果
-            setValidation({ file: file.name, result: result.validation })
-            toast.error(t('fileShare.add.rejected'), file.name)
+            const fatal = result.validation.issues.find((i) => i.level === 'fatal')
+            results.push({
+              source: file.name,
+              ok: false,
+              reason: fatal?.message || t('fileShare.add.rejected'),
+              name: file.name
+            })
           } else {
-            if (result.validation.issues.some((i) => i.level !== 'info')) {
-              setValidation({ file: result.file, result: result.validation })
-            }
             const urls = await getFileShareUrls(result.file)
-            if (urls[0]) {
-              let copied = true
-              try {
-                await copyText(urls[0])
-              } catch {
-                copied = false
-              }
-              toast.success(
-                t(copied ? 'fileShare.add.success' : 'fileShare.add.successNotCopied', {
-                  url: urls[0]
-                }),
-                file.name
-              )
-            } else {
-              toast.success(t('fileShare.add.successNoUrl'), file.name)
-            }
+            results.push({
+              source: file.name,
+              ok: true,
+              file: result.file,
+              url: urls[0],
+              name: file.name
+            })
           }
         } catch (e) {
-          toast.error(String(e), file.name)
+          results.push({ source: file.name, ok: false, reason: String(e), name: file.name })
         }
       }
       await refresh()
     } finally {
       setUploading(false)
+    }
+    setUploadResults(results.length ? results : null)
+  }
+
+  // 结果弹窗「完成」: 有改动且已投放的文件保存为显示名
+  const handleUploadDone = async (): Promise<void> => {
+    if (uploadResults) {
+      for (const item of uploadResults) {
+        const alias = item.name.trim()
+        if (!item.ok || !item.file || !alias || alias === item.source) continue
+        try {
+          await setFileShareFileMeta(item.file, { alias })
+        } catch (e) {
+          toast.error(String(e), item.file)
+        }
+      }
+    }
+    setUploadResults(null)
+    await refresh()
+  }
+
+  const handleCopyUploadUrl = async (item: UploadResult): Promise<void> => {
+    if (!item.url) return
+    try {
+      await copyText(item.url)
+      toast.success(t('common.copied'))
+    } catch (e) {
+      toast.error(String(e))
     }
   }
 
@@ -381,7 +406,7 @@ const FileShare: React.FC = () => {
             </Select>
           </SettingItem>
           <SettingItem title={t('fileShare.server.status')}>{statusChip}</SettingItem>
-          <div className="px-2 pb-2">
+          <div className="pb-2">
             <p className="text-xs text-foreground-500">{t('fileShare.server.hint')}</p>
           </div>
         </SettingCard>
@@ -415,26 +440,23 @@ const FileShare: React.FC = () => {
             ) : (
               <div className="mt-2 flex flex-col gap-2">
                 {groupedFiles.map(({ name: groupName, files: groupFiles }) => {
-                  const collapsed = collapsedGroups.has(groupName)
+                  const collapsed = !expandedGroups.has(groupName)
                   const renaming = renameGroup === groupName
                   return (
                     <div key={groupName || '__ungrouped__'}>
-                      {/* 组头: 折叠 + 组名/数量 + 内联重命名(未分组不可改名) */}
-                      <div className="flex items-center justify-between gap-2 rounded-medium px-2 py-1 hover:bg-default-100">
-                        <div
-                          className="flex min-w-0 cursor-pointer select-none items-center gap-1"
-                          onClick={() => {
-                            setCollapsedGroups((prev) => {
-                              const next = new Set(prev)
-                              if (next.has(groupName)) next.delete(groupName)
-                              else next.add(groupName)
-                              return next
-                            })
-                          }}
-                        >
-                          <IoIosArrowBack
-                            className={`h-4 w-4 text-foreground-500 transition duration-200 ${collapsed ? '' : '-rotate-90'}`}
-                          />
+                      {/* 组头: 整行单击折叠/展开 + 组名/数量 + 内联重命名(未分组不可改名) */}
+                      <div
+                        className="flex items-center justify-between gap-2 rounded-medium px-2 py-1 hover:bg-default-100 cursor-pointer select-none"
+                        onClick={() => {
+                          setExpandedGroups((prev) => {
+                            const next = new Set(prev)
+                            if (next.has(groupName)) next.delete(groupName)
+                            else next.add(groupName)
+                            return next
+                          })
+                        }}
+                      >
+                        <div className="flex min-w-0 items-center gap-1">
                           <span className="truncate text-sm font-bold">
                             {groupName || t('fileShare.list.ungrouped')}
                           </span>
@@ -442,48 +464,59 @@ const FileShare: React.FC = () => {
                             {groupFiles.length}
                           </Chip>
                         </div>
-                        {groupName &&
-                          (renaming ? (
-                            <div className="flex items-center gap-1">
-                              <Input
-                                size="sm"
-                                className="w-40"
-                                placeholder={t('fileShare.group.namePlaceholder')}
-                                value={renameGroupInput}
-                                autoFocus
-                                onValueChange={setRenameGroupInput}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') void handleRenameGroup()
-                                }}
-                              />
-                              <Button
-                                size="sm"
-                                color="primary"
-                                isDisabled={
-                                  !renameGroupInput.trim() || renameGroupInput.trim() === groupName
-                                }
-                                onPress={() => {
-                                  void handleRenameGroup()
-                                }}
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          {groupName &&
+                            (renaming ? (
+                              <div
+                                className="flex items-center gap-1"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                {t('common.confirm')}
-                              </Button>
-                            </div>
-                          ) : (
-                            <Tooltip content={t('fileShare.group.rename')}>
-                              <Button
-                                isIconOnly
-                                size="sm"
-                                variant="light"
-                                onPress={() => {
-                                  setRenameGroup(groupName)
-                                  setRenameGroupInput(groupName)
-                                }}
-                              >
-                                <MdEdit className="text-lg" />
-                              </Button>
-                            </Tooltip>
-                          ))}
+                                <Input
+                                  size="sm"
+                                  className="w-40"
+                                  placeholder={t('fileShare.group.namePlaceholder')}
+                                  value={renameGroupInput}
+                                  autoFocus
+                                  onValueChange={setRenameGroupInput}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') void handleRenameGroup()
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  color="primary"
+                                  isDisabled={
+                                    !renameGroupInput.trim() ||
+                                    renameGroupInput.trim() === groupName
+                                  }
+                                  onPress={() => {
+                                    void handleRenameGroup()
+                                  }}
+                                >
+                                  {t('common.confirm')}
+                                </Button>
+                              </div>
+                            ) : (
+                              <span onClick={(e) => e.stopPropagation()}>
+                                <Tooltip content={t('fileShare.group.rename')}>
+                                  <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="light"
+                                    onPress={() => {
+                                      setRenameGroup(groupName)
+                                      setRenameGroupInput(groupName)
+                                    }}
+                                  >
+                                    <MdEdit className="text-lg" />
+                                  </Button>
+                                </Tooltip>
+                              </span>
+                            ))}
+                          <IoIosArrowBack
+                            className={`ml-1 h-4 w-4 shrink-0 text-foreground-500 transition duration-200 ${collapsed ? '' : '-rotate-90'}`}
+                          />
+                        </div>
                       </div>
                       {!collapsed && (
                         <div className="mt-1 flex flex-col gap-1">
@@ -572,10 +605,6 @@ const FileShare: React.FC = () => {
                 })}
               </div>
             )}
-            <p className="mt-2 text-xs text-foreground-500">
-              <MdLink className="inline-block mr-0.5" />
-              {t('fileShare.list.usage')}
-            </p>
           </CardBody>
         </Card>
       </div>
@@ -585,7 +614,7 @@ const FileShare: React.FC = () => {
       <BaseConfirmModal
         isOpen={revokeTarget !== null}
         title={t('fileShare.revoke.confirmTitle')}
-        content={t('fileShare.revoke.confirmContent', { file: revokeTarget || '' })}
+        content={t('fileShare.revoke.confirmContent')}
         onCancel={() => {
           setRevokeTarget(null)
         }}
@@ -649,51 +678,78 @@ const FileShare: React.FC = () => {
         </Modal>
       )}
 
-      {validation !== null && (
+      {uploadResults !== null && (
         <Modal
           isOpen
           onOpenChange={(open) => {
-            if (!open) setValidation(null)
+            if (!open) void handleUploadDone()
           }}
         >
           <ModalContent>
-            <ModalHeader className="flex flex-col gap-1">
-              <span className="select-text">
-                {t('fileShare.validation.title', {
-                  file: validation.file,
-                  status: validation.result.ok
-                    ? t('fileShare.validation.added')
-                    : t('fileShare.validation.rejected')
-                })}
-              </span>
-            </ModalHeader>
+            <ModalHeader>{t('fileShare.result.title')}</ModalHeader>
             <ModalBody>
-              <div className="flex flex-col gap-1.5">
-                {validation.result.issues.map((issue, index) => (
-                  <div key={index} className="flex items-start gap-2 text-sm">
-                    <span
-                      className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
-                        issue.level === 'fatal'
-                          ? 'bg-danger'
-                          : issue.level === 'warn'
-                            ? 'bg-warning'
-                            : 'bg-success'
-                      }`}
-                    />
-                    <span className="break-all select-text">{issue.message}</span>
+              <div className="flex flex-col gap-3">
+                {uploadResults.map((item, index) => (
+                  <div key={index} className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      {item.ok ? (
+                        <Chip color="success" size="sm" variant="flat">
+                          {t('fileShare.result.ok')}
+                        </Chip>
+                      ) : (
+                        <Chip color="danger" size="sm" variant="flat">
+                          {t('fileShare.result.fail')}
+                        </Chip>
+                      )}
+                      <span className="truncate font-mono text-xs select-text" title={item.source}>
+                        {item.source}
+                      </span>
+                    </div>
+                    {item.ok ? (
+                      <>
+                        <Input
+                          size="sm"
+                          label={t('fileShare.result.name')}
+                          value={item.name}
+                          onValueChange={(v) => {
+                            setUploadResults((prev) => {
+                              if (!prev) return prev
+                              const next = [...prev]
+                              next[index] = { ...next[index], name: v }
+                              return next
+                            })
+                          }}
+                        />
+                        {item.url && (
+                          <div className="flex items-center gap-1">
+                            <span className="min-w-0 flex-1 truncate font-mono text-xs select-all">
+                              {item.url}
+                            </span>
+                            <Button
+                              isIconOnly
+                              size="sm"
+                              variant="light"
+                              onPress={() => {
+                                void handleCopyUploadUrl(item)
+                              }}
+                            >
+                              <IoCopy className="text-lg" />
+                            </Button>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="break-all text-xs text-foreground-500 select-text">
+                        {item.reason}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
             </ModalBody>
             <ModalFooter>
-              <Button
-                size="sm"
-                color="primary"
-                onPress={() => {
-                  setValidation(null)
-                }}
-              >
-                {t('common.close')}
+              <Button size="sm" color="primary" onPress={() => void handleUploadDone()}>
+                {t('common.done')}
               </Button>
             </ModalFooter>
           </ModalContent>

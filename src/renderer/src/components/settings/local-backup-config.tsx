@@ -7,21 +7,10 @@ import {
   restartCore
 } from '@renderer/utils/ipc'
 import { useTranslation } from 'react-i18next'
+import { fileToBase64 } from '@renderer/utils/file'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 import BaseConfirmModal from '../base/base-confirm-modal'
-
-const readFileAsBase64 = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => {
-      const result = String(reader.result ?? '')
-      const commaIndex = result.indexOf(',')
-      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result)
-    }
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
 
 const LocalBackupConfig: React.FC = () => {
   const { t } = useTranslation()
@@ -69,11 +58,7 @@ const LocalBackupConfig: React.FC = () => {
     setImporting(true)
     try {
       // 内容直传通道：读取 zip 为 base64 后交主进程恢复（web/桌面统一）
-      await importLocalBackupFromContent(await readFileAsBase64(file))
-      window.electron.ipcRenderer.send('updateAppConfig')
-      window.electron.ipcRenderer.send('appConfigUpdated')
-      window.electron.ipcRenderer.send('controledMihomoConfigUpdated')
-      window.electron.ipcRenderer.send('profileConfigUpdated')
+      await importLocalBackupFromContent(await fileToBase64(file))
 
       try {
         await restartCore()

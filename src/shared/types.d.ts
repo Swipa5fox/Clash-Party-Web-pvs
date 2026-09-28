@@ -294,14 +294,8 @@ interface INetworkLatencyTarget {
 }
 
 interface IAppConfig {
-  core: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
+  core: 'mihomo' | 'mihomo-specific'
   specificVersion?: string
-  enableSmartCore: boolean
-  enableSmartOverride: boolean
-  smartCoreUseLightGBM: boolean
-  smartCoreCollectData: boolean
-  smartCoreStrategy: 'sticky-sessions' | 'round-robin'
-  smartCollectorSize?: number
   proxyDisplayMode: 'simple' | 'full'
   proxyDisplayOrder: 'default' | 'delay' | 'name'
   profileDisplayDate?: 'expire' | 'update'
@@ -354,9 +348,7 @@ interface IAppConfig {
   siderWidth: number
   appTheme: AppTheme
   customTheme?: string
-  autoCheckUpdate: boolean
   autoUpdateProfileOnStart: boolean
-  silentUpdate: boolean
   githubProxy?: string
   autoCloseConnection: boolean
   sysProxy: ISysProxyConfig
@@ -543,6 +535,8 @@ interface ICustomLineGroup {
   name: string
   port: number
   proxies: string[]
+  // 选线来源订阅(profile id): 仅用于选线器打开时预选回显, 生成期不使用
+  sourceProfile?: string
   testUrl?: string
   interval?: number
   auto: boolean

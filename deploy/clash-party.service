@@ -1,0 +1,23 @@
+[Unit]
+Description=Clash Party Web (mihomo manager)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 安装位置（tarball 解压到 /opt/clash-party）与数据目录按需调整
+WorkingDirectory=/opt/clash-party
+ExecStart=/usr/bin/node /opt/clash-party/server.cjs
+Environment=CP_DATA_DIR=/var/lib/clash-party
+# TUN 模式需要 CAP_NET_ADMIN；不用 TUN 可删掉这两行
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+Restart=on-failure
+RestartSec=5
+# 安全加固（按需启用）
+NoNewPrivileges=true
+ProtectHome=read-only
+ProtectKernelTunables=true
+
+[Install]
+WantedBy=multi-user.target

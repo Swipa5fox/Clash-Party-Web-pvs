@@ -5,10 +5,8 @@ import { calcTraffic, calcPercent } from '@renderer/utils/calc'
 import { toast } from '@renderer/components/base/toast'
 import { CgLoadbarDoc } from 'react-icons/cg'
 import { IoMdRefresh } from 'react-icons/io'
-import relativeTime from 'dayjs/plugin/relativeTime'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import 'dayjs/locale/zh-cn'
 import dayjs from '@renderer/utils/dayjs'
 import React, { lazy, Suspense, useState } from 'react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -16,9 +14,6 @@ import { TiFolder } from 'react-icons/ti'
 import { useTranslation } from 'react-i18next'
 
 const ConfigViewer = lazy(() => import('./config-viewer'))
-
-dayjs.extend(relativeTime)
-dayjs.locale('zh-cn')
 
 interface Props {
   iconOnly?: boolean

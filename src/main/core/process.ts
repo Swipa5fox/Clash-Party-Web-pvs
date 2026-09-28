@@ -135,15 +135,6 @@ export async function cleanupUnixSockets(): Promise<void> {
   }
 }
 
-export async function validateWindowsPipeAccess(pipePath: string): Promise<void> {
-  try {
-    managerLogger.info(`Validating pipe access for: ${pipePath}`)
-    managerLogger.info(`Pipe validation completed for: ${pipePath}`)
-  } catch (error) {
-    managerLogger.error('Windows pipe validation failed:', error)
-  }
-}
-
 export async function waitForCoreReady(): Promise<void> {
   for (let i = 0; i < CORE_READY_MAX_RETRIES; i++) {
     try {

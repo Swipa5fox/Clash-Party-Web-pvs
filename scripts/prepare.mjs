@@ -2,7 +2,6 @@ import fs from 'fs'
 import AdmZip from 'adm-zip'
 import path from 'path'
 import zlib from 'zlib'
-import { extract } from 'tar'
 import { execSync } from 'child_process'
 
 const cwd = process.cwd()
@@ -33,78 +32,6 @@ function resolveTargetArch() {
   return process.arch
 }
 const arch = resolveTargetArch()
-
-/* ======= mihomo alpha======= */
-const MIHOMO_ALPHA_VERSION_URL =
-  'https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt'
-const MIHOMO_ALPHA_URL_PREFIX = `https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha`
-let MIHOMO_ALPHA_VERSION
-
-const MIHOMO_ALPHA_MAP = {
-  'win32-x64': 'mihomo-windows-amd64-compatible',
-  'win32-ia32': 'mihomo-windows-386',
-  'win32-arm64': 'mihomo-windows-arm64',
-  'linux-x64': 'mihomo-linux-amd64-compatible',
-  'linux-arm64': 'mihomo-linux-arm64'
-}
-
-// Fetch the latest alpha release version from the version.txt file
-// 网络抖动会让裸 fetch 直接挂掉整个构建(容器里无代理可用),加超时+重试:
-// 服务器在境内,直连 GitHub 经常超时/被重置,已连续三次在部署时撞上。
-async function fetchWithRetry(url, { retries = 3, timeoutMs = 20000, label = url } = {}) {
-  const target = ghUrl(url)
-  for (let i = 1; i <= retries; i++) {
-    try {
-      const response = await fetch(target, { signal: AbortSignal.timeout(timeoutMs) })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      return response
-    } catch (error) {
-      console.warn(`[${label}] 第 ${i}/${retries} 次失败: ${error.message}`)
-      if (i === retries) throw error
-      await new Promise((r) => setTimeout(r, 3000 * i)) // 退避 3s/6s
-    }
-  }
-}
-
-async function getLatestAlphaVersion() {
-  try {
-    const response = await fetchWithRetry(MIHOMO_ALPHA_VERSION_URL, {
-      label: 'mihomo-alpha-version'
-    })
-    let v = await response.text()
-    MIHOMO_ALPHA_VERSION = v.trim() // Trim to remove extra whitespaces
-    console.log(`Latest alpha version: ${MIHOMO_ALPHA_VERSION}`)
-  } catch {
-    process.exit(1)
-  }
-}
-
-/* ======= mihomo smart ======= */
-const MIHOMO_SMART_VERSION_URL =
-  'https://github.com/vernesong/mihomo/releases/download/Prerelease-Alpha/version.txt'
-const MIHOMO_SMART_URL_PREFIX = `https://github.com/vernesong/mihomo/releases/download/Prerelease-Alpha`
-let MIHOMO_SMART_VERSION
-
-const MIHOMO_SMART_MAP = {
-  'win32-x64': 'mihomo-windows-amd64-v2-go120',
-  'win32-ia32': 'mihomo-windows-386-go120',
-  'win32-arm64': 'mihomo-windows-arm64',
-  'linux-x64': 'mihomo-linux-amd64-v2-go120',
-  'linux-arm64': 'mihomo-linux-arm64'
-}
-
-async function getLatestSmartVersion() {
-  try {
-    const response = await fetchWithRetry(MIHOMO_SMART_VERSION_URL, {
-      label: 'mihomo-smart-version'
-    })
-    let v = await response.text()
-    MIHOMO_SMART_VERSION = v.trim() // Trim to remove extra whitespaces
-    console.log(`Latest smart version: ${MIHOMO_SMART_VERSION}`)
-  } catch {
-    process.exit(1)
-  }
-}
 
 /* ======= mihomo release ======= */
 const MIHOMO_VERSION_URL =
@@ -142,34 +69,9 @@ if (!MIHOMO_MAP[`${platform}-${arch}`]) {
   throw new Error(`unsupported platform "${platform}-${arch}"`)
 }
 
-if (!MIHOMO_ALPHA_MAP[`${platform}-${arch}`]) {
-  throw new Error(`unsupported platform "${platform}-${arch}"`)
-}
-
-if (!MIHOMO_SMART_MAP[`${platform}-${arch}`]) {
-  throw new Error(`unsupported platform "${platform}-${arch}"`)
-}
-
 /**
  * core info
  */
-function MihomoAlpha() {
-  const name = MIHOMO_ALPHA_MAP[`${platform}-${arch}`]
-  const isWin = platform === 'win32'
-  const urlExt = isWin ? 'zip' : 'gz'
-  const downloadURL = `${MIHOMO_ALPHA_URL_PREFIX}/${name}-${MIHOMO_ALPHA_VERSION}.${urlExt}`
-  const exeFile = `${name}${isWin ? '.exe' : ''}`
-  const zipFile = `${name}-${MIHOMO_ALPHA_VERSION}.${urlExt}`
-
-  return {
-    name: 'mihomo-alpha',
-    targetFile: `mihomo-alpha${isWin ? '.exe' : ''}`,
-    exeFile,
-    zipFile,
-    downloadURL
-  }
-}
-
 function mihomo() {
   const name = MIHOMO_MAP[`${platform}-${arch}`]
   const isWin = platform === 'win32'
@@ -187,22 +89,6 @@ function mihomo() {
   }
 }
 
-function mihomoSmart() {
-  const name = MIHOMO_SMART_MAP[`${platform}-${arch}`]
-  const isWin = platform === 'win32'
-  const urlExt = isWin ? 'zip' : 'gz'
-  const downloadURL = `${MIHOMO_SMART_URL_PREFIX}/${name}-${MIHOMO_SMART_VERSION}.${urlExt}`
-  const exeFile = `${name}${isWin ? '.exe' : ''}`
-  const zipFile = `${name}-${MIHOMO_SMART_VERSION}.${urlExt}`
-
-  return {
-    name: 'mihomo-smart',
-    targetFile: `mihomo-smart${isWin ? '.exe' : ''}`,
-    exeFile,
-    zipFile,
-    downloadURL
-  }
-}
 /**
  * download sidecar and rename
  */
@@ -228,31 +114,9 @@ async function resolveSidecar(binInfo) {
 
     if (zipFile.endsWith('.zip')) {
       const zip = new AdmZip(tempZip)
-      zip.getEntries().forEach((entry) => {
-        console.log(`[DEBUG]: "${name}" entry name`, entry.entryName)
-      })
       zip.extractAllTo(tempDir, true)
       fs.renameSync(tempExe, sidecarPath)
       console.log(`[INFO]: "${name}" unzip finished`)
-    } else if (zipFile.endsWith('.tgz')) {
-      // tgz
-      fs.mkdirSync(tempDir, { recursive: true })
-      await extract({
-        cwd: tempDir,
-        file: tempZip
-      })
-      const files = fs.readdirSync(tempDir)
-      console.log(`[DEBUG]: "${name}" files in tempDir:`, files)
-      const extractedFile = files.find((file) => file.startsWith('虚空终端-'))
-      if (extractedFile) {
-        const extractedFilePath = path.join(tempDir, extractedFile)
-        fs.renameSync(extractedFilePath, sidecarPath)
-        console.log(`[INFO]: "${name}" file renamed to "${sidecarPath}"`)
-        execSync(`chmod 755 ${sidecarPath}`)
-        console.log(`[INFO]: "${name}" chmod binary finished`)
-      } else {
-        throw new Error(`Expected file not found in ${tempDir}`)
-      }
     } else {
       // gz
       const readStream = fs.createReadStream(tempZip)
@@ -382,7 +246,7 @@ function assertElfMachine(filePath, targetArch) {
 }
 
 function getSysproxyNodeName() {
-  // 检测是否为 musl 系统（与 src/native/sysproxy/index.js 保持一致）
+  // 检测是否为 musl 系统
   const isMusl = (() => {
     if (platform !== 'linux') return false
     try {
@@ -440,39 +304,10 @@ const resolveSysproxy = async () => {
   console.log(`[INFO]: ${nodeName} finished`)
 }
 
-const resolveFont = async () => {
-  const targetPath = path.join(cwd, 'src', 'renderer', 'src', 'assets', 'NotoColorEmoji.ttf')
-
-  if (fs.existsSync(targetPath)) {
-    return
-  }
-  // 该字体现在随仓库提供: src/renderer/src/assets/NotoColorEmoji.ttf (10.2MB, 从旧镜像
-  // /app/out/renderer/assets/ 取出) —— 上面的 existsSync 会直接 return, 正常构建不走这里。
-  // 保留下载只作"手动删掉字体"的兜底, 而且**不要依赖它**: 上游两个地址都不可靠 ——
-  // 原 GitHub raw 因仓库改用 LFS 返回 404; jsDelivr 分支 CDN 时好时坏(2026-09-18 实测 404)。
-  // main.css 里 `src: url('./NotoColorEmoji.ttf')` 是硬引用, 文件缺失会让 vite 构建直接失败。
-  await downloadFile(
-    'https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@main/fonts/NotoColorEmoji.ttf',
-    targetPath
-  )
-
-  console.log(`[INFO]: NotoColorEmoji.ttf finished`)
-}
-
 const tasks = [
-  {
-    name: 'mihomo-alpha',
-    func: () => getLatestAlphaVersion().then(() => resolveSidecar(MihomoAlpha())),
-    retry: 5
-  },
   {
     name: 'mihomo',
     func: () => getLatestReleaseVersion().then(() => resolveSidecar(mihomo())),
-    retry: 5
-  },
-  {
-    name: 'mihomo-smart',
-    func: () => getLatestSmartVersion().then(() => resolveSidecar(mihomoSmart())),
     retry: 5
   },
   { name: 'mmdb', func: resolveMmdb, retry: 5 },
@@ -482,13 +317,9 @@ const tasks = [
   { name: 'asn', func: resolveASN, retry: 5 },
   { name: 'bundlemrs', func: resolveBundleMRS, retry: 5 },
   {
-    name: 'font',
-    func: resolveFont,
-    retry: 5
-  },
-  {
     name: 'sysproxy',
-    func: resolveSysproxy,
+    // sysproxy-rs 仅 Windows 使用（Linux 服务器无桌面代理设置可写）
+    func: platform === 'win32' ? resolveSysproxy : async () => {},
     retry: 5
   }
 ]
@@ -496,9 +327,6 @@ const tasks = [
 async function runTask() {
   const task = tasks.shift()
   if (!task) return
-  if (task.winOnly && platform !== 'win32') return runTask()
-  if (task.linuxOnly && platform !== 'linux') return runTask()
-  if (task.unixOnly && platform === 'win32') return runTask()
 
   for (let i = 0; i < task.retry; i++) {
     try {
@@ -507,12 +335,7 @@ async function runTask() {
     } catch (err) {
       console.error(`[ERROR]: task::${task.name} try ${i} ==`, err.message)
       if (i === task.retry - 1) {
-        if (task.optional) {
-          console.log(`[WARN]: Optional task::${task.name} failed, skipping...`)
-          break
-        } else {
-          throw err
-        }
+        throw err
       }
     }
   }

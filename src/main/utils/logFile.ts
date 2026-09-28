@@ -2,7 +2,7 @@ import { appendFile, open, stat, writeFile } from 'fs/promises'
 import { Writable } from 'stream'
 
 const MB = 1024 * 1024
-const DEFAULT_MAX_LOG_FILE_SIZE_MB = 10
+const DEFAULT_MAX_LOG_FILE_SIZE_MB = 100
 const MIN_MAX_LOG_FILE_SIZE_MB = 1
 const TRUNCATE_MARKER = Buffer.from('\n[LOG] File truncated because size limit reached.\n')
 // 触顶压缩后保留的内容比例。压缩后文件回落到约 maxBytes * RATIO 大小，

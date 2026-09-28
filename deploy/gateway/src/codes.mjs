@@ -22,10 +22,5 @@ export function createCodeStore({ ttlMs = 60000, now = Date.now } = {}) {
     return payload
   }
 
-  function sweep() {
-    const t = now()
-    for (const [code, entry] of codes) if (t > entry.exp) codes.delete(code)
-  }
-
-  return { issue, consume, sweep, size: () => codes.size }
+  return { issue, consume, size: () => codes.size }
 }

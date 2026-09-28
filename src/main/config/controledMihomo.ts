@@ -17,7 +17,7 @@ let controledMihomoConfig: Partial<IMihomoConfig> // mihomo.yaml
 const controledMihomoWriteQueue = new WriteQueue()
 
 function cloneDefaultControledMihomoConfig(): Partial<IMihomoConfig> {
-  return JSON.parse(JSON.stringify(defaultControledMihomoConfig)) as Partial<IMihomoConfig>
+  return structuredClone(defaultControledMihomoConfig)
 }
 
 export async function getControledMihomoConfig(force = false): Promise<Partial<IMihomoConfig>> {
@@ -66,7 +66,7 @@ export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>):
     const nextConfig = JSON.parse(
       JSON.stringify(controledMihomoConfig || cloneDefaultControledMihomoConfig())
     ) as Partial<IMihomoConfig>
-    const nextPatch = JSON.parse(JSON.stringify(patch)) as Partial<IMihomoConfig>
+    const nextPatch = structuredClone(patch)
     let restoreDnsState = false
 
     // 当模式从 direct 切换到 rule/global 时，恢复之前保存的 DNS 状态

@@ -188,7 +188,9 @@ function main() {
     )
   }
   createServer(deps).listen(config.port, '0.0.0.0', () => {
-    console.log(`cpx-gateway listening on :${config.port} (public origin ${config.publicOrigin})`)
+    console.log(
+      `clash-party-gateway listening on :${config.port} (public origin ${config.publicOrigin})`
+    )
   })
 }
 

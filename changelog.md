@@ -4,6 +4,76 @@
 
 该文件同时是发布流水线的发布说明来源：`scripts/updater.mjs` 读取它生成 `latest.yml`（应用内更新弹窗展示），`scripts/telegram.mjs` 读取它发布到频道。因此最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
+## Rebuild v1.3.1（2026-09-28）
+
+部署文件对齐 v1.3 纯 Node 形态（此前仓库 deploy/ 整套还停在 Electron 时代，直接拿来构建必挂）；自定义线路组选线器两级化。
+
+### 自定义线路组
+
+- **注入交集修复**：`factory.ts` 注入自建组前，节点名与当前订阅求交集——订阅节点改名/换订阅后失效的名字剔除、整组空则跳过注入，避免内核因「引用不存在的节点」拒绝整份配置（导入校验/热重载全被卡死）。重构拆出 `removeDisabledGroups`/`injectOneGroup` 并补 factory.test.ts 12 例（交集剔除/整组跳过/停用清理/子组开关/同名不覆盖等）
+- **选线器两级化（第一级=订阅）**：弹窗第一级从「代理组」改为「订阅」（profile id 稳定，换订阅组名不再全变），节点按订阅懒加载（复用 ad-filter 判据过滤广告/信息节点）；切订阅不清已选（支持跨订阅混选）；`ICustomLineGroup.sourceProfile` 存 profile id 回显。验证：mock-WS 桥隔离环境走通 订阅列表→选订阅→节点加载(广告过滤)→多选→确认回传，服务端日志证实 getProfileStr 被调
+- **常量下沉 `src/shared/customLineGroups.ts`**：子组 defs / `BUILTIN_POLICIES` / `customLineGroupNames`，主进程注入与选线器弹窗共用，改子组后缀单点改
+- **弹窗单卡模式**：去「添加线路组」按钮，打开自动附一张空白草稿，全空草稿保存时丢弃；新建草稿端口默认空（不再预填 17890）
+- **代理组页行模型修复**：旧版把 `'all' in proxy` 一律过滤导致入口组（成员全是子组）展开为空；改为「直接节点行 + 子组区段（头行+节点网格）」
+
+### 线路工具与覆写
+
+- **`tools/mihomo-lines` 账号登录改造**：`lines.mjs` 从 `?token=` URL 参数（v1.3 起已 401）改为 POST `/api/login` 拿 `cp_session` cookie 再连 `/ws` 桥；`lines.config.json` 改 `{"host","user","password","panelToken"}`；gateway :8080 面板门同样先登录取会话 cookie；`lines-ui.html`（435 行已死旧 UI）删除
+- **`ad-filter.js` 扩为全量机场垃圾过滤**：判据两条（server 是回环/本地址为主判据 + 节点名关键字兜底，只匹配节点名不匹配组名——删组会让 rules 失效）；覆盖广告节点与「剩余流量/到期时间」等信息节点
+- **新增覆写 `overrides/cn-direct-rules.yaml`**：国内直连 + 少量强制代理，自建 `include-all: true` 的「强制代理」组不依赖订阅组名（换订阅自动适配；include-all select 组不能放 DIRECT 兜底，会默认直连）；`au-jp-lines.yaml` 删除（过时，角色由 cn-direct-rules 承担），bootstrap.sh 示例文案同步
+- `deploy/opt/sub-backup.sh` 删除（订阅备份职责已并入 Web UI 的本地备份）
+
+### Docker 部署重写
+
+- **`deploy/party/Dockerfile` 重写**：多阶段构建（builder 内 `pnpm install` + `pnpm run build` 出 `dist/server.cjs` + `dist/renderer/`），运行时镜像仅 `node:22-slim` + `ca-certificates`，产物按 tarball 同构布局 COPY（`server.cjs`/`package.json`/`renderer/`/`resources/`）。移除 Electron 全家：`xvfb`/`xauth`/GTK 运行库、`ELECTRON_MIRROR`/`ELECTRON_BUILDER_BINARIES_MIRROR`、`src/native/sysproxy` COPY 与 `file:src\native\sysproxy` 反斜杠路径 sed 修正、`HOME=/data` 的 `.config/mihomo-party-dev` 数据布局。内核/geo 预置检测改为「存在 Linux ELF `extra/sidecar/mihomo` 即跳过下载」（Windows 检出的 `mihomo.exe` 不再误判为就绪）。镜像声明收敛为 `CP_DATA_DIR`/`CP_WEB_HOST`/`NODE_ENV` 三项（端口/卷走 compose，不与代码默认重复声明）
+- **`deploy/party/entrypoint.sh` 重写**：数据目录走 `CP_DATA_DIR`（数据直落 `/data`，无 `.config` 套层）；种子 `mihomo.yaml` 保留（`allow-lan: true` + 控制器 `127.0.0.1:9090`）；离线面板落位改从 `/app/resources/panel-ui`；`exec node server.cjs` 替代 `xvfb-run electron`
+- **新增 `deploy/party/docker-compose.yml`**：party 单容器独立部署（host 网络 + `/var/lib/clash-party:/data` bind + `init: true`），对齐 192.168.110.53 实跑形态；无 `build:` 段（缺镜像响亮失败，不静默走 npmjs+github 直连，与 gateway compose 同一 doctrine）
+- **gateway compose 对齐**：party 服务删 `CP_WEB_TOKEN` 环境变量（v1.3 已是账号密码登录）；healthcheck 探测路径 `/` → `/login`（未登录 `/` 返回 302，旧探针会永久误判）；`init: true` 注释去 xvfb 语义
+- **`deploy.sh` / `.env.example` / `bootstrap.sh`**：删 `CP_WEB_TOKEN` 生成/注入/展示与 `ELECTRON_MIRROR`/`ELECTRON_BUILDER_BINARIES_MIRROR` build-arg；`verify_party` 探 `/login`；汇总输出改为「初始凭据 admin/admin123，首次登录后改密」；bootstrap 的 `CP_TOKEN` 参数与 `lines.config.json {"host","token"}` 指引移除（线路工具登录已改走账号密码拿 `cp_session`）
+- **镜像 tag 规范化**：`deploy.sh` 默认 tag 从固定 `local` 改为 package.json 版本号（`--tag` 可覆盖，`latest` 别名保留）——镜像可追溯/可回滚；全部文档示例统一 `:latest`，不再教 `:local`
+- **`.dockerignore`**：`pnpm-workspace.yaml`（builder 需要）注释补正；保留 `out` 排除（挡旧 electron-vite 磁盘残留混进构建上下文）
+- **`deploy/gateway/README.md`**：全文对齐纯 Node + 账号登录语义（架构图、鉴权说明、卷路径 `/data` 直落、core-assets 提取路径 `/app/extra` → `/app/resources`、token 轮换节改为 web-auth.json 重置流程、FAQ 去 xvfb 行）
+
+> 镜像体积从 ~2.9GB（Electron+GTK）降到 ~560MB。数据卷布局不变（`/data` 下直落），Electron 时代建的旧卷（数据在 `/data/.config/mihomo-party-dev/`）不迁移的话新镜像读不到，需把该子目录内容上移一层。
+
+### 修复（提交前发现）
+
+- **tsconfig 断链**：v1.3 迁移删了 `@electron-toolkit/tsconfig` 依赖但两个 tsconfig 仍 extends 它，`pnpm install` 后包被卸载直接让 vitest/tsc 全挂；配置已内联（node/web 各自完整 compilerOptions）
+- **sysproxy 加载断链**：`sysproxy.ts` 动态 `import('sysproxy-rs')` 的目标包装器已随依赖删除而消失（此前能过全靠 node_modules 残留旧副本）；改为直接 `createRequire` 加载 `extra/sidecar/sysproxy.win32-x64-msvc.node`（与 mihomo 内核同目录布局），esbuild externals 同步去项。顺带修掉 `createRequire(import.meta.url)` 在 esbuild CJS 产物里为 `undefined` 的坑（改基址 `process.execPath`，绑定路径是绝对路径不受影响）
+- **pnpm-lock.yaml 陈旧**：importers 仍登记 electron 全家与 `file:src\native\sysproxy`，换机 checkout 后 `pnpm install` 必挂；已随依赖清单重生成
+- `.gitignore` 补 `tsconfig.web.tsbuildinfo`（改 `*.tsbuildinfo` 通配）
+
+## Rebuild v1.3（2026-09-25）
+
+主进程脱离 Electron，成为纯 Node 服务器；产物从 Windows 安装包改为 Linux tarball。
+
+### 架构
+
+- **主进程去 Electron 化**：原 13 个文件的 electron import 全部移除。`app.getPath/setPath` 路径体系改 env 驱动（`CP_DATA_DIR`，默认 XDG_DATA_HOME 下 `clash-party/`）；`app.getVersion/getLocale` 换 `src/main/runtime.ts`（读 package.json + 解析 `LANG`）；退出清理（停内核、关系统代理）从 `before-quit`/`powerMonitor` 改挂 SIGINT/SIGTERM，适配 systemd；`dialog.showErrorBox` 分支删除（恒日志输出）；`nativeTheme`/`shell.openExternal`/`app.getFileIcon` 等桌面概念降级为空实现/日志/默认图标；`ipcMain.on('restartCore')` 死代码移除
+- **网络栈替换**：`chromeRequest` 从 Electron `net.request`/`session.fromPartition` 重写为 axios + http(s)-proxy-agent（deps 原有），接口不变调用方零改动；socks5 代理选项移除（全仓无调用方）；`net.isOnline` 离线重试路径删除（服务器恒在线）
+- **sysproxy-rs 依赖移除**：原生模块仅 Windows 有意义，改 `sysproxy.ts` 内 win32 动态 import；`package.json` 的 `file:src\native\sysproxy`（反斜杠路径，Linux pnpm 必挂）移除；`prepare.mjs` 的 sysproxy 下载任务改 win32-only
+- **入口重写**：`src/main/index.ts` 从 `app.whenReady` 编排改为 async main()；单实例锁删除（:3999 端口独占天然保证）；`CP_WEB_HOST` 默认值 127.0.0.1 → `0.0.0.0`（服务器场景）
+
+### 构建与分发
+
+- 删除 electron / electron-builder / electron-vite / @electron-toolkit 全链路与 electron-builder.yml、`build:win`、mark-portable、copy-legacy 脚本
+- 渲染层：独立 `vite.config.ts`（原 electron-vite 配置的 renderer 段），单入口 `web.html` 直出 `dist/renderer/`
+- 主进程：esbuild 打成单文件 `dist/server.cjs`（603 源文件，5.8MB，全生产依赖内联，tarball 无需 node_modules）
+- `pnpm build:tarball` 组装 `clash-party-<platform>-<version>-<arch>.tar.gz`（server.cjs + 最小 package.json + renderer + mihomo 内核 + geo 资源 + systemd unit）+ sha256
+- 新增 `deploy/clash-party.service`：`AmbientCapabilities=CAP_NET_ADMIN`（TUN）、`CP_DATA_DIR=/var/lib/clash-party`、`Restart=on-failure`
+- dev 链路：`pnpm dev` = vite dev server（:5199）+ tsx 直跑主进程源码，`CP_RENDERER_URL` 让 web 桥反代 HMR（保持 :3999 同源桥接）
+- CI（build.yml）：workflow_dispatch 出 Linux x64 tarball（原 Windows dev 构建链路移除）
+
+### 修复（迁移中发现）
+
+- eslint 从 @electron-toolkit/eslint-config-ts 迁到 typescript-eslint，补 node globals；顺带修掉 ts-ignore ×2、no-unused-expressions ×3
+- 运行时根目录探测改为三种布局（repo 源码 / repo dist bundle / tarball）通用，修掉打包后 `getVersion` 返回 0.0.0
+
+### 验证
+
+- Windows 本机 `node dist/server.cjs`：登录页 200、admin 登录、WS 桥 RPC（getVersion/getAppConfig/getInterfaces/mihomoVersion）全通，mihomo v1.19.31 起动，浏览器 UI 完整可用（代理组/流量/连接页）
+- `pnpm review`（prettier + eslint + tsc node/web）全绿；vitest 21 文件 184 用例全过
+
 ## Rebuild v1.2（2026-09-25）
 
 自 v1.1.0（`cee5fdd`）以来的变更：78 个文件，+365 / −2429（不含 README / changelog / 版本号）。

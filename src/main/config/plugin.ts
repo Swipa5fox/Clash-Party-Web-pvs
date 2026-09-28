@@ -18,7 +18,7 @@ export async function getPluginConfig(force = false): Promise<IPluginConfig> {
     if (typeof pluginConfig !== 'object' || pluginConfig === null) pluginConfig = { items: [] }
     if (!Array.isArray(pluginConfig.items)) pluginConfig.items = []
   }
-  return JSON.parse(JSON.stringify(pluginConfig)) as IPluginConfig
+  return structuredClone(pluginConfig)
 }
 
 async function update(updater: (c: IPluginConfig) => IPluginConfig): Promise<void> {

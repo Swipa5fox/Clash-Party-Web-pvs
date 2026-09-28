@@ -1,8 +1,7 @@
-import { copyFile, mkdir, readFile, stat } from 'fs/promises'
+import { copyFile, mkdir, readFile } from 'fs/promises'
 import vm from 'vm'
 import { existsSync, writeFileSync } from 'fs'
 import path from 'path'
-import { isIP } from 'net'
 import {
   getControledMihomoConfig,
   getProfileConfig,
@@ -26,10 +25,15 @@ import { deepMerge } from '../utils/merge'
 import { createLogger } from '../utils/logger'
 import { decryptAgeContent } from '../utils/age'
 import { DEFAULT_CONTROL_DNS, DEFAULT_CONTROL_SNIFF } from '../../shared/appConfig'
+import {
+  BUILTIN_POLICIES,
+  CUSTOM_LINE_SUB_GROUP_DEFS,
+  customLineGroupNames
+} from '../../shared/customLineGroups'
 import { atomicWriteFile } from '../utils/safeFile'
+import { isSourceNewer } from '../utils/init'
 
 const factoryLogger = createLogger('Factory')
-const SMART_OVERRIDE_ID = 'smart-core-override'
 
 let runtimeConfigStr: string = ''
 let runtimeConfig: IMihomoConfig = {} as IMihomoConfig
@@ -75,93 +79,62 @@ function processRulesWithOffset(ruleStrings: string[], currentRules: string[], i
 }
 
 /**
- * 确保在启用特定条件（如 Smart 覆写）且启用了 TUN 模式时，将代理服务器的 IP 地址添加到路由排除列表中，以避免路由回环。
- * 该函数会遍历配置中的所有代理节点，提取出服务器的 IP 地址（支持 IPv4/IPv6），并将其转换为对应的 CIDR 格式（IPv4: /32, IPv6: /128）。
- *
- * @param profile 当前的 Mihomo 配置对象
- * @param enabled 是否需要执行排除逻辑（通常为是否启用了 Smart 核心覆写）
- * @returns 此次新添加到排除列表中的网段/IP 数组
+ * 注入自定义线路组: 每组生成 入口组(自动/故障/手动/全局子组) 与专属端口 listener。
+ * 入口组名即线路组名, 子组名为 `${name}·自动|故障|手动|全局`, listener 名为 `${name}·入口`。
+ * 节点名与当前订阅求交集: 订阅节点名变了/换订阅后失效名字剔除、整组空则不注入,
+ * 避免注入不存在节点的组让内核拒绝整份配置(导入校验/热重载全被卡死)。
  */
-function ensureSmartProxyServerTunExclude(profile: IMihomoConfig, enabled: boolean): string[] {
-  if (!enabled || profile.tun?.enable !== true || !Array.isArray(profile.proxies)) return []
-
-  const routeExcludeAddress = Array.isArray(profile.tun['route-exclude-address'])
-    ? [...profile.tun['route-exclude-address']]
-    : []
-  profile.tun['route-exclude-address'] = routeExcludeAddress
-
-  const existing = new Set(routeExcludeAddress.map((address) => address.trim().toLowerCase()))
-  const added: string[] = []
-
-  for (const proxy of profile.proxies as unknown[]) {
-    if (!proxy || typeof proxy !== 'object') continue
-
-    const server = (proxy as Record<string, unknown>).server
-    if (typeof server !== 'string' && typeof server !== 'number') continue
-
-    const host = String(server)
-      .trim()
-      .replace(/^\[(.*)\]$/, '$1')
-      .toLowerCase()
-    const ipVersion = isIP(host)
-    if (!ipVersion) continue
-
-    const cidr = ipVersion === 4 ? `${host}/32` : `${host}/128`
-    if (existing.has(host) || existing.has(cidr)) continue
-
-    routeExcludeAddress.push(cidr)
-    existing.add(cidr)
-    added.push(cidr)
-  }
-
-  return added
-}
-
-/**
- * 注入自定义线路组: 每组生成 入口组(自动/故障/手动子组) 与专属端口 listener。
- * 入口组名即线路组名, 子组名为 `${name}·自动|故障|手动`, listener 名为 `${name}·入口`。
- */
-function applyCustomLineGroups(profile: IMihomoConfig, groups: ICustomLineGroup[]): void {
+export function applyCustomLineGroups(profile: IMihomoConfig, groups: ICustomLineGroup[]): void {
   if (groups.length === 0) return
   const proxyGroups = (profile['proxy-groups'] as Record<string, unknown>[] | undefined) ?? []
   const listeners = (profile.listeners as IMihomoListenerConfig[] | undefined) ?? []
-  const groupNames = new Set(proxyGroups.map((g) => g?.name))
+  const availableNames = new Set(
+    (profile.proxies as { name?: unknown }[] | undefined)?.map((p) => String(p?.name))
+  )
 
-  // 清理 pass: 停用(enabled === false)的组移除其入口组/子组与专属端口 listener,
-  // 避免热重载后旧配置残留(组配置本身保留在 customLineGroups 文件中)
-  const SUB_SUFFIXES = ['自动', '故障', '手动', '全局']
+  removeDisabledGroups(proxyGroups, listeners, groups)
+  groups.forEach((g) => injectOneGroup(g, proxyGroups, listeners, availableNames))
+
+  profile['proxy-groups'] = proxyGroups as []
+  profile.listeners = listeners
+}
+
+// 停用(enabled === false)的组移除其入口组/子组与专属端口 listener,
+// 避免热重载后旧配置残留(组配置本身保留在 customLineGroups 文件中)
+function removeDisabledGroups(
+  proxyGroups: Record<string, unknown>[],
+  listeners: IMihomoListenerConfig[],
+  groups: ICustomLineGroup[]
+): void {
   groups
     .filter((g) => g.enabled === false)
     .forEach((g) => {
-      const removeNames = [g.name, ...SUB_SUFFIXES.map((s) => `${g.name}·${s}`)]
+      const removeNames = customLineGroupNames(g.name)
       for (let i = proxyGroups.length - 1; i >= 0; i--) {
         if (removeNames.includes(String(proxyGroups[i]?.name))) proxyGroups.splice(i, 1)
       }
       const listenerIdx = listeners.findIndex((l) => l?.name === `${g.name}·入口`)
       if (listenerIdx >= 0) listeners.splice(listenerIdx, 1)
-      removeNames.forEach((n) => groupNames.delete(n))
     })
+}
 
-  groups.forEach((g) => {
-    if (!g.name || !g.port || !Array.isArray(g.proxies)) return
-    if (g.enabled === false) return
-    const proxies = g.proxies.filter(Boolean)
-    if (proxies.length === 0) return
+function injectOneGroup(
+  g: ICustomLineGroup,
+  proxyGroups: Record<string, unknown>[],
+  listeners: IMihomoListenerConfig[],
+  availableNames: Set<string>
+): void {
+  if (!g.name || !g.port || !Array.isArray(g.proxies)) return
+  if (g.enabled === false) return
+  const proxies = g.proxies.filter((n) => typeof n === 'string' && availableNames.has(n))
+  if (proxies.length === 0) return
 
-    const subNames: string[] = []
-    const subDefs: { suffix: string; type: string; enable: boolean }[] = [
-      { suffix: '自动', type: 'url-test', enable: g.auto !== false },
-      { suffix: '故障', type: 'fallback', enable: g.fallback !== false },
-      { suffix: '手动', type: 'select', enable: g.manual !== false },
-      // 全局: select 直接包含全部线路, 可手选任意线路(不经过其他子组层级)
-      { suffix: '全局', type: 'select', enable: g.global !== false }
-    ]
-    subDefs.forEach((def) => {
-      if (!def.enable) return
+  const groupNames = new Set(proxyGroups.map((x) => String(x?.name)))
+  const subNames = CUSTOM_LINE_SUB_GROUP_DEFS.filter((def) => g[def.flag] !== false)
+    .map((def) => {
       const subName = `${g.name}·${def.suffix}`
-      if (groupNames.has(subName)) return
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sub: Record<string, any> = {
+      if (groupNames.has(subName)) return null
+      const sub: Record<string, unknown> = {
         name: subName,
         type: def.type,
         proxies: [...proxies]
@@ -172,33 +145,51 @@ function applyCustomLineGroups(profile: IMihomoConfig, groups: ICustomLineGroup[
         sub.interval = g.interval && g.interval > 0 ? g.interval : 300
       }
       proxyGroups.push(sub)
-      groupNames.add(subName)
-      subNames.push(subName)
+      return subName
     })
-    if (subNames.length === 0) subNames.push(...proxies)
+    .filter((n): n is string => n !== null)
+  if (subNames.length === 0) subNames.push(...proxies)
 
-    if (!groupNames.has(g.name)) {
-      proxyGroups.push({ name: g.name, type: 'select', proxies: [...subNames] })
-      groupNames.add(g.name)
-    }
+  if (!groupNames.has(g.name)) {
+    proxyGroups.push({ name: g.name, type: 'select', proxies: [...subNames] })
+  }
 
-    const listenerName = `${g.name}·入口`
-    const listener = {
-      name: listenerName,
-      type: 'mixed',
-      port: g.port,
-      proxy: g.name
-    }
-    const existingIdx = listeners.findIndex((l) => l?.name === listenerName)
-    if (existingIdx >= 0) {
-      listeners[existingIdx] = listener
-    } else {
-      listeners.push(listener)
-    }
-  })
+  const listener = {
+    name: `${g.name}·入口`,
+    type: 'mixed',
+    port: g.port,
+    proxy: g.name
+  }
+  const existingIdx = listeners.findIndex((l) => l?.name === listener.name)
+  if (existingIdx >= 0) {
+    listeners[existingIdx] = listener
+  } else {
+    listeners.push(listener)
+  }
+}
 
-  profile['proxy-groups'] = proxyGroups as []
-  profile.listeners = listeners
+/**
+ * 组成员排序: 节点前置、组引用后置。
+ * select 组无手选记录时默认选中第一个成员, 订阅常把 自动选择/故障转移 排在最前,
+ * 导致"默认进自动模式"。节点前置后默认即第一个节点(如 高级|香港 01);
+ * 手选记忆由 mihomo profile.store-selected 按名字恢复, 不受顺序影响。
+ */
+export function reorderGroupMembersNodesFirst(profile: IMihomoConfig): void {
+  const groups = profile['proxy-groups'] as Record<string, unknown>[] | undefined
+  if (!groups?.length) return
+  const groupNames = new Set(groups.map((g) => String(g?.name)))
+  for (const g of groups) {
+    const members = g?.proxies
+    if (!Array.isArray(members) || members.length < 2) continue
+    // 只前置"真节点"(非组、非内建策略); 其余(组引用/内建策略/非字符串)原序后置
+    const nodes = members.filter(
+      (m) => typeof m === 'string' && !groupNames.has(m) && !BUILTIN_POLICIES.has(m)
+    )
+    if (nodes.length === 0) continue
+    const rest = members.filter((m) => !nodes.includes(m))
+    if (nodes[0] === members[0]) continue
+    g.proxies = [...nodes, ...rest]
+  }
 }
 
 export async function generateProfile(
@@ -218,17 +209,8 @@ export async function generateProfile(
   const ageSecretKey = options.ageSecretKey ?? currentProfileItem?.ageSecretKey ?? ''
   const baseProfile = options.baseProfile ?? (await getProfile(profileId))
   const overrideIds = await getOrderedOverrideIds(profileId, options.profileOverrideIds)
-  const profileWithNormalOverride = await applyOverrides(
-    baseProfile,
-    overrideIds.normal,
-    ageSecretKey
-  )
-  const profileWithRuleOverride = await applyRuleOverride(profileId, profileWithNormalOverride)
-  const currentProfile = await applyOverrides(
-    profileWithRuleOverride,
-    overrideIds.smart,
-    ageSecretKey
-  )
+  const profileWithOverride = await applyOverrides(baseProfile, overrideIds, ageSecretKey)
+  const currentProfile = await applyRuleOverride(profileId, profileWithOverride)
   let controledMihomoConfig = pendingControledMihomoConfig ?? (await getControledMihomoConfig())
 
   // 根据开关状态过滤控制配置
@@ -248,20 +230,11 @@ export async function generateProfile(
   // 注入自定义线路组(代理组 + 专属端口 listener)
   const { items: customGroups = [] } = await getCustomLineGroupsConfig()
   applyCustomLineGroups(profile, customGroups)
+  // 组成员节点前置: select 组默认(无手选记录时)落在第一个节点而非 自动选择/故障转移
+  reorderGroupMembersNodesFirst(profile)
   // 关闭 DNS 覆写时，如果最终配置没有启用的 DNS 配置，清空 dns-hijack 避免请求被劫持但无法处理
   if (!controlDns && profile.tun && !profile.dns?.enable) {
     profile.tun = { ...profile.tun, 'dns-hijack': [] }
-  }
-  // Smart Override JS 早于受控 TUN 配置合并执行；最终配置写出前再排除代理服务器 IP。
-  const addedProxyServerRouteExcludes = ensureSmartProxyServerTunExclude(
-    profile,
-    overrideIds.smart.length > 0
-  )
-  if (addedProxyServerRouteExcludes.length > 0) {
-    factoryLogger.info(
-      'Added Smart Override proxy server TUN route excludes',
-      addedProxyServerRouteExcludes
-    )
   }
   // 删除空的局域网允许列表，避免局域网访问异常
   if (!profile['lan-allowed-ips']?.length) {
@@ -365,15 +338,6 @@ async function prepareProfileWorkDir(current: string | undefined): Promise<void>
     await mkdir(mihomoProfileWorkDir(current), { recursive: true })
   }
 
-  const isSourceNewer = async (sourcePath: string, targetPath: string): Promise<boolean> => {
-    try {
-      const [sourceStats, targetStats] = await Promise.all([stat(sourcePath), stat(targetPath)])
-      return sourceStats.mtime > targetStats.mtime
-    } catch {
-      return true
-    }
-  }
-
   const copy = async (file: string): Promise<void> => {
     const targetPath = path.join(mihomoProfileWorkDir(current), file)
     const sourcePath = path.join(mihomoWorkDir(), file)
@@ -397,19 +361,11 @@ async function prepareProfileWorkDir(current: string | undefined): Promise<void>
 async function getOrderedOverrideIds(
   current: string | undefined,
   profileOverrideIds?: string[]
-): Promise<{
-  normal: string[]
-  smart: string[]
-}> {
+): Promise<string[]> {
   const { items = [] } = (await getOverrideConfig()) || {}
   const globalOverride = items.filter((item) => item.global).map((item) => item.id)
   const override = profileOverrideIds ?? (await getProfileItem(current))?.override ?? []
-  const orderedOverrideIds = [...new Set(globalOverride.concat(override))]
-
-  return {
-    normal: orderedOverrideIds.filter((id) => id !== SMART_OVERRIDE_ID),
-    smart: orderedOverrideIds.filter((id) => id === SMART_OVERRIDE_ID)
-  }
+  return [...new Set(globalOverride.concat(override))]
 }
 
 async function applyOverrides(

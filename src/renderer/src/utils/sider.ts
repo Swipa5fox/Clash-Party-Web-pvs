@@ -18,12 +18,18 @@ export const SIDER_CARD_ROUTES: Record<SiderCardKey, string> = {
   fileShare: '/file-share'
 }
 
-export function mergeSiderOrder(saved: string[] = []): SiderCardKey[] {
-  const valid = saved.filter((key): key is SiderCardKey =>
-    SIDER_CARD_KEYS.includes(key as SiderCardKey)
-  )
-  const missing = SIDER_CARD_KEYS.filter((key) => !valid.includes(key))
+// 已保存顺序在前（过滤非法项），缺的键按默认顺序补齐
+export function mergeCardOrder<T extends string>(saved: T[] = [], all: readonly T[]): T[] {
+  const valid = saved.filter((key): key is T => all.includes(key))
+  const missing = all.filter((key) => !valid.includes(key))
   return [...valid, ...missing]
+}
+
+export function mergeSiderOrder(saved: string[] = []): SiderCardKey[] {
+  return mergeCardOrder(
+    saved.filter((key): key is SiderCardKey => SIDER_CARD_KEYS.includes(key as SiderCardKey)),
+    SIDER_CARD_KEYS
+  )
 }
 
 export function getSiderCardRoute(card?: string): string {

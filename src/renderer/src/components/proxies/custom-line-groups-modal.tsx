@@ -8,19 +8,24 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
+  Select,
+  SelectItem,
   Switch,
   Tooltip
 } from '@heroui/react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FaPlus, FaTrash } from 'react-icons/fa6'
-import { checkPortOccupied, mihomoProxies } from '@renderer/utils/ipc'
+import { FaPlus } from 'react-icons/fa6'
+import { checkPortOccupied, getProfileConfig, getProfileStr } from '@renderer/utils/ipc'
+import { parse } from 'yaml'
 
 interface Props {
   isOpen: boolean
   onClose: () => void
   groups: ICustomLineGroup[]
   onSave: (groups: ICustomLineGroup[]) => Promise<boolean>
+  // 编辑模式: 只展示并保存该组(单卡, 不附加空白草稿); 新增走不带此参数的入口
+  editGroupId?: string | null
 }
 
 type Draft = ICustomLineGroup
@@ -37,11 +42,11 @@ const hostHints = (): string[] => {
   return hostname ? [hostname] : []
 }
 
-// 生成默认草稿
+// 生成默认草稿: 端口不预填, 由用户自定(0 = 未填)
 const newDraft = (): Draft => ({
   id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
   name: '',
-  port: 17890,
+  port: 0,
   proxies: [],
   testUrl: DEFAULT_TEST_URL,
   interval: 300,
@@ -52,30 +57,84 @@ const newDraft = (): Draft => ({
   enabled: true
 })
 
-// 代理名列表弹窗: 多选
+// 机场广告/信息节点判据: 回环 server 或名字带套餐文案, 与 ad-filter 覆写保持一致
+const JUNK_NAME_RE =
+  /官址|官网|网址|订阅地址|剩余|已用|未用|流量|到期|过期|重置|续费|购买|下单|套餐|客服|公告|通知|防失联|加群|群组|电报|telegram|tg群|t\.me/i
+const DEAD_SERVER_RE = /^(?:127\.\d{1,3}\.\d{1,3}\.\d{1,3}|0\.0\.0\.0|localhost|::1)$/i
+
+// 从订阅 profile 文本提取节点名列表(过滤广告/信息节点)
+const extractProfileNodes = (profileStr: string): string[] => {
+  try {
+    const parsed = parse(profileStr) as { proxies?: { name?: unknown; server?: unknown }[] }
+    return (parsed?.proxies ?? [])
+      .filter(
+        (p) =>
+          !!p &&
+          !JUNK_NAME_RE.test(String(p.name ?? '')) &&
+          !DEAD_SERVER_RE.test(String(p.server ?? ''))
+      )
+      .map((p) => String(p.name ?? ''))
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+// 代理选择弹窗: 两级 = 先选订阅, 再多选该订阅的节点; 切订阅不清已选(支持跨订阅混选)
 const ProxyPicker: React.FC<{
   isOpen: boolean
   onClose: () => void
-  proxies: IMihomoProxy[]
+  profiles: IProfileItem[]
   selected: string[]
+  sourceProfile?: string
   title: string
-  onConfirm: (selected: string[]) => void
-}> = ({ isOpen, onClose, proxies, selected, title, onConfirm }) => {
+  onConfirm: (selected: string[], sourceProfile?: string) => void
+}> = ({ isOpen, onClose, profiles, selected, sourceProfile, title, onConfirm }) => {
   const { t } = useTranslation()
   const [local, setLocal] = useState<string[]>(selected)
+  const [profile, setProfile] = useState<string>('')
+  const [nodes, setNodes] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (isOpen) {
       setLocal(selected)
+      setProfile(sourceProfile && profiles.some((p) => p.id === sourceProfile) ? sourceProfile : '')
       setSearch('')
     }
-  }, [isOpen, selected])
+  }, [isOpen, selected, sourceProfile, profiles])
+
+  // 选中订阅后读 profile 文件取节点
+  useEffect(() => {
+    if (!isOpen || !profile) {
+      setNodes([])
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    getProfileStr(profile)
+      .then((str) => {
+        if (!cancelled) setNodes(extractProfileNodes(str))
+      })
+      .catch(() => {
+        if (!cancelled) setNodes([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, profile])
 
   const filtered = useMemo(() => {
-    if (!search) return proxies
-    return proxies.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-  }, [proxies, search])
+    if (!search) return nodes
+    return nodes.filter((n) => n.toLowerCase().includes(search.toLowerCase()))
+  }, [nodes, search])
+
+  // 已选但不在当前订阅的名字(切换后仍保留展示)
+  const outsideSelected = useMemo(() => local.filter((n) => !nodes.includes(n)), [local, nodes])
 
   const toggle = (name: string): void => {
     setLocal((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
@@ -92,40 +151,81 @@ const ProxyPicker: React.FC<{
       <ModalContent>
         <ModalHeader className="flex app-drag">{title}</ModalHeader>
         <ModalBody className="max-h-[60vh] overflow-y-auto">
-          <Input
+          <Select
             size="sm"
-            placeholder={t('customLines.searchProxy')}
-            value={search}
-            onValueChange={setSearch}
-          />
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
-            {filtered.map((p) => {
-              const isSelected = local.includes(p.name)
-              return (
-                <div
-                  key={p.name}
-                  className={`cursor-pointer rounded-md border border-divider px-2 py-1 text-sm truncate ${
-                    isSelected ? 'bg-primary/30 border-primary' : 'bg-content2'
-                  }`}
-                  onClick={() => toggle(p.name)}
-                  title={p.name}
-                >
-                  <span className="flag-emoji">{p.name}</span>
+            label={t('customLines.pickProfile')}
+            selectedKeys={profile ? new Set([profile]) : new Set<string>()}
+            onSelectionChange={(keys) => {
+              const key = keys instanceof Set ? [...keys][0] : keys.currentKey
+              setProfile(typeof key === 'string' ? key : '')
+            }}
+          >
+            {profiles.map((p) => (
+              <SelectItem key={p.id}>{p.name}</SelectItem>
+            ))}
+          </Select>
+          {profile ? (
+            <>
+              <Input
+                size="sm"
+                placeholder={t('customLines.searchProxy')}
+                value={search}
+                onValueChange={setSearch}
+              />
+              {loading ? (
+                <div className="text-center text-foreground-400 text-sm py-4">
+                  {t('common.loading')}
                 </div>
-              )
-            })}
-            {filtered.length === 0 && (
-              <div className="col-span-full text-center text-foreground-400 text-sm py-4">
-                {t('customLines.noProxies')}
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
+                  {filtered.map((name) => {
+                    const isSelected = local.includes(name)
+                    return (
+                      <div
+                        key={name}
+                        className={`cursor-pointer rounded-md border border-divider px-2 py-1 text-sm truncate ${
+                          isSelected ? 'bg-primary/30 border-primary' : 'bg-content2'
+                        }`}
+                        onClick={() => toggle(name)}
+                        title={name}
+                      >
+                        <span className="flag-emoji">{name}</span>
+                      </div>
+                    )
+                  })}
+                  {filtered.length === 0 && (
+                    <div className="col-span-full text-center text-foreground-400 text-sm py-4">
+                      {t('customLines.noProxies')}
+                    </div>
+                  )}
+                </div>
+              )}
+              {outsideSelected.length > 0 && (
+                <div className="flex flex-wrap gap-1 pt-1">
+                  {outsideSelected.map((name) => (
+                    <Chip
+                      key={name}
+                      size="sm"
+                      variant="flat"
+                      onClose={() => setLocal((prev) => prev.filter((n) => n !== name))}
+                    >
+                      <span className="flag-emoji">{name}</span>
+                    </Chip>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center text-foreground-400 text-sm py-4">
+              {t('customLines.noProfiles')}
+            </div>
+          )}
         </ModalBody>
         <ModalFooter>
           <Button size="sm" variant="light" onPress={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button size="sm" color="primary" onPress={() => onConfirm(local)}>
+          <Button size="sm" color="primary" onPress={() => onConfirm(local, profile || undefined)}>
             {t('common.confirm')}
           </Button>
         </ModalFooter>
@@ -134,55 +234,60 @@ const ProxyPicker: React.FC<{
   )
 }
 
-const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSave }) => {
+const CustomLineGroupsModal: React.FC<Props> = ({
+  isOpen,
+  onClose,
+  groups,
+  onSave,
+  editGroupId
+}) => {
   const { t } = useTranslation()
-  const [drafts, setDrafts] = useState<Draft[]>([])
-  const [proxies, setProxies] = useState<IMihomoProxy[]>([])
+  const isEdit = Boolean(editGroupId)
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const [profiles, setProfiles] = useState<IProfileItem[]>([])
   const [saving, setSaving] = useState(false)
-  const [pickerTarget, setPickerTarget] = useState<string | null>(null)
+  const [pickerTarget, setPickerTarget] = useState(false)
   const [portIssues, setPortIssues] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (isOpen) {
-      setDrafts(JSON.parse(JSON.stringify(groups)) as Draft[])
-      mihomoProxies()
-        .then((res) => {
-          const list = Object.values(res.proxies).filter(
-            (p): p is IMihomoProxy => !('all' in p) && p.name !== 'GLOBAL'
-          )
-          setProxies(list)
-        })
-        .catch(() => setProxies([]))
+      // 单卡: 编辑带出目标组, 新增给一张空白草稿; 保存都对照全量 groups
+      const target = editGroupId ? groups.find((g) => g.id === editGroupId) : undefined
+      setDraft(target ? structuredClone(target) : newDraft())
+      getProfileConfig()
+        .then((res) => setProfiles(res.items.filter((p) => p.type !== 'plugin')))
+        .catch(() => setProfiles([]))
     }
-  }, [isOpen, groups])
+  }, [isOpen, groups, editGroupId])
 
-  const updateDraft = (id: string, patch: Partial<Draft>): void => {
-    setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)))
+  const updateDraft = (patch: Partial<Draft>): void => {
+    setDraft((prev) => (prev ? { ...prev, ...patch } : prev))
   }
 
+  // 组间重复/保留端口判定; 未填(0)由 invalid 提示, 不算冲突
   const portConflict = useCallback(
-    (draft: Draft): boolean =>
-      drafts.some((d) => d.id !== draft.id && d.port === draft.port) ||
-      RESERVED_PORTS.includes(draft.port),
-    [drafts]
+    (d: Draft): boolean =>
+      d.port !== 0 &&
+      (RESERVED_PORTS.includes(d.port) || groups.some((g) => g.id !== d.id && g.port === d.port)),
+    [groups]
   )
 
-  // 端口占用探测：内核所在本机 + 宿主机地址，命中即返回该草稿的错误文案
+  // 端口占用探测：内核所在本机 + 宿主机地址，命中即返回错误文案
   const probePorts = useCallback(async (): Promise<Record<string, string>> => {
+    if (!draft) return {}
     const issues: Record<string, string> = {}
     const hosts = hostHints()
-    await Promise.all(
-      drafts.map(async (draft) => {
-        if (!draft.port || draft.port < 1024 || draft.port > 65535) return
-        if (RESERVED_PORTS.includes(draft.port)) return
-        // 组间重复由静态校验提示，不必探测
-        if (drafts.some((d) => d.id !== draft.id && d.port === draft.port)) return
-        // 该组已生效的端口会被它自己的 listener 占着，跳过以免误报
-        if (groups.find((g) => g.id === draft.id)?.port === draft.port) return
+    const d = draft
+    if (d.port && d.port >= 1024 && d.port <= 65535 && !RESERVED_PORTS.includes(d.port)) {
+      // 与其它组重复由静态校验提示，不必探测
+      const dup = groups.some((g) => g.id !== d.id && g.port === d.port)
+      // 该组已生效的端口会被它自己的 listener 占着，跳过以免误报(仅编辑命中)
+      const own = groups.find((g) => g.id === d.id)?.port === d.port
+      if (!dup && !own) {
         try {
-          const result = await checkPortOccupied(draft.port, hosts)
+          const result = await checkPortOccupied(d.port, hosts)
           if (result?.occupied) {
-            issues[draft.id] =
+            issues[d.id] =
               result.source === 'remote'
                 ? t('customLines.portOccupiedRemote', { host: result.detail ?? '' })
                 : t('customLines.portOccupiedLocal')
@@ -190,10 +295,10 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
         } catch {
           // 探测失败不阻塞保存
         }
-      })
-    )
+      }
+    }
     return issues
-  }, [drafts, groups, t])
+  }, [draft, groups, t])
 
   // 端口改动后防抖探测一次，实时给出冲突提示
   useEffect(() => {
@@ -213,22 +318,25 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
     }
   }, [isOpen, probePorts])
 
+  // 空草稿判定: 新增时啥都没填 → 保存等于取消, 不落盘直接关
+  const isBlank = (d: Draft): boolean => !d.name.trim() && !d.port && d.proxies.length === 0
+
   const invalid = useMemo(
     () =>
-      drafts.some(
-        (d) =>
-          !d.name.trim() ||
-          !d.port ||
-          d.port < 1024 ||
-          d.port > 65535 ||
-          portConflict(d) ||
-          d.proxies.length === 0
-      ) || Object.keys(portIssues).length > 0,
-    [drafts, portConflict, portIssues]
+      !draft ||
+      (!isBlank(draft) &&
+        (!draft.name.trim() ||
+          !draft.port ||
+          draft.port < 1024 ||
+          draft.port > 65535 ||
+          portConflict(draft) ||
+          draft.proxies.length === 0)) ||
+      Object.keys(portIssues).length > 0,
+    [draft, portConflict, portIssues]
   )
 
   const doSave = async (): Promise<void> => {
-    if (invalid) return
+    if (!draft || invalid) return
     setSaving(true)
     // 防抖探测可能尚未返回，保存前再确认一次
     const issues = await probePorts()
@@ -237,35 +345,20 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
       setSaving(false)
       return
     }
-    const ok = await onSave(
-      drafts.map(
-        ({
-          id,
-          name,
-          port,
-          proxies,
-          testUrl,
-          interval,
-          auto,
-          fallback,
-          manual,
-          global,
-          enabled
-        }) => ({
-          id,
-          name: name.trim(),
-          port,
-          proxies,
-          testUrl: testUrl || DEFAULT_TEST_URL,
-          interval,
-          auto,
-          fallback,
-          manual,
-          global,
-          enabled
-        })
-      )
-    )
+    if (isBlank(draft)) {
+      // 空草稿 = 什么都没加, 不落盘直接关
+      setSaving(false)
+      onClose()
+      return
+    }
+    const clean: ICustomLineGroup = {
+      ...draft,
+      name: draft.name.trim(),
+      testUrl: draft.testUrl || DEFAULT_TEST_URL
+    }
+    // 编辑: 按id替换回全量; 新增: 追加到全量尾部
+    const next = isEdit ? groups.map((g) => (g.id === clean.id ? clean : g)) : [...groups, clean]
+    const ok = await onSave(next)
     setSaving(false)
     if (ok) onClose()
   }
@@ -281,78 +374,66 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
         size="lg"
       >
         <ModalContent>
-          <ModalHeader className="flex app-drag">{t('customLines.title')}</ModalHeader>
+          <ModalHeader className="flex app-drag">
+            {isEdit ? t('customLines.editTitle') : t('customLines.addTitle')}
+          </ModalHeader>
           <ModalBody className="max-h-[60vh] overflow-y-auto gap-4">
-            {drafts.length === 0 && (
-              <div className="text-center text-foreground-400 text-sm py-8">
-                {t('customLines.empty')}
-              </div>
-            )}
-            {drafts.map((d) => (
-              <div key={d.id} className="flex flex-col gap-2 border border-divider rounded-lg p-3">
+            {draft && (
+              <div className="flex flex-col gap-2 border border-divider rounded-lg p-3">
                 <div className="flex items-center gap-2">
                   <Input
                     size="sm"
                     className="flex-1"
                     label={t('customLines.groupName')}
-                    value={d.name}
-                    onValueChange={(v) => updateDraft(d.id, { name: v })}
-                    isInvalid={!d.name.trim()}
+                    value={draft.name}
+                    onValueChange={(v) => updateDraft({ name: v })}
+                    isInvalid={!draft.name.trim() && !isBlank(draft)}
                   />
                   <Input
                     size="sm"
                     type="number"
                     className="w-28"
                     label={t('customLines.port')}
-                    value={String(d.port)}
-                    onValueChange={(v) => updateDraft(d.id, { port: parseInt(v) || 0 })}
+                    value={draft.port ? String(draft.port) : ''}
+                    onValueChange={(v) => updateDraft({ port: parseInt(v) || 0 })}
                     isInvalid={
-                      !d.port ||
-                      d.port < 1024 ||
-                      d.port > 65535 ||
-                      portConflict(d) ||
-                      Boolean(portIssues[d.id])
+                      (!draft.port && !isBlank(draft)) ||
+                      draft.port < 1024 ||
+                      draft.port > 65535 ||
+                      portConflict(draft) ||
+                      Boolean(portIssues[draft.id])
                     }
                   />
-                  <Button
-                    isIconOnly
-                    size="sm"
-                    color="danger"
-                    variant="light"
-                    onPress={() => setDrafts((prev) => prev.filter((x) => x.id !== d.id))}
-                  >
-                    <FaTrash />
-                  </Button>
                 </div>
-                {portConflict(d) && (
+                {portConflict(draft) && (
                   <div className="text-danger text-xs">{t('customLines.portConflict')}</div>
                 )}
-                {portIssues[d.id] && <div className="text-danger text-xs">{portIssues[d.id]}</div>}
+                {portIssues[draft.id] && (
+                  <div className="text-danger text-xs">{portIssues[draft.id]}</div>
+                )}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm shrink-0">{t('customLines.lines')}</span>
                   <Button
                     size="sm"
                     variant="flat"
                     startContent={<FaPlus />}
-                    onPress={() => setPickerTarget(d.id)}
+                    onPress={() => setPickerTarget(true)}
                   >
                     {t('customLines.pickLines')}
                   </Button>
                   <Chip size="sm" variant="flat">
-                    {d.proxies.length}
+                    {draft.proxies.length}
                   </Chip>
                 </div>
-                {d.proxies.length > 0 && (
+                {draft.proxies.length > 0 && (
                   <div className="flex flex-wrap gap-1">
-                    {d.proxies.map((name) => (
+                    {draft.proxies.map((name) => (
                       <Chip
                         key={name}
                         size="sm"
                         variant="flat"
                         onClose={() =>
-                          updateDraft(d.id, {
-                            proxies: d.proxies.filter((n) => n !== name)
-                          })
+                          updateDraft({ proxies: draft.proxies.filter((n) => n !== name) })
                         }
                       >
                         <span className="flag-emoji">{name}</span>
@@ -377,18 +458,18 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
                     >
                       <Switch
                         size="sm"
-                        isSelected={Boolean(d[key])}
-                        onValueChange={(v) => updateDraft(d.id, { [key]: v } as Partial<Draft>)}
+                        isSelected={Boolean(draft[key])}
+                        onValueChange={(v) => updateDraft({ [key]: v } as Partial<Draft>)}
                       >
                         {label}
                       </Switch>
                     </Tooltip>
                   ))}
                 </div>
-                {d.auto === false &&
-                  d.fallback === false &&
-                  d.manual === false &&
-                  d.global === false && (
+                {draft.auto === false &&
+                  draft.fallback === false &&
+                  draft.manual === false &&
+                  draft.global === false && (
                     <div className="text-warning text-xs">{t('customLines.noSubGroup')}</div>
                   )}
                 <Divider />
@@ -397,28 +478,20 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
                     size="sm"
                     className="flex-1"
                     label={t('customLines.testUrl')}
-                    value={d.testUrl ?? ''}
-                    onValueChange={(v) => updateDraft(d.id, { testUrl: v })}
+                    value={draft.testUrl ?? ''}
+                    onValueChange={(v) => updateDraft({ testUrl: v })}
                   />
                   <Input
                     size="sm"
                     type="number"
                     className="w-28"
                     label={t('customLines.interval')}
-                    value={String(d.interval ?? 300)}
-                    onValueChange={(v) => updateDraft(d.id, { interval: parseInt(v) || 300 })}
+                    value={String(draft.interval ?? 300)}
+                    onValueChange={(v) => updateDraft({ interval: parseInt(v) || 300 })}
                   />
                 </div>
               </div>
-            ))}
-            <Button
-              variant="flat"
-              color="primary"
-              startContent={<FaPlus />}
-              onPress={() => setDrafts((prev) => [...prev, newDraft()])}
-            >
-              {t('customLines.add')}
-            </Button>
+            )}
           </ModalBody>
           <ModalFooter>
             <Button variant="light" onPress={onClose}>
@@ -431,14 +504,15 @@ const CustomLineGroupsModal: React.FC<Props> = ({ isOpen, onClose, groups, onSav
         </ModalContent>
       </Modal>
       <ProxyPicker
-        isOpen={pickerTarget !== null}
-        onClose={() => setPickerTarget(null)}
-        proxies={proxies}
-        selected={drafts.find((d) => d.id === pickerTarget)?.proxies ?? []}
+        isOpen={pickerTarget}
+        onClose={() => setPickerTarget(false)}
+        profiles={profiles}
+        selected={draft?.proxies ?? []}
+        sourceProfile={draft?.sourceProfile}
         title={t('customLines.pickLines')}
-        onConfirm={(picked) => {
-          if (pickerTarget) updateDraft(pickerTarget, { proxies: picked })
-          setPickerTarget(null)
+        onConfirm={(picked, sourceProfile) => {
+          updateDraft({ proxies: picked, ...(sourceProfile ? { sourceProfile } : {}) })
+          setPickerTarget(false)
         }}
       />
     </>

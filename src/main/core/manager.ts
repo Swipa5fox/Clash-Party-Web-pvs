@@ -7,14 +7,12 @@ import path from 'path'
 import os from 'os'
 import { existsSync, watch, type FSWatcher as NodeFSWatcher } from 'fs'
 import chokidar, { type FSWatcher as ChokidarWatcher } from 'chokidar'
-import { ipcMain } from 'electron'
 import { broadcastEvent } from '../resolve/broadcaster'
 import {
   getAppConfig,
   getControledMihomoConfig,
   getProfileItem,
-  patchControledMihomoConfig,
-  manageSmartOverride
+  patchControledMihomoConfig
 } from '../config'
 import {
   dataDir,
@@ -52,7 +50,6 @@ import {
 import {
   cleanupSocketFile,
   cleanupWindowsNamedPipes,
-  validateWindowsPipeAccess,
   waitForCoreReady,
   verifyProcessOwner
 } from './process'
@@ -71,7 +68,7 @@ const execFilePromise = promisify(execFile)
 const ctlParam = process.platform === 'win32' ? '-ext-ctl-pipe' : '-ext-ctl-unix'
 const coreHookTimeout = 30000
 const automaticRestartDelay = 750
-const coreProcessNames = ['mihomo', 'mihomo-alpha', 'mihomo-smart'] as const
+const coreProcessNames = ['mihomo'] as const
 
 // 核心进程状态
 interface CoreProcessWatchdog {
@@ -167,8 +164,8 @@ function stopCoreProcessWatchdog(corePid?: number): void {
   watchdog.process.stdin?.destroy()
 }
 
-function startCoreProcessWatchdog(proc: ChildProcess, detached: boolean): void {
-  if (process.platform !== 'linux' || detached || !proc.pid) return
+function startCoreProcessWatchdog(proc: ChildProcess): void {
+  if (process.platform !== 'linux' || !proc.pid) return
 
   stopCoreProcessWatchdog()
 
@@ -362,12 +359,8 @@ export function initCoreWatcher(): void {
     }
   })
 
-  // 监听 restartCore 事件（用于 DNS 状态恢复等场景，避免循环依赖）
-  ipcMain.removeAllListeners('restartCore')
-  ipcMain.on('restartCore', async () => {
-    await restartCore()
-    broadcastEvent('appConfigUpdated')
-  })
+  // 原 ipcMain.on('restartCore') 监听（用于 DNS 状态恢复等场景）已无发送方，
+  // 桌面壳移除后是死代码；如需跨模块触发 restartCore，直接 import 调用即可。
 }
 
 // 清理核心文件监听
@@ -405,7 +398,6 @@ interface CoreConfig {
   tunEnabled: boolean
   cpuPriority: string
   ageSecretKey?: string
-  detached: boolean
   startupMode: CoreStartupMode
   startupHook?: CoreStartupHook
 }
@@ -426,7 +418,7 @@ function buildCoreEnv(safePath?: string, ageSecretKey?: string): NodeJS.ProcessE
 }
 
 // 准备核心配置
-async function prepareCore(detached: boolean, skipStop = false): Promise<CoreConfig> {
+async function prepareCore(skipStop = false): Promise<CoreConfig> {
   await ensureRuntimeFiles()
 
   const [appConfig, mihomoConfig] = await Promise.all([getAppConfig(), getControledMihomoConfig()])
@@ -444,9 +436,6 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   // 清理轻量模式遗留的后台核心
   await stopPidFileCore()
 
-  // 管理 Smart 内核覆写配置
-  await manageSmartOverride()
-
   // generateProfile 返回实际使用的 current
   const current = await generateProfile()
   const ageSecretKey = (await getProfileItem(current))?.ageSecretKey || ''
@@ -462,13 +451,8 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
   const ipcPath = getMihomoIpcPath()
   managerLogger.info(`Using IPC path: ${ipcPath}`)
 
-  if (process.platform === 'win32') {
-    await validateWindowsPipeAccess(ipcPath)
-  }
-
   const startupMode: CoreStartupMode = coreStartupMode === 'post-up' ? 'post-up' : 'log'
-  const startupHook =
-    !detached && startupMode === 'post-up' ? await createCoreStartupHook() : undefined
+  const startupHook = startupMode === 'post-up' ? await createCoreStartupHook() : undefined
 
   return {
     corePath: mihomoCorePath(core),
@@ -479,7 +463,6 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     tunEnabled: tun?.enable ?? false,
     cpuPriority: mihomoCpuPriority,
     ageSecretKey,
-    detached,
     startupMode,
     startupHook
   }
@@ -494,7 +477,6 @@ function spawnCoreProcess(config: CoreConfig): ChildProcess {
     ipcPath,
     cpuPriority,
     ageSecretKey,
-    detached,
     startupMode,
     startupHook
   } = config
@@ -503,13 +485,11 @@ function spawnCoreProcess(config: CoreConfig): ChildProcess {
   if (startupHook) {
     args.push('-post-up', startupHook.postUpCommand, '-post-down', startupHook.postDownCommand)
     managerLogger.info(`Core startup mode: post-up, post-up command: ${startupHook.postUpCommand}`)
-  } else if (!detached) {
+  } else {
     managerLogger.info(`Core startup mode: ${startupMode}`)
   }
 
   const proc = spawn(corePath, args, {
-    detached,
-    stdio: detached ? 'ignore' : undefined,
     env: buildCoreEnv(safePath, ageSecretKey)
   })
 
@@ -520,12 +500,10 @@ function spawnCoreProcess(config: CoreConfig): ChildProcess {
     )
   }
 
-  if (!detached) {
-    const stdout = createCoreLogWritableStream(coreLogPath)
-    const stderr = createCoreLogWritableStream(coreLogPath)
-    proc.stdout?.pipe(stdout)
-    proc.stderr?.pipe(stderr)
-  }
+  const stdout = createCoreLogWritableStream(coreLogPath)
+  const stderr = createCoreLogWritableStream(coreLogPath)
+  proc.stdout?.pipe(stdout)
+  proc.stderr?.pipe(stderr)
 
   return proc
 }
@@ -706,23 +684,15 @@ interface CoreStartAttempt {
   readiness: Promise<Promise<void>[]>
 }
 
-async function startCoreInternal(detached = false, skipStop = false): Promise<CoreStartAttempt> {
+async function startCoreInternal(skipStop = false): Promise<CoreStartAttempt> {
   ensureNotShuttingDown()
-  const config = await prepareCore(detached, skipStop)
+  const config = await prepareCore(skipStop)
   ensureNotShuttingDown()
   const hookWaiter = config.startupHook ? createCoreHookWaiter(config.startupHook) : undefined
   const proc = spawnCoreProcess(config)
   hookWaiter?.attachProcess(proc)
   child = proc
-  startCoreProcessWatchdog(proc, detached)
-
-  if (detached) {
-    managerLogger.info(
-      `Core process detached successfully on ${process.platform}, PID: ${proc.pid}`
-    )
-    proc.unref()
-    return { readiness: Promise.resolve([new Promise(() => {})]) }
-  }
+  startCoreProcessWatchdog(proc)
 
   const readiness = new Promise<Promise<void>[]>((resolve, reject) => {
     setupCoreListeners(proc, config, hookWaiter, resolve, reject)
@@ -743,19 +713,14 @@ async function startCoreInternal(detached = false, skipStop = false): Promise<Co
 }
 
 // 互斥只覆盖 prepare/spawn；API-ready 等待在队列外进行，避免 close handler 自重启死锁。
-function queueCoreStart(detached = false, skipStop = false): Promise<Promise<void>[]> {
+function queueCoreStart(): Promise<Promise<void>[]> {
   return runCoreOperation(async () => {
     ensureNotShuttingDown()
-    if (!detached && !skipStop && hasCoreProcess()) {
+    if (hasCoreProcess()) {
       return { readiness: Promise.resolve<Promise<void>[]>([]) }
     }
-    return startCoreInternal(detached, skipStop)
+    return startCoreInternal()
   }).then((attempt) => attempt.readiness)
-}
-
-export function startCore(detached = false, skipStop = false): Promise<Promise<void>[]> {
-  ensureCoreOperationAllowed()
-  return queueCoreStart(detached, skipStop)
 }
 
 // 启动期唯一的例外入口：安全检查通过后由主流程调用，仍受退出状态保护。
@@ -820,7 +785,7 @@ export async function stopCoreForExit(): Promise<void> {
 async function restartCoreOnce(): Promise<void> {
   const startAttempt = await runCoreOperation(async () => {
     await stopCoreInternal()
-    return startCoreInternal(false, true)
+    return startCoreInternal(true)
   })
   await startAttempt.readiness
 }

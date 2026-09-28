@@ -1,6 +1,7 @@
 import { Button, Tab, Input, Switch, Tabs, Divider } from '@heroui/react'
+import { StringListEditor } from '@renderer/components/base/string-list-editor'
 import BasePage from '@renderer/components/base/base-page'
-import { showErrorSync } from '@renderer/utils/error-display'
+import { showError } from '@renderer/utils/error-display'
 import { MdDeleteForever } from 'react-icons/md'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
@@ -84,47 +85,13 @@ const DNS: React.FC = () => {
     setChanged(true)
   }
 
-  const handleListChange = (type: string, value: string, index: number): void => {
-    const list = [...values[type]]
-    if (value.trim()) {
-      if (index < list.length) {
-        list[index] = value
-      } else {
-        list.push(value)
-      }
-    } else {
-      list.splice(index, 1)
-    }
-    setValues({ ...values, [type]: list })
-  }
-
-  const renderListInputs = (type: string, placeholder: string): ReactNode => {
-    const currentItems = values[type]
-    const showNewLine = currentItems.every((item: string) => item.trim() !== '')
-
-    return [...currentItems, ...(showNewLine ? [''] : [])].map((item, index) => (
-      <div key={index} className="mt-2 flex">
-        <Input
-          fullWidth
-          size="sm"
-          placeholder={placeholder}
-          value={typeof item === 'string' ? item : item.domain}
-          onValueChange={(v) => handleListChange(type, v, index)}
-        />
-        {index < values[type].length && (
-          <Button
-            className="ml-2"
-            size="sm"
-            variant="flat"
-            color="warning"
-            onPress={() => handleListChange(type, '', index)}
-          >
-            <MdDeleteForever className="text-lg" />
-          </Button>
-        )}
-      </div>
-    ))
-  }
+  const renderListInputs = (type: string, placeholder: string): ReactNode => (
+    <StringListEditor
+      items={values[type]}
+      placeholder={placeholder}
+      onChange={(list) => setValues({ ...values, [type]: list })}
+    />
+  )
 
   const handleSubkeyChange = (type: string, domain: string, value: string, index: number): void => {
     const list = [...values[type]]
@@ -168,12 +135,10 @@ const DNS: React.FC = () => {
       })
       if (controlDns) {
         // 热重载后台执行,不阻塞保存响应,失败才提示
-        mihomoHotReloadConfig().catch((e) =>
-          showErrorSync(e, t('common.error.dnsConfigSaveFailed'))
-        )
+        mihomoHotReloadConfig().catch((e) => showError(e, t('common.error.dnsConfigSaveFailed')))
       }
     } catch (e) {
-      showErrorSync(e, t('common.error.dnsConfigSaveFailed'))
+      showError(e, t('common.error.dnsConfigSaveFailed'))
     }
   }
 

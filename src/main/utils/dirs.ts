@@ -1,71 +1,47 @@
-import { existsSync, mkdirSync } from 'fs'
+import { existsSync } from 'fs'
+import { homedir } from 'os'
 import path from 'path'
-import { is } from '@electron-toolkit/utils'
-import { app } from 'electron'
+import { installRoot } from '../runtime'
 
-export const homeDir = app.getPath('home')
+export const homeDir = homedir()
 
-export function isPortable(): boolean {
-  return existsSync(path.join(exeDir(), 'PORTABLE'))
+// 数据目录：CP_DATA_DIR 显式指定 > tarball 根旁 data/ > XDG_DATA_HOME。
+// portable/exe 概念随桌面壳一并移除。
+function resolveDataDir(): string {
+  if (process.env.CP_DATA_DIR) return process.env.CP_DATA_DIR
+  const root = installRoot()
+  // tarball 部署根（含 resources/ 但不含 src/）旁的 data/ 才算自带布局，
+  // 避免把 repo 仓库误判成安装目录。
+  const isInstall = existsSync(path.join(root, 'resources')) && !existsSync(path.join(root, 'src'))
+  if (isInstall) return path.join(root, 'data')
+  const xdg = process.env.XDG_DATA_HOME || path.join(homeDir, '.local', 'share')
+  return path.join(xdg, 'clash-party')
 }
 
-function portableDataDir(): string {
-  return path.join(exeDir(), 'data')
-}
+let dataDirPath: string | null = null
 
-// 本地开发使用独立的应用名和数据目录，避免开发过程读写正式版的配置与凭据存储。
-// 已打包的 dev 预发行版仍与正式版共享身份和数据，保持原有滚动升级路径。
 export function configureAppPaths(): void {
-  if (!app.isPackaged) {
-    app.setName('mihomo-party-dev')
-    app.setPath('userData', path.join(app.getPath('appData'), 'mihomo-party-dev'))
-  }
-
-  // portable 模式始终拥有最高优先级。
-  if (isPortable()) {
-    app.setPath('userData', portableDataDir())
-  }
+  dataDirPath = resolveDataDir()
 }
 
 export function dataDir(): string {
-  if (isPortable()) {
-    return portableDataDir()
-  } else {
-    return app.getPath('userData')
-  }
+  if (!dataDirPath) dataDirPath = resolveDataDir()
+  return dataDirPath
 }
 
-export function taskDir(): string {
-  const baseDir = dataDir()
-  if (!existsSync(baseDir)) {
-    mkdirSync(baseDir, { recursive: true })
-  }
-
-  const dir = path.join(baseDir, 'tasks')
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-  return dir
+export function exePath(): string {
+  return process.argv[1] ? path.resolve(process.argv[1]) : process.execPath
 }
 
 export function exeDir(): string {
   return path.dirname(exePath())
 }
 
-export function exePath(): string {
-  return app.getPath('exe')
-}
-
 export function resourcesDir(): string {
-  if (is.dev) {
-    return path.join(__dirname, '../../extra')
-  } else {
-    if (app.getAppPath().endsWith('asar')) {
-      return process.resourcesPath
-    } else {
-      return path.join(app.getAppPath(), 'resources')
-    }
-  }
+  // tarball: 根/resources；repo（dev 与 dist bundle）: extra/。
+  if (existsSync(path.join(installRoot(), 'resources')))
+    return path.join(installRoot(), 'resources')
+  return path.join(installRoot(), 'extra')
 }
 
 export function resourcesFilesDir(): string {
@@ -82,10 +58,6 @@ export function mihomoCoreDir(): string {
 
 export function mihomoCorePath(core: string): string {
   const isWin = process.platform === 'win32'
-  // 处理 Smart 内核
-  if (core === 'mihomo-smart') {
-    return path.join(mihomoCoreDir(), `mihomo-smart${isWin ? '.exe' : ''}`)
-  }
   return path.join(mihomoCoreDir(), `${core}${isWin ? '.exe' : ''}`)
 }
 
@@ -161,22 +133,19 @@ export function logDir(): string {
   return path.join(dataDir(), 'logs')
 }
 
-export function logPath(): string {
+function dateStamp(): string {
   const date = new Date()
-  const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
-  const name = `clash-party-${year}-${month}-${day}`
-  return path.join(logDir(), `${name}.log`)
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
+export function logPath(): string {
+  return path.join(logDir(), `clash-party-${dateStamp()}.log`)
 }
 
 export function coreLogPath(): string {
-  const date = new Date()
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const name = `core-${year}-${month}-${day}`
-  return path.join(logDir(), `${name}.log`)
+  return path.join(logDir(), `core-${dateStamp()}.log`)
 }
 
 export function rulesDir(): string {

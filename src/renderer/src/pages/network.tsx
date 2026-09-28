@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next'
 import { fetchIPInfo, measureLatency } from '@renderer/utils/ipc'
 import { copyText } from '@renderer/utils/clipboard'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { mergeCardOrder } from '@renderer/utils/sider'
 import { DEFAULT_NETWORK_INFO_CARD_ORDER } from '../../../shared/appConfig'
 
 type IPProvider = 'ip.sb' | 'ipwho.is' | 'ipapi.is'
@@ -53,13 +54,16 @@ const IP_ENDPOINTS: Record<IPProvider, string> = {
   'ipapi.is': 'https://api.ipapi.is/'
 }
 
+// 区域指示符 emoji 由 @font-face 的 Noto Color Emoji 渲染（同代理名里的国旗）
 const CountryFlag: React.FC<{ code?: string; className?: string }> = ({ code, className }) => {
   if (!code || code.length !== 2) return null
+  const flag = code
+    .toUpperCase()
+    .replace(/[A-Z]/g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)))
   return (
-    <span
-      className={`fi fi-${code.toLowerCase()} rounded-sm ${className ?? ''}`}
-      style={{ fontSize: '1rem', lineHeight: 1 }}
-    />
+    <span className={`flag-emoji ${className ?? ''}`} style={{ fontSize: '1rem', lineHeight: 1 }}>
+      {flag}
+    </span>
   )
 }
 
@@ -132,13 +136,13 @@ const DEFAULT_LATENCY_TARGETS: LatencyTarget[] = [
   { name: 'GitHub', url: 'https://github.com/' }
 ]
 
-function mergeNetworkInfoCardOrder(saved: string[] = []): NetworkInfoCardKey[] {
-  const valid = saved.filter((key): key is NetworkInfoCardKey =>
-    DEFAULT_NETWORK_INFO_CARD_ORDER.includes(key as NetworkInfoCardKey)
+const mergeNetworkInfoCardOrder = (saved: string[] = []): NetworkInfoCardKey[] =>
+  mergeCardOrder(
+    saved.filter((key): key is NetworkInfoCardKey =>
+      DEFAULT_NETWORK_INFO_CARD_ORDER.includes(key as NetworkInfoCardKey)
+    ),
+    DEFAULT_NETWORK_INFO_CARD_ORDER
   )
-  const missing = DEFAULT_NETWORK_INFO_CARD_ORDER.filter((key) => !valid.includes(key))
-  return [...valid, ...missing]
-}
 
 interface SortableNetworkInfoCardProps {
   id: NetworkInfoCardKey
@@ -239,9 +243,7 @@ function latencyColor(latency: number | null): string {
 
 function latencyBarColor(latency: number | null): string {
   if (latency === null) return 'bg-foreground/20'
-  if (latency < 100) return 'bg-success'
-  if (latency < 300) return 'bg-warning'
-  return 'bg-danger'
+  return latencyColor(latency).replace('text-', 'bg-')
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

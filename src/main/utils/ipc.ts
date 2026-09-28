@@ -1,12 +1,11 @@
 import path from 'path'
 import { readFile } from 'fs/promises'
-import { app, ipcMain } from 'electron'
 import i18next from 'i18next'
+import { appVersion } from '../runtime'
 import {
   mihomoChangeProxy,
   mihomoCloseAllConnections,
   mihomoCloseConnection,
-  mihomoGroupDelay,
   mihomoGroups,
   mihomoProxies,
   mihomoProxyDelay,
@@ -21,8 +20,6 @@ import {
   mihomoHotReloadConfig,
   mihomoVersion,
   patchMihomoConfig,
-  mihomoSmartGroupWeights,
-  mihomoSmartFlushCache,
   mihomoRulesDisable
 } from '../core/mihomoApi'
 import {
@@ -31,8 +28,6 @@ import {
   getControledMihomoConfig,
   patchControledMihomoConfig,
   getProfileConfig,
-  getCurrentProfileItem,
-  getProfileItem,
   addProfileItem,
   removeProfileItem,
   changeCurrentProfile,
@@ -44,7 +39,6 @@ import {
   setProfileConfig,
   getOverrideConfig,
   setOverrideConfig,
-  getOverrideItem,
   addOverrideItem,
   removeOverrideItem,
   getOverride,
@@ -53,23 +47,15 @@ import {
   convertMrsRuleset
 } from '../config'
 import { getCustomLineGroupsConfig, setCustomLineGroupsConfig } from '../config/customLineGroups'
-import {
-  restartCore,
-  checkTunPermissions,
-  checkAdminPrivileges,
-  checkMihomoCorePermissions,
-  checkHighPrivilegeCore
-} from '../core/manager'
+import { restartCore } from '../core/manager'
 import { triggerSysProxy } from '../sys/sysproxy'
-import { setNativeTheme, setupFirewall, buildEnvText, type EnvType } from '../sys/misc'
+import { setNativeTheme, buildEnvText, type EnvType } from '../sys/misc'
 import { getRuntimeConfig, getRuntimeConfigStr } from '../core/factory'
 import {
   listWebdavBackups,
   webdavBackup,
   webdavDelete,
   webdavRestore,
-  exportLocalBackup,
-  importLocalBackup,
   exportBackupToBase64,
   importBackupFromBase64,
   reinitScheduler
@@ -83,7 +69,7 @@ import {
   writeTheme
 } from '../resolve/theme'
 import { exportGistAgeSecretKeyText, generateGistAgeKeyPair, getGistUrl } from '../resolve/gistApi'
-import { addProfileUpdater, removeProfileUpdater } from '../core/profileUpdater'
+import { addProfileUpdater } from '../core/profileUpdater'
 import {
   previewPlugin,
   installPlugin,
@@ -96,7 +82,7 @@ import { getPluginConfig } from '../config/plugin'
 import { broadcastEvent } from '../resolve/broadcaster'
 import {
   getFileShareServerState,
-  restartFileShareServer,
+  startFileShareServer,
   listFileShareFiles,
   addFileShareFile,
   revokeFileShareFile,
@@ -107,7 +93,6 @@ import {
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { getIconDataURL } from './icon'
-import { getDeploymentEnv } from './deployment'
 import { dataDir, rulePath } from './dirs'
 import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
 import { atomicWriteFile } from './safeFile'
@@ -117,31 +102,6 @@ import { checkPortOccupied } from './portCheck'
 export type AsyncFn = (...args: any[]) => Promise<any>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type SyncFn = (...args: any[]) => any
-
-function wrapAsync<T extends AsyncFn>(
-  fn: T
-): (...args: Parameters<T>) => Promise<ReturnType<T> | { invokeError: unknown }> {
-  return async (...args) => {
-    try {
-      return await fn(...args)
-    } catch (e) {
-      if (e && typeof e === 'object' && 'message' in e) {
-        return { invokeError: e.message }
-      }
-      return { invokeError: typeof e === 'string' ? e : 'Unknown Error' }
-    }
-  }
-}
-
-function registerHandlers(handlers: Record<string, AsyncFn | SyncFn>, async = true): void {
-  for (const [channel, handler] of Object.entries(handlers)) {
-    if (async) {
-      ipcMain.handle(channel, (_e, ...args) => wrapAsync(handler as AsyncFn)(...args))
-    } else {
-      ipcMain.handle(channel, (_e, ...args) => (handler as SyncFn)(...args))
-    }
-  }
-}
 
 async function fetchMihomoTags(
   forceRefresh = false
@@ -183,15 +143,6 @@ async function patchAppConfigAndBroadcast(patch: Partial<IAppConfig>): Promise<v
 
 async function setRuleStr(id: string, str: string): Promise<void> {
   await atomicWriteFile(rulePath(id), str, { encoding: 'utf8' })
-}
-
-async function getSmartOverrideContent(): Promise<string | null> {
-  try {
-    const override = await getOverrideItem('smart-core-override')
-    return override?.file || null
-  } catch {
-    return null
-  }
 }
 
 async function fetchIPInfo(url: string): Promise<unknown> {
@@ -253,10 +204,7 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   mihomoUpgradeGeo,
   mihomoUpgrade,
   mihomoProxyDelay,
-  mihomoGroupDelay,
   patchMihomoConfig,
-  mihomoSmartGroupWeights,
-  mihomoSmartFlushCache,
   // Config
   getAppConfig,
   patchAppConfig: patchAppConfigAndBroadcast,
@@ -265,8 +213,6 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   // Profile
   getProfileConfig,
   setProfileConfig,
-  getCurrentProfileItem,
-  getProfileItem,
   getProfileStr,
   setProfileStr,
   addProfileItem,
@@ -274,11 +220,9 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   updateProfileItem,
   changeCurrentProfile,
   addProfileUpdater,
-  removeProfileUpdater,
   // Override
   getOverrideConfig,
   setOverrideConfig,
-  getOverrideItem,
   addOverrideItem,
   removeOverrideItem,
   updateOverrideItem,
@@ -294,7 +238,6 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   convertMrsRuleset,
   getRuntimeConfig,
   getRuntimeConfigStr,
-  getSmartOverrideContent,
   getRuleStr,
   setRuleStr,
   // Core
@@ -302,11 +245,6 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   mihomoHotReloadConfig,
   // System
   triggerSysProxy,
-  checkTunPermissions,
-  checkAdminPrivileges,
-  checkMihomoCorePermissions,
-  checkHighPrivilegeCore,
-  setupFirewall,
   copyEnvText: async (type?: EnvType) => await buildEnvText(type),
   // Update
   fetchMihomoTags,
@@ -318,8 +256,6 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   listWebdavBackups,
   webdavDelete,
   reinitWebdavBackupScheduler: reinitScheduler,
-  exportLocalBackup,
-  importLocalBackup,
   exportLocalBackupBase64: exportBackupToBase64,
   importLocalBackupFromContent: importBackupFromBase64,
   // Theme
@@ -347,7 +283,7 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   changeLanguage,
   // File Share
   getFileShareServerState,
-  restartFileShareServer,
+  restartFileShareServer: startFileShareServer,
   listFileShareFiles,
   addFileShareFile,
   revokeFileShareFile,
@@ -359,12 +295,6 @@ export const asyncHandlers: Record<string, AsyncFn> = {
 export const syncHandlers: Record<string, SyncFn> = {
   getInterfaces,
   setNativeTheme,
-  getVersion: () => app.getVersion(),
-  platform: () => process.platform,
-  getDeploymentEnv
-}
-
-export function registerIpcMainHandlers(): void {
-  registerHandlers(asyncHandlers, true)
-  registerHandlers(syncHandlers, false)
+  getVersion: () => appVersion(),
+  platform: () => process.platform
 }

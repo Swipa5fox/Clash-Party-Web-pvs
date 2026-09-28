@@ -31,7 +31,6 @@ export interface WebBridgeOptions {
   devServerUrl?: string
   rpc?: RpcFn
   blockedChannels?: readonly string[]
-  onSend?: (channel: string, args: unknown[]) => void
 }
 
 // web 模式下拒绝的危险 channel：可杀死/重启主进程 / 触发宿主模态弹窗（阻塞桥连接）/
@@ -193,7 +192,10 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
     }
   }
 
+  // HTML 入口禁缓存: 文件名带 hash 的 assets 走强缓存, 但 web.html 每次都要拿到新版引用,
+  // 否则发版后浏览器一直用旧 bundle(SPA 无感知), 用户必须硬刷新
   const serveWebHtml = (res: express.Response): void => {
+    res.set('Cache-Control', 'no-cache')
     res.sendFile(webHtmlPath, (err) => {
       if (err && !res.headersSent) {
         res.status(503).type('text/plain').send(NOT_BUILT_MESSAGE)
@@ -232,6 +234,21 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
     res.json({ ok: true })
   })
 
+  // ---- 公开静态小件（favicon/品牌图）：登录页/浏览器标签未登录也要能取到，必须放在会话门之前 ----
+  const servePublicAsset =
+    (file: string) =>
+    (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+      if (devProxy) {
+        devProxy.handler(req, res, next)
+        return
+      }
+      res.sendFile(path.join(opts.staticRoot, file), (err) => {
+        if (err && !res.headersSent) res.status(404).type('text/plain').send('not found')
+      })
+    }
+  app.get('/favicon.ico', servePublicAsset('favicon.ico'))
+  app.get('/logo.png', servePublicAsset('logo.png'))
+
   // ---- 会话保护：除登录端点外的所有页面/静态/dev 代理均需有效 Cookie ----
   app.use((req, res, next) => {
     const sid = parseSidFromCookie(req.headers.cookie)
@@ -267,7 +284,13 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
     app.use(devProxy.handler)
   }
 
-  app.use(express.static(opts.staticRoot))
+  app.use(
+    express.static(opts.staticRoot, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.html')) res.set('Cache-Control', 'no-cache')
+      }
+    })
+  )
 
   app.use((_req, res) => {
     if (staticRootExists()) {
@@ -351,17 +374,6 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
           .catch((e: unknown) => {
             sendJson(ws, { type: 'result', id: record.id, ok: false, error: stringifyError(e) })
           })
-        return
-      }
-
-      if (record.type === 'send') {
-        const channel = typeof record.channel === 'string' ? record.channel : ''
-        const args = Array.isArray(record.args) ? record.args : []
-        try {
-          opts.onSend?.(channel, args)
-        } catch {
-          // ignore onSend failures to keep the bridge alive
-        }
         return
       }
     })

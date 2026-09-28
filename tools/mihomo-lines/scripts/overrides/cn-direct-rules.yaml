@@ -1,0 +1,36 @@
+# cn-direct-rules.yaml — 国内直连 + 少量域名强制走代理(全局覆写)
+# 2026-09-28 修复: 原版 +rules 硬编码组名 LILISI, 订阅换成 iKuuu(组名
+# '🔰 选择节点'等)后 mihomo -t 校验报 proxy [LILISI] not found, 导入被拒。
+# 改法: 自建 include-all 组'强制代理', 不依赖订阅组名, 换订阅自动适配。
+# 实测: include-all 组运行时成员=静态 proxies 在前 + 订阅节点在后,
+# select 默认选第一个成员, 故不能放 DIRECT 兜底(会默认直连)。
+# 节点级 store-selected: true 已开, 手选一次即记住。
+# 推送(本仓库 scripts/ 下): node lines.mjs push overrides/cn-direct-rules.yaml cn-direct-rules 'CN 国内直连'
+
+proxy-groups+:
+  - name: 强制代理
+    type: select
+    include-all: true
+
+rule-providers:
+  china-direct:
+    type: http
+    behavior: domain
+    format: yaml
+    url: https://cdn.jsdelivr.net/gh/Loyalsoldier/clash-rules@release/direct.txt
+    path: ./ruleset/china-direct.yaml
+    interval: 86400
+    proxy: DIRECT
+
++rules:
+  - DOMAIN,ocsp.apple.com,强制代理
+  - DOMAIN,sandbox.itunes.apple.com,强制代理
+  - DOMAIN,itunes.apple.com,强制代理
+  - DOMAIN-SUFFIX,dytt8.net,强制代理
+  - DOMAIN-SUFFIX,globalsign.com,强制代理
+  - DOMAIN-SUFFIX,ubnt.com,强制代理
+  - RULE-SET,china-direct,DIRECT
+  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve
+  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve
+  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve
+  - IP-CIDR,169.254.0.0/16,DIRECT,no-resolve

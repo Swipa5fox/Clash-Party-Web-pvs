@@ -1,14 +1,42 @@
-import { triggerAutoProxy, triggerManualProxy } from 'sysproxy-rs'
-import { net } from 'electron'
+import { existsSync } from 'fs'
+import { join } from 'path'
+import { createRequire } from 'module'
 import { getAppConfig, getControledMihomoConfig } from '../config'
 import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
 import { pacPort, startPacServer, stopPacServer } from '../resolve/server'
 import { proxyLogger } from '../utils/logger'
 import { isContainerDeployment } from '../utils/deployment'
+import { resourcesDir } from '../utils/dirs'
 
-let triggerSysProxyTimer: NodeJS.Timeout | null = null
+// sysproxy-rs 仅在 Windows 有意义（Linux 服务器上没有桌面代理设置可写），
+// 且原生模块按平台分发。依赖包已随桌面化清除，改为直接加载
+// extra/sidecar 下的 win32 原生绑定（与 mihomo 内核同目录布局）。
+type SysproxyBinding = {
+  triggerAutoProxy: (enable: boolean, url: string) => void
+  triggerManualProxy: (enable: boolean, host: string, port: number, bypass: string) => void
+}
+
+let bindingPromise: Promise<SysproxyBinding | null> | null = null
+
+function loadBinding(): Promise<SysproxyBinding | null> {
+  if (!bindingPromise) {
+    bindingPromise =
+      process.platform === 'win32'
+        ? Promise.resolve().then(() => {
+            const bindingPath = join(resourcesDir(), 'sidecar', 'sysproxy.win32-x64-msvc.node')
+            if (!existsSync(bindingPath)) return null
+            // 不用 import.meta.url：esbuild 的 cjs 产物里它为空(undefined)。
+            // 绑定路径是绝对路径，createRequire 的基址不影响解析。
+            const native = createRequire(process.execPath)(bindingPath) as SysproxyBinding
+            if (typeof native.triggerAutoProxy !== 'function') return null
+            return native
+          })
+        : Promise.resolve(null)
+  }
+  return bindingPromise
+}
+
 let triggerSysProxyQueue: Promise<void> = Promise.resolve()
-let triggerSysProxySequence = 0
 
 const defaultBypass: string[] = (() => {
   switch (process.platform) {
@@ -43,47 +71,31 @@ const defaultBypass: string[] = (() => {
   }
 })()
 
-interface TriggerSysProxyOptions {
-  force?: boolean
-}
-
-export async function triggerSysProxy(
-  enable: boolean,
-  options: TriggerSysProxyOptions = {}
-): Promise<void> {
-  // 容器部署（cpx-party 镜像）内没有宿主机桌面环境，sysproxy-rs 的原生调用
+export async function triggerSysProxy(enable: boolean): Promise<void> {
+  // 容器部署（clash-party 镜像）内没有宿主机桌面环境，sysproxy-rs 的原生调用
   // 必然失败（如 Linux 上找不到 gsettings → "No such file or directory"）。
   // 在这里给出明确错误，让前端 toast 显示可操作的提示而非底层 os error。
   if (isContainerDeployment()) {
     throw new Error('容器部署不支持系统代理：请让各设备手动配置代理地址 http://<主机IP>:7890')
   }
-
-  const sequence = ++triggerSysProxySequence
-
-  if (triggerSysProxyTimer) {
-    clearTimeout(triggerSysProxyTimer)
-    triggerSysProxyTimer = null
+  // Linux 服务器上无系统代理可写（无桌面环境），PAC 服务照常启停但原生调用跳过。
+  if (process.platform !== 'win32') {
+    if (enable) {
+      await startPacServer()
+    } else {
+      await stopPacServer()
+    }
+    return
   }
 
+  // 原 Electron net.isOnline() 网络离线重试路径：服务器恒在线，直接顺序执行。
   const operation = triggerSysProxyQueue.then(async () => {
-    if (net.isOnline() || options.force) {
-      if (enable) {
-        await disableSysProxy()
-        await enableSysProxy()
-      } else {
-        await disableSysProxy()
-      }
-      return
+    if (enable) {
+      await disableSysProxy()
+      await enableSysProxy()
+    } else {
+      await disableSysProxy()
     }
-
-    if (sequence !== triggerSysProxySequence) return
-    triggerSysProxyTimer = setTimeout(() => {
-      triggerSysProxyTimer = null
-      if (sequence !== triggerSysProxySequence) return
-      void triggerSysProxy(enable, options).catch((error) => {
-        void proxyLogger.error('Failed to retry system proxy', error)
-      })
-    }, 5000)
   })
 
   triggerSysProxyQueue = operation.catch(() => {})
@@ -101,11 +113,14 @@ async function enableSysProxy(): Promise<void> {
     .filter(Boolean)
     .join(process.platform === 'win32' ? ';' : ',')
 
+  const binding = await loadBinding()
+  if (!binding) return
+
   try {
     if (mode === 'auto') {
-      triggerAutoProxy(true, `http://${proxyHost}:${pacPort}/pac`)
+      binding.triggerAutoProxy(true, `http://${proxyHost}:${pacPort}/pac`)
     } else {
-      triggerManualProxy(true, proxyHost, port, formattedBypass)
+      binding.triggerManualProxy(true, proxyHost, port, formattedBypass)
     }
   } catch (error) {
     await proxyLogger.error('Failed to enable system proxy', error)
@@ -116,20 +131,26 @@ async function enableSysProxy(): Promise<void> {
 async function disableSysProxy(): Promise<void> {
   await stopPacServer()
 
+  const binding = await loadBinding()
+  if (!binding) return
+
   try {
-    triggerAutoProxy(false, '')
-    triggerManualProxy(false, '', 0, '')
+    binding.triggerAutoProxy(false, '')
+    binding.triggerManualProxy(false, '', 0, '')
   } catch (error) {
     await proxyLogger.error('Failed to disable system proxy', error)
     throw error
   }
 }
 
-export function disableSysProxySync(): void {
+export async function disableSysProxySync(): Promise<void> {
   if (isContainerDeployment()) return // 容器内无系统代理可关，跳过原生调用
+  if (process.platform !== 'win32') return
+  const binding = await loadBinding()
+  if (!binding) return
   try {
-    triggerAutoProxy(false, '')
-    triggerManualProxy(false, '', 0, '')
+    binding.triggerAutoProxy(false, '')
+    binding.triggerManualProxy(false, '', 0, '')
   } catch {
     // ignore errors during sync disable
   }

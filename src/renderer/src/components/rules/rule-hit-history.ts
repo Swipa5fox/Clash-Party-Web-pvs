@@ -16,10 +16,6 @@ export function recordSamples(rules: IMihomoRulesDetail[]): void {
   }
 }
 
-export function getHitHistory(index: number): number[] {
-  return history.get(index) ? [...(history.get(index) as number[])] : []
-}
-
 // 相邻采样的命中增量序列（sparkline 数据源），长度 = 采样数 - 1
 export function getHitDeltas(index: number): number[] {
   const samples = history.get(index)

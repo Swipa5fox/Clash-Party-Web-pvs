@@ -1,4 +1,3 @@
-import type { LookupFunction } from 'net'
 import { parseGatewayOrigin, isValidEndpointPath } from './gateway-url'
 import { requestOnce } from './http-client'
 
@@ -6,7 +5,6 @@ const MAX_BYTES = 64 * 1024
 
 export interface DiscoverOpts {
   timeout: number
-  lookup?: LookupFunction
   proxy?: { host: string; port: number }
 }
 
@@ -34,12 +32,10 @@ export async function discoverGateway(
   // 沿用 loginUrl 的协议（http 或 https），支持内网 IP 纯 HTTP 直连部署。
   const u = new URL(loginUrl)
   const url = `${u.protocol}//${u.host}/.well-known/cpx-gateway`
-  const lookup = opts.lookup
   const res = await requestOnce(url, {
     method: 'GET',
     timeout: opts.timeout,
     maxBytes: MAX_BYTES,
-    lookup,
     proxy: opts.proxy
   })
   if (res.status < 200 || res.status >= 300) {

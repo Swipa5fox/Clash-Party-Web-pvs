@@ -1,7 +1,7 @@
 # Build context for deploy/party/Dockerfile (docker build from the repo root).
-# Keep everything the builder needs: package.json, pnpm-lock.yaml, src/,
-# scripts/, extra/files geo assets. Drop everything regenerable
-# or machine-local.
+# Keep everything the builder needs: package.json, pnpm-lock.yaml,
+# pnpm-workspace.yaml, src/, scripts/, extra/ (geo assets + pre-synced linux
+# mihomo sidecar). Drop everything regenerable or machine-local.
 
 # VCS / IDE
 .git
@@ -11,12 +11,11 @@
 
 # Local toolchain state (regenerated inside the builder)
 node_modules
-out
 dist
+out
 release
 
-# Windows / darwin binaries — the linux container never uses them.
-# (*.node must NOT be excluded wholesale: sysproxy.linux-x64-gnu.node is needed.)
+# Windows-only sidecar binaries — the linux container never uses them.
 extra/sidecar/*.exe
 extra/sidecar/*win32*.node
 extra/sidecar/*darwin*.node

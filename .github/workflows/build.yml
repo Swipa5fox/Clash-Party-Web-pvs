@@ -1,92 +1,13 @@
 name: Build
 on:
-  # tag 触发已移除：发布为本机手工 Windows x64（旧 tag CI 需每次取消，且会抢建 immutable release 烧录 tag 名）
+  # 发布为本机手工流程；CI 仅 workflow_dispatch 出 dev 构建产物
   workflow_dispatch:
 
 permissions: write-all
 
 jobs:
-  cleanup-dev-release:
+  linux:
     runs-on: ubuntu-latest
-    steps:
-      - name: Delete Dev Release Assets
-        if: github.event_name == 'workflow_dispatch'
-        continue-on-error: true
-        run: |
-          # Get release ID for dev tag
-          echo "🔍 Looking for existing dev release..."
-          RELEASE_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/dev" | \
-            jq -r '.id // empty')
-
-          if [ ! -z "$RELEASE_ID" ] && [ "$RELEASE_ID" != "empty" ]; then
-            echo "✅ Found dev release with ID: $RELEASE_ID"
-
-            echo "📋 Getting list of assets with pagination..."
-            ALL_ASSETS="[]"
-            PAGE=1
-            PER_PAGE=100
-            
-            while true; do
-              echo "📄 Fetching page $PAGE..."
-              ASSETS_PAGE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?page=$PAGE&per_page=$PER_PAGE")
-
-              PAGE_COUNT=$(echo "$ASSETS_PAGE" | jq '. | length')
-              echo "📦 Found $PAGE_COUNT assets on page $PAGE"
-              
-              if [ "$PAGE_COUNT" -eq 0 ]; then
-                echo "📋 No more assets found, stopping pagination"
-                break
-              fi
-
-              ALL_ASSETS=$(echo "$ALL_ASSETS" "$ASSETS_PAGE" | jq -s '.[0] + .[1]')
-
-              if [ "$PAGE_COUNT" -lt "$PER_PAGE" ]; then
-                echo "📋 Last page reached (got $PAGE_COUNT < $PER_PAGE), stopping pagination"
-                break
-              fi
-              
-              PAGE=$((PAGE + 1))
-            done
-            
-            TOTAL_ASSET_COUNT=$(echo "$ALL_ASSETS" | jq '. | length')
-            echo "📦 Total assets found across all pages: $TOTAL_ASSET_COUNT"
-            
-            if [ "$TOTAL_ASSET_COUNT" -gt 0 ]; then
-              # Delete each asset with detailed logging
-              echo "$ALL_ASSETS" | jq -r '.[].id' | while read asset_id; do
-                if [ ! -z "$asset_id" ]; then
-                  echo "🗑️ Deleting asset ID: $asset_id"
-                  RESPONSE=$(curl -s -w "HTTPSTATUS:%{http_code}" -X DELETE \
-                    -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-                    "https://api.github.com/repos/${{ github.repository }}/releases/assets/$asset_id")
-                  
-                  HTTP_CODE=$(echo $RESPONSE | tr -d '\n' | sed -e 's/.*HTTPSTATUS://')
-                  if [ "$HTTP_CODE" = "204" ]; then
-                    echo "✅ Successfully deleted asset $asset_id"
-                  else
-                    echo "❌ Failed to delete asset $asset_id (HTTP: $HTTP_CODE)"
-                    echo "Response: $(echo $RESPONSE | sed -e 's/HTTPSTATUS:.*//')"
-                  fi
-                  # Add small delay to avoid rate limiting
-                  sleep 0.5
-                fi
-              done
-              echo "🎉 Finished deleting all $TOTAL_ASSET_COUNT assets"
-            else
-              echo "ℹ️  No assets found to delete"
-            fi
-          else
-            echo "ℹ️  No existing dev release found"
-          fi
-      - name: Skip for Tag Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: echo "Skipping cleanup for tag release"
-  windows:
-    needs: [cleanup-dev-release]
-    if: always() && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
-    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -98,111 +19,20 @@ jobs:
           node-version: 22
           cache: 'pnpm'
       - name: Install Dependencies
-        env:
-          npm_config_arch: x64
-          npm_config_target_arch: x64
         run: pnpm install
       - name: Update Version for Dev Build
-        if: github.event_name == 'workflow_dispatch'
         env:
           GITHUB_EVENT_NAME: workflow_dispatch
         run: node scripts/update-version.mjs
-      - name: Prepare
-        env:
-          npm_config_arch: x64
-          npm_config_target_arch: x64
+      - name: Prepare (mihomo sidecar + geo files)
         run: pnpm prepare --x64
       - name: Build
-        env:
-          npm_config_arch: x64
-          npm_config_target_arch: x64
-        run: pnpm build:win
-      - name: Generate checksums
-        run: pnpm checksum setup.exe portable.7z
-      - name: Copy Legacy Artifacts
-        run: pnpm copy-legacy
+        run: pnpm build:tarball
       - name: Upload Artifacts
-        if: startsWith(github.ref, 'refs/heads/')
         uses: actions/upload-artifact@v6
         with:
-          name: Windows x64
+          name: Linux x64 tarball
           path: |
+            dist/*.tar.gz
             dist/*.sha256
-            dist/*setup.exe
-            dist/*portable.7z
           if-no-files-found: error
-      - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/*.sha256
-            dist/*setup.exe
-            dist/*portable.7z
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish Dev Release
-        if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev
-          files: |
-            dist/*.sha256
-            dist/*setup.exe
-            dist/*portable.7z
-          prerelease: true
-          draft: false
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  updater:
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    needs: [windows]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - name: Install Dependencies
-        run: pnpm install
-      - name: Update Version for Dev Build
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          GITHUB_EVENT_NAME: workflow_dispatch
-        run: node scripts/update-version.mjs
-      - name: Telegram Notification
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          RELEASE_TYPE: release
-        run: pnpm telegram
-      - name: Telegram Dev Notification
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          GITHUB_SHA: ${{ github.sha }}
-          RELEASE_TYPE: dev
-        run: pnpm telegram:dev
-      - name: Generate latest.yml
-        run: pnpm updater
-      - name: Publish Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: latest.yml
-          body_path: changelog.md
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Publish Dev Release
-        if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev
-          files: latest.yml
-          body_path: changelog.md
-          prerelease: true
-          draft: false
-          token: ${{ secrets.GITHUB_TOKEN }}

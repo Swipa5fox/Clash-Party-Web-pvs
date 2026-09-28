@@ -1,10 +1,12 @@
 import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import React from 'react'
 import { MdFormatOverline } from 'react-icons/md'
+import CountBadge from '@renderer/components/base/count-badge'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { useOverrideConfig } from '@renderer/hooks/use-override-config'
 import { useTranslation } from 'react-i18next'
 
 interface Props {
@@ -19,6 +21,7 @@ const OverrideCard: React.FC<Props> = (props) => {
   const location = useLocation()
   const navigate = useNavigate()
   const match = location.pathname.includes('/override')
+  const { overrideConfig } = useOverrideConfig()
   const {
     attributes,
     listeners,
@@ -79,6 +82,7 @@ const OverrideCard: React.FC<Props> = (props) => {
                 className={`${match ? 'text-primary-foreground' : 'text-foreground'} text-[24px]`}
               />
             </Button>
+            <CountBadge count={overrideConfig?.items?.length ?? 0} active={match} />
           </div>
         </CardBody>
         <CardFooter className="pt-1">

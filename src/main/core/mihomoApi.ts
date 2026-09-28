@@ -1,7 +1,6 @@
 import { createConnection } from 'net'
 import axios, { AxiosInstance } from 'axios'
 import WebSocket from 'ws'
-import { app } from 'electron'
 import { getAppConfig, getControledMihomoConfig } from '../config'
 import { broadcastEvent } from '../resolve/broadcaster'
 import { createLogger } from '../utils/logger'
@@ -25,7 +24,6 @@ interface MihomoStreamState {
   reconnectTimer: NodeJS.Timeout | null
 }
 
-// ponytail: 4 个结构相同的 stream 状态字面量换成一个工厂
 const makeStream = (): MihomoStreamState => ({
   ws: null,
   retry: MAX_RETRY,
@@ -33,10 +31,6 @@ const makeStream = (): MihomoStreamState => ({
   generation: 0,
   reconnectTimer: null
 })
-const trafficStream = makeStream()
-const memoryStream = makeStream()
-const logsStream = makeStream()
-const connectionsStream = makeStream()
 
 function clearStreamReconnect(stream: MihomoStreamState): void {
   if (!stream.reconnectTimer) return
@@ -145,6 +139,65 @@ function createMihomoWebSocket(endpoint: string): {
   }
 }
 
+// 四条内核推送流（traffic/memory/logs/connections）结构相同：同一份重连/代际状态机，
+// 只是端点、广播事件和数据类型不同，收进一个控制器避免抄四遍
+function createStreamController<T>(
+  name: string,
+  event: string,
+  endpoint: string | (() => Promise<string> | string)
+): { start: () => Promise<void>; stop: () => void } {
+  const stream = makeStream()
+
+  const connect = async (): Promise<void> => {
+    const generation = beginStreamConnection(stream)
+    if (generation === null) return
+
+    let path: string
+    try {
+      path = typeof endpoint === 'function' ? await endpoint() : endpoint
+    } catch (error) {
+      mihomoApiLogger.error(`${name} WebSocket endpoint resolution failed`, error)
+      return
+    }
+    if (!isCurrentStream(stream, generation)) return
+
+    const { ws, ipcPath, wsUrl } = createMihomoWebSocket(path)
+    mihomoApiLogger.info(`Creating ${name} WebSocket with URL: ${wsUrl}, IPC path: ${ipcPath}`)
+    stream.ws = ws
+
+    ws.onmessage = (e): void => {
+      if (!isCurrentStream(stream, generation)) return
+      stream.retry = MAX_RETRY
+      try {
+        broadcastEvent(event, JSON.parse(e.data as string) as T)
+      } catch {
+        // 内核可能发出非 JSON 帧，忽略
+      }
+    }
+
+    ws.onclose = (): void => {
+      if (!isCurrentStream(stream, generation)) return
+      stream.ws = null
+      scheduleStreamReconnect(stream, generation, connect)
+    }
+
+    ws.onerror = (error): void => {
+      mihomoApiLogger.error(`${name} WebSocket error`, error)
+      closeErroredStreamSocket(stream, generation, ws)
+    }
+  }
+
+  return {
+    start: async (): Promise<void> => {
+      activateStream(stream)
+      await connect()
+    },
+    stop: (): void => {
+      stopStream(stream)
+    }
+  }
+}
+
 export const getAxios = async (force: boolean = false): Promise<AxiosInstance> => {
   const dynamicIpcPath = getMihomoIpcPath()
 
@@ -194,7 +247,8 @@ export const patchMihomoConfig = async (patch: Partial<IMihomoConfig>): Promise<
 
   // Configuration patches can also be the first recovery action after startup
   // failed. Do not start the core during pre-ready migrations.
-  if (!hasCoreProcess() && app.isReady()) {
+  // （原 app.isReady() gate 随 Electron 移除：服务器入口保证核心初始化完成后才注册。）
+  if (!hasCoreProcess()) {
     mihomoApiLogger.warn('Core is not running, restarting core before config patch')
     await restartCore()
   }
@@ -202,7 +256,7 @@ export const patchMihomoConfig = async (patch: Partial<IMihomoConfig>): Promise<
   try {
     await patchConfig()
   } catch (error) {
-    if (hasCoreProcess() || !app.isReady()) throw error
+    if (hasCoreProcess()) throw error
 
     mihomoApiLogger.warn('Core exited before config patch completed, restarting core', error)
     await restartCore()
@@ -417,18 +471,6 @@ export const mihomoProxyDelay = async (
   })
 }
 
-export const mihomoGroupDelay = async (group: string, url?: string): Promise<IMihomoGroupDelay> => {
-  const appConfig = await getAppConfig()
-  const { delayTestUrl, delayTestTimeout } = appConfig
-  const instance = await getAxios()
-  return await instance.get(`/group/${encodeURIComponent(group)}/delay`, {
-    params: {
-      url: delayTestUrl || url || 'https://www.gstatic.com/generate_204',
-      timeout: delayTestTimeout || 5000
-    }
-  })
-}
-
 export const mihomoUpgrade = async (): Promise<void> => {
   const instance = await getAxios()
   return await instance.post('/upgrade', undefined, { timeout: 90000 })
@@ -484,183 +526,34 @@ const runHotReload = async (): Promise<void> => {
   }
 }
 
-// Smart 内核 API
-export const mihomoSmartGroupWeights = async (
-  groupName: string
-): Promise<Record<string, number>> => {
-  const instance = await getAxios()
-  return await instance.get(`/group/${encodeURIComponent(groupName)}/weights`)
-}
+// 流式 API
+const trafficStream = createStreamController<IMihomoTrafficInfo>(
+  'Traffic',
+  'mihomoTraffic',
+  '/traffic'
+)
 
-export const mihomoSmartFlushCache = async (configName?: string): Promise<void> => {
-  const instance = await getAxios()
-  if (configName) {
-    return await instance.post(`/cache/smart/flush/${encodeURIComponent(configName)}`)
-  } else {
-    return await instance.post('/cache/smart/flush')
-  }
-}
+export const startMihomoTraffic = trafficStream.start
+export const stopMihomoTraffic = trafficStream.stop
 
-export const startMihomoTraffic = async (): Promise<void> => {
-  activateStream(trafficStream)
-  await mihomoTraffic()
-}
+const memoryStream = createStreamController<IMihomoMemoryInfo>('Memory', 'mihomoMemory', '/memory')
 
-export const stopMihomoTraffic = (): void => {
-  stopStream(trafficStream)
-}
+export const startMihomoMemory = memoryStream.start
+export const stopMihomoMemory = memoryStream.stop
 
-const mihomoTraffic = async (): Promise<void> => {
-  const generation = beginStreamConnection(trafficStream)
-  if (generation === null) return
-
-  const { ws, ipcPath, wsUrl } = createMihomoWebSocket('/traffic')
-
-  mihomoApiLogger.info(`Creating traffic WebSocket with URL: ${wsUrl}, IPC path: ${ipcPath}`)
-  trafficStream.ws = ws
-
-  ws.onmessage = (e): void => {
-    if (!isCurrentStream(trafficStream, generation)) return
-
-    const data = e.data as string
-    trafficStream.retry = MAX_RETRY
-    try {
-      // JSON.parse 必须放在 try 内：内核发来非 JSON 帧时，旧实现会在 async 回调里
-      // 抛出并变成未捕获的 Promise rejection（其余三条流都已在 try 内解析）。
-      const json = JSON.parse(data) as IMihomoTrafficInfo
-      broadcastEvent('mihomoTraffic', json)
-    } catch {
-      // ignore
-    }
-  }
-
-  ws.onclose = (): void => {
-    if (!isCurrentStream(trafficStream, generation)) return
-    trafficStream.ws = null
-    scheduleStreamReconnect(trafficStream, generation, mihomoTraffic)
-  }
-
-  ws.onerror = (error): void => {
-    mihomoApiLogger.error('Traffic WebSocket error', error)
-    closeErroredStreamSocket(trafficStream, generation, ws)
-  }
-}
-
-export const startMihomoMemory = async (): Promise<void> => {
-  activateStream(memoryStream)
-  await mihomoMemory()
-}
-
-export const stopMihomoMemory = (): void => {
-  stopStream(memoryStream)
-}
-
-const mihomoMemory = async (): Promise<void> => {
-  const generation = beginStreamConnection(memoryStream)
-  if (generation === null) return
-
-  const { ws } = createMihomoWebSocket('/memory')
-  memoryStream.ws = ws
-
-  ws.onmessage = (e): void => {
-    if (!isCurrentStream(memoryStream, generation)) return
-
-    const data = e.data as string
-    memoryStream.retry = MAX_RETRY
-    try {
-      broadcastEvent('mihomoMemory', JSON.parse(data) as IMihomoMemoryInfo)
-    } catch {
-      // ignore
-    }
-  }
-
-  ws.onclose = (): void => {
-    if (!isCurrentStream(memoryStream, generation)) return
-    memoryStream.ws = null
-    scheduleStreamReconnect(memoryStream, generation, mihomoMemory)
-  }
-
-  ws.onerror = (): void => {
-    closeErroredStreamSocket(memoryStream, generation, ws)
-  }
-}
-
-export const startMihomoLogs = async (): Promise<void> => {
-  activateStream(logsStream)
-  await mihomoLogs()
-}
-
-export const stopMihomoLogs = (): void => {
-  stopStream(logsStream)
-}
-
-const mihomoLogs = async (): Promise<void> => {
-  const generation = beginStreamConnection(logsStream)
-  if (generation === null) return
-
+const logsStream = createStreamController<IMihomoLogInfo>('Logs', 'mihomoLogs', async () => {
   const { 'log-level': logLevel = 'info' } = await getControledMihomoConfig()
+  return `/logs?level=${logLevel}`
+})
 
-  const { ws } = createMihomoWebSocket(`/logs?level=${logLevel}`)
-  logsStream.ws = ws
+export const startMihomoLogs = logsStream.start
+export const stopMihomoLogs = logsStream.stop
 
-  ws.onmessage = (e): void => {
-    if (!isCurrentStream(logsStream, generation)) return
+const connectionsStream = createStreamController<IMihomoConnectionsInfo>(
+  'Connections',
+  'mihomoConnections',
+  '/connections'
+)
 
-    const data = e.data as string
-    logsStream.retry = MAX_RETRY
-    try {
-      broadcastEvent('mihomoLogs', JSON.parse(data) as IMihomoLogInfo)
-    } catch {
-      // ignore
-    }
-  }
-
-  ws.onclose = (): void => {
-    if (!isCurrentStream(logsStream, generation)) return
-    logsStream.ws = null
-    scheduleStreamReconnect(logsStream, generation, mihomoLogs)
-  }
-
-  ws.onerror = (): void => {
-    closeErroredStreamSocket(logsStream, generation, ws)
-  }
-}
-
-export const startMihomoConnections = async (): Promise<void> => {
-  activateStream(connectionsStream)
-  await mihomoConnections()
-}
-
-export const stopMihomoConnections = (): void => {
-  stopStream(connectionsStream)
-}
-
-const mihomoConnections = async (): Promise<void> => {
-  const generation = beginStreamConnection(connectionsStream)
-  if (generation === null) return
-
-  const { ws } = createMihomoWebSocket('/connections')
-  connectionsStream.ws = ws
-
-  ws.onmessage = (e): void => {
-    if (!isCurrentStream(connectionsStream, generation)) return
-
-    const data = e.data as string
-    connectionsStream.retry = MAX_RETRY
-    try {
-      broadcastEvent('mihomoConnections', JSON.parse(data) as IMihomoConnectionsInfo)
-    } catch {
-      // ignore
-    }
-  }
-
-  ws.onclose = (): void => {
-    if (!isCurrentStream(connectionsStream, generation)) return
-    connectionsStream.ws = null
-    scheduleStreamReconnect(connectionsStream, generation, mihomoConnections)
-  }
-
-  ws.onerror = (): void => {
-    closeErroredStreamSocket(connectionsStream, generation, ws)
-  }
-}
+export const startMihomoConnections = connectionsStream.start
+export const stopMihomoConnections = connectionsStream.stop

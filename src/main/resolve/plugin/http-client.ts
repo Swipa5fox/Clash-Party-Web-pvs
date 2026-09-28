@@ -1,6 +1,5 @@
 import http from 'http'
 import https from 'https'
-import type { LookupFunction } from 'net'
 import { HttpProxyAgent } from 'http-proxy-agent'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 
@@ -10,8 +9,6 @@ export interface PluginRequestOptions {
   body?: string
   timeout: number
   maxBytes: number
-  lookup?: LookupFunction
-  // 走代理时由代理负责解析/连接目标，本地 SSRF guarded lookup 不再适用（安全保证降级）
   proxy?: { host: string; port: number }
 }
 
@@ -72,7 +69,7 @@ export function requestOnce(urlStr: string, opts: PluginRequestOptions): Promise
     }
     if (opts.body !== undefined) headers['Content-Length'] = String(Buffer.byteLength(opts.body))
 
-    // 代理模式：连接打到本地代理，目标由代理解析；不再注入 guarded lookup。
+    // 代理模式：连接打到本地代理，目标由代理解析
     const proxyUrl = opts.proxy ? `http://${opts.proxy.host}:${opts.proxy.port}` : undefined
     const agent = proxyUrl
       ? url.protocol === 'https:'
@@ -86,7 +83,6 @@ export function requestOnce(urlStr: string, opts: PluginRequestOptions): Promise
         method: opts.method,
         headers,
         agent,
-        lookup: proxyUrl ? undefined : opts.lookup,
         timeout: opts.timeout
       },
       (res) => {

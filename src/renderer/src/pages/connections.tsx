@@ -199,12 +199,14 @@ const Connections: React.FC = () => {
   }, [filteredConnections])
 
   const closeAllConnections = useCallback((): void => {
-    tab === 'active' ? mihomoCloseAllConnections() : trashAllClosedConnection()
+    if (tab === 'active') mihomoCloseAllConnections()
+    else trashAllClosedConnection()
   }, [tab])
 
   const closeConnection = useCallback(
     (id: string): void => {
-      tab === 'active' ? mihomoCloseConnection(id) : trashClosedConnection(id)
+      if (tab === 'active') mihomoCloseConnection(id)
+      else trashClosedConnection(id)
     },
     [tab]
   )

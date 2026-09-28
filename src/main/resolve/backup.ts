@@ -4,8 +4,6 @@ import { existsSync } from 'fs'
 import dayjs from 'dayjs'
 import AdmZip from 'adm-zip'
 import { Cron } from 'croner'
-import { dialog } from 'electron'
-import i18next from 'i18next'
 import { systemLogger } from '../utils/logger'
 import {
   appConfigPath,
@@ -231,31 +229,6 @@ export async function reinitScheduler(): Promise<void> {
 }
 
 /**
- * 导出本地备份
- */
-export async function exportLocalBackup(): Promise<boolean> {
-  const zip = createBackupZip()
-
-  const date = new Date()
-  const zipFileName = `clash-party-backup-${dayjs(date).format('YYYY-MM-DD_HH-mm-ss')}.zip`
-  const result = await dialog.showSaveDialog({
-    title: i18next.t('localBackup.export.title'),
-    defaultPath: zipFileName,
-    filters: [
-      { name: 'ZIP Files', extensions: ['zip'] },
-      { name: 'All Files', extensions: ['*'] }
-    ]
-  })
-
-  if (!result.canceled && result.filePath) {
-    zip.writeZip(result.filePath)
-    await systemLogger.info(`Local backup exported to: ${result.filePath}`)
-    return true
-  }
-  return false
-}
-
-/**
  * 导出本地备份为 base64（无对话框，web 端由浏览器下载）
  */
 export async function exportBackupToBase64(): Promise<string> {
@@ -270,27 +243,4 @@ export async function importBackupFromBase64(b64: string): Promise<void> {
   const zip = new AdmZip(Buffer.from(b64, 'base64'))
   zip.extractAllTo(dataDir(), true)
   await systemLogger.info('Local backup imported from base64 content')
-}
-
-/**
- * 导入本地备份
- */
-export async function importLocalBackup(): Promise<boolean> {
-  const result = await dialog.showOpenDialog({
-    title: i18next.t('localBackup.import.title'),
-    filters: [
-      { name: 'ZIP Files', extensions: ['zip'] },
-      { name: 'All Files', extensions: ['*'] }
-    ],
-    properties: ['openFile']
-  })
-
-  if (!result.canceled && result.filePaths.length > 0) {
-    const filePath = result.filePaths[0]
-    const zip = new AdmZip(filePath)
-    zip.extractAllTo(dataDir(), true)
-    await systemLogger.info(`Local backup imported from: ${filePath}`)
-    return true
-  }
-  return false
 }

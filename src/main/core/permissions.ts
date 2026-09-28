@@ -86,10 +86,7 @@ export async function checkHighPrivilegeCore(): Promise<boolean> {
 }
 
 async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
-  const mihomoExecutables =
-    process.platform === 'win32'
-      ? ['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe']
-      : ['mihomo', 'mihomo-alpha', 'mihomo-smart']
+  const mihomoExecutables = process.platform === 'win32' ? ['mihomo.exe'] : ['mihomo']
 
   try {
     if (process.platform === 'win32') {

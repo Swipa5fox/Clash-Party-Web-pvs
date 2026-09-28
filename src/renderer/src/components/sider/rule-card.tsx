@@ -1,5 +1,6 @@
-import { Button, Card, CardBody, CardFooter, Chip, Tooltip } from '@heroui/react'
+import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import { MdOutlineAltRoute } from 'react-icons/md'
+import CountBadge from '@renderer/components/base/count-badge'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -82,24 +83,7 @@ const RuleCard: React.FC<Props> = (props) => {
                 className={`${match ? 'text-primary-foreground' : 'text-foreground'} text-[24px]`}
               />
             </Button>
-            <Chip
-              classNames={
-                match
-                  ? {
-                      base: 'border-primary-foreground',
-                      content: 'text-primary-foreground'
-                    }
-                  : {
-                      base: 'border-primary',
-                      content: 'text-primary'
-                    }
-              }
-              size="sm"
-              variant="bordered"
-              className="mr-2 mt-2"
-            >
-              {rules?.rules?.length ?? 0}
-            </Chip>
+            <CountBadge count={rules?.rules?.length ?? 0} active={match} />
           </div>
         </CardBody>
         <CardFooter className="pt-1">

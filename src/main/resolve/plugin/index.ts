@@ -6,19 +6,17 @@ import {
   removePluginItem,
   patchPluginItem as patchConfig
 } from '../../config/plugin'
-import { upsertPluginProfile, removePluginProfileContent } from '../../config/profile'
+import { upsertPluginProfile, removeProfileItem } from '../../config/profile'
 import { getAppConfig } from '../../config/app'
 import { broadcastEvent } from '../broadcaster'
 import { parseDescriptor } from './descriptor'
 import { discoverGateway } from './discovery'
 import { browserLogin, CLIENT_ID } from './oauth'
-import { generateDeviceId } from './device'
 import { enroll, fetchConfig, revoke, GatewayError, type GatewayTarget } from './gateway'
 import { writeVault, readVault, removeVault, hasVaultMaterial } from './vault'
 import { computeBackoff } from './backoff'
-import { MAX_PLUGIN_FILE_BYTES } from './constants'
-import { fetchRemotePlugin } from './remote'
 
+const MAX_PLUGIN_FILE_BYTES = 1024 * 1024
 const DEFAULT_PLUGIN_INTERVAL_MIN = 1440 // 24h
 
 function notifyRenderer(): void {
@@ -83,10 +81,6 @@ export async function installPlugin(fileBytesB64: string): Promise<IPluginItem> 
   await addPluginItem(record)
   notifyRenderer()
   return record
-}
-
-export async function installRemotePlugin(url: string): Promise<IPluginItem> {
-  return installPlugin(await fetchRemotePlugin(url))
 }
 
 // 写订阅 profile + 回填 profileId + 置 active + 清失败状态（首次登录与复用设备登录共用）
@@ -157,7 +151,7 @@ async function runLogin(id: string): Promise<void> {
 
   const wk = await discoverGateway(record.loginUrl, net)
   const target: GatewayTarget = { gateway: wk.gateway, endpoints: wk.endpoints }
-  const deviceId = generateDeviceId()
+  const deviceId = randomUUID()
   const oauth = await browserLogin(record.loginUrl)
   await enroll(
     target,
@@ -351,7 +345,7 @@ export async function removePlugin(id: string): Promise<void> {
   // 避免对同一设备重复 revoke。
   await revokePluginDevice(id)
   await removeVault(id)
-  if (record?.profileId) await removePluginProfileContent(record.profileId)
+  if (record?.profileId) await removeProfileItem(record.profileId)
   await removePluginItem(id)
   notifyRenderer()
 }

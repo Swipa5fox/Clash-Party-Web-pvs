@@ -1,6 +1,6 @@
 import { Button } from '@heroui/react'
 import { version } from '@renderer/utils/init'
-import { getDriver } from '@renderer/App'
+import { getDriver } from '@renderer/utils/tour'
 import { useTranslation } from 'react-i18next'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy.sh — build-from-source deployment for cpx-gateway + cpx-party (Clash Party Web UI).
+# deploy.sh — build-from-source deployment for clash-party-gateway + clash-party (Clash Party Web UI).
 #
 # Stages:
 #   1. Preflight  — docker / compose v2 present
@@ -13,7 +13,7 @@
 #   ./deploy.sh [options]
 #
 # Options:
-#   --tag TAG          image tag (default: local, plus "latest" alias)
+#   --tag TAG          image tag (default: app version from package.json, plus "latest" alias)
 #   --no-cache         pass --no-cache to docker build
 #   --registry HOST    private registry host[:port]; images are tagged HOST/<name>:TAG
 #   --push             push to the registry (requires --registry)
@@ -31,9 +31,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$SCRIPT_DIR"
 
 # ---------------------------------------------------------------- options ---
-GATEWAY_IMAGE_NAME="${GATEWAY_IMAGE_NAME:-cpx-gateway}"
-PARTY_IMAGE_NAME="${PARTY_IMAGE_NAME:-cpx-party}"
-IMAGE_TAG="${IMAGE_TAG:-local}"
+GATEWAY_IMAGE_NAME="${GATEWAY_IMAGE_NAME:-clash-party-gateway}"
+PARTY_IMAGE_NAME="${PARTY_IMAGE_NAME:-clash-party}"
+# 默认 tag = package.json 的版本号（镜像可追溯/可回滚，publish 也直接可用）；
+# --tag 覆盖。解析不依赖 node（部署机可能只装了 docker）。
+IMAGE_TAG="${IMAGE_TAG:-$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$REPO_ROOT/package.json" | head -1)}"
+[ -n "$IMAGE_TAG" ] || IMAGE_TAG=local
 REGISTRY="${REGISTRY:-}"
 PUSH="false"
 NO_CACHE=""
@@ -112,21 +115,18 @@ if [ ! -f .env ]; then
 else
   log ".env exists — keeping it (delete the file to reconfigure)."
 fi
-# CP_WEB_TOKEN gates the Clash Party Web UI (:3999); PANEL_TOKEN gates the
-# proxied mihomo control API on :8080 (single-port panel). Missing ones are
-# generated ONCE here and reused for both — .env keys that already exist are
-# left alone (set PANEL_TOKEN= there to disable, or a value to enable).
+# CP_WEB_TOKEN was removed in v1.3 (Web UI now uses username/password login,
+# initial admin/admin123 — credentials hashed into the party_data volume).
+# PANEL_TOKEN still gates the proxied mihomo control API on :8080 (single-port
+# panel); missing one is generated ONCE here (.env keys that already exist are
+# left alone — set PANEL_TOKEN= to disable, or a value to enable).
 # The value itself stays out of this log — it is shown once in the final
 # summary, and only when stdout is a terminal.
 GEN_TOKEN="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
-if ! grep -q '^CP_WEB_TOKEN=' .env; then
-  printf '\nCP_WEB_TOKEN=%s\n' "$GEN_TOKEN" >> .env
-  chmod 600 .env 2>/dev/null || true
-  log "Generated CP_WEB_TOKEN (Web UI auth) — stored in .env, shown in the final summary."
-fi
 if ! grep -q '^PANEL_TOKEN=' .env; then
   printf '\nPANEL_TOKEN=%s\n' "$GEN_TOKEN" >> .env
-  log "Generated PANEL_TOKEN (panel/API auth on :8080) — same value as CP_WEB_TOKEN."
+  chmod 600 .env 2>/dev/null || true
+  log "Generated PANEL_TOKEN (panel/API auth on :8080) — stored in .env, shown in the final summary."
 fi
 # shellcheck disable=SC1091
 . ./.env   # pulls in MIHOMO_*_PORT overrides for the verify stage
@@ -159,10 +159,12 @@ else
 fi
 if want party; then
   log "Stage 3/6: build ${PARTY_IMAGE_NAME}:${IMAGE_TAG} from repo root"
-  # 内核/geo 资源离线化: /opt/cpx-core-assets 是从已构建镜像提取出的 linux 产物
-  # (mihomo x3 + sysproxy .node + geo + panel-ui 面板)。同步进构建上下文后,
-  # Dockerfile 会跳过 scripts/prepare.mjs 的联网下载 —— 构建不再依赖 github.com。
+  # 内核/geo 资源离线化: /opt/cpx-core-assets 是预置的 linux 产物
+  # (mihomo 内核 + geo)。同步进构建上下文后, Dockerfile 会跳过
+  # scripts/prepare.mjs 的联网下载 —— 构建不再依赖 github.com。
   # 目录不存在时静默跳过, Dockerfile 自动回退联网下载(旧行为)。
+  # 注意: v1.3 纯 Node 版运行时镜像里资源在 /app/resources(Dockerfile 把
+  # extra/ COPY 成 resources/), core-assets 仍按 extra/ 布局准备即可。
   CORE_ASSETS_DIR="${CORE_ASSETS_DIR:-/opt/cpx-core-assets}"
   if [ -d "$CORE_ASSETS_DIR/extra" ]; then
     log "sync core assets from ${CORE_ASSETS_DIR} (offline build)"
@@ -174,17 +176,13 @@ if want party; then
   # not the CWD ("lstat deploy: no such file or directory").
   # NPM_REGISTRY defaults to a mirror — registry.npmjs.org is unreachable at
   # usable speeds from CN networks (override with the env var if needed).
-  # ELECTRON_MIRROR keeps the ~100MB Electron zip download off github.com too.
   # GITHUB_MIRROR is passed through for the prepare.mjs fallback (only used when
   # /opt/cpx-core-assets is absent): many cloud hosts cannot reach github.com at
   # all, in which case the core/geo download would hang — set it to
   # https://gh-proxy.com/ (or your own) to build anyway.
   NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"
-  ELECTRON_MIRROR="${ELECTRON_MIRROR:-https://npmmirror.com/mirrors/electron/}"
   docker build $NO_CACHE \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY}" \
-    --build-arg ELECTRON_MIRROR="${ELECTRON_MIRROR}" \
-    --build-arg ELECTRON_BUILDER_BINARIES_MIRROR="${ELECTRON_BUILDER_BINARIES_MIRROR:-https://npmmirror.com/mirrors/electron-builder-binaries/}" \
     --build-arg GITHUB_MIRROR="${GITHUB_MIRROR:-}" \
     -t "${PARTY_IMAGE_NAME}:${IMAGE_TAG}" \
     -t "${PARTY_IMAGE_NAME}:latest" \
@@ -272,12 +270,14 @@ verify_gateway() {
   echo "  gateway: FAIL (well-known not reachable on :${GATEWAY_HOST_PORT}) — see: docker compose logs gateway"
   return 1
 }
-# Party container: headless Electron serving the full Web UI (:3999) + its own
-# mihomo core (mixed port).
+# Party container: pure-Node web server (v1.3+) serving the full Web UI (:3999)
+# + its own mihomo core (mixed port).
 verify_party() {
   want party || return 0
   local rc=0 web_port="${PARTY_WEB_PORT:-3999}"
-  if wait_http "http://127.0.0.1:${web_port}/"; then
+  # v1.3+ 鉴权是账号密码登录: 未登录 `GET /` 是 302 → /login。探公开页 /login
+  # (200 即服务活着); curl -fsS 对 302 会按失败处理,不能直接探 /。
+  if wait_http "http://127.0.0.1:${web_port}/login"; then
     echo "  party:   OK (Web UI reachable on host :${web_port})"
   else
     echo "  party:   FAIL (Web UI not reachable on :${web_port}) — see: docker compose logs party"
@@ -311,16 +311,7 @@ verify_panel   || RC=1
 [ "$RC" -eq 0 ] || fail "Health check failed for one or more services."
 
 ORIGIN="$(grep -E '^PUBLIC_ORIGIN=' .env | cut -d= -f2-)"
-TOKEN="$(grep -E '^CP_WEB_TOKEN=' .env | cut -d= -f2-)"
 HOST_IP="${ORIGIN#http://}"; HOST_IP="${HOST_IP%%:*}"
-# CP_WEB_TOKEN grants full control of the Clash Party instance, so never let it
-# land in captured output (CI logs, `./deploy.sh > deploy.log`). An interactive
-# operator gets the ready-to-click URL; a non-TTY run gets a pointer to .env.
-if [ -t 1 ]; then
-  WEB_URL="http://${HOST_IP}:${PARTY_WEB_PORT:-3999}/?token=${TOKEN}"
-else
-  WEB_URL="http://${HOST_IP}:${PARTY_WEB_PORT:-3999}/?token=<CP_WEB_TOKEN, see .env>"
-fi
 cat <<EOF
 
 ✅ Deployed ${GATEWAY_IMAGE_NAME}:${IMAGE_TAG} + ${PARTY_IMAGE_NAME}:${IMAGE_TAG}
@@ -328,12 +319,14 @@ cat <<EOF
 
 Next steps:
   1) Clash Party Web UI (full interface): open
-       ${WEB_URL}
+       http://${HOST_IP}:${PARTY_WEB_PORT:-3999}/
+     and log in (initial credentials admin/admin123 — change the password
+     right after first login; it is stored hashed in the party_data volume).
      Add your subscription under 订阅 (Profiles) — the party container's mihomo
      core picks it up automatically (no file editing, no restart).
   2) LAN clients use http://${HOST_IP}:${MIHOMO_MIXED_PORT:-7890} (HTTP+SOCKS5 mixed)
   3) Control panel via the gateway: open ${ORIGIN}/ — it asks for PANEL_TOKEN once
-     per browser (same value as the Web UI token above; see .env)
+     per browser (see .env)
   4) Verify discovery:      curl ${ORIGIN}/.well-known/cpx-gateway
   5) Add a gateway account (prompts for a password):
        docker compose exec gateway cpx-admin add-user <name> '<hidden-subscription-url>' --limit 3
@@ -346,6 +339,6 @@ Next steps:
 Manage:  docker compose exec gateway cpx-admin list-users
 Logs:    docker compose logs -f gateway party
 Update:  ./deploy.sh                 (rebuild from latest source; data persists in volumes)
-Rebuild from scratch:  ./deploy.sh --no-cache --tag local
+Rebuild from scratch:  ./deploy.sh --no-cache
 Private registry:      ./deploy.sh --registry reg.local:5000 --push
 EOF

@@ -1,7 +1,8 @@
-import { Button, Card, CardBody, CardFooter, Chip, Tooltip } from '@heroui/react'
+import { Button, Card, CardBody, CardFooter, Tooltip } from '@heroui/react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { LuGroup } from 'react-icons/lu'
+import CountBadge from '@renderer/components/base/count-badge'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useGroups } from '@renderer/hooks/use-groups'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -81,24 +82,7 @@ const ProxyCard: React.FC<Props> = (props) => {
                 className={`${match ? 'text-primary-foreground' : 'text-foreground'} text-[24px] font-bold`}
               />
             </Button>
-            <Chip
-              classNames={
-                match
-                  ? {
-                      base: 'border-primary-foreground',
-                      content: 'text-primary-foreground'
-                    }
-                  : {
-                      base: 'border-primary',
-                      content: 'text-primary'
-                    }
-              }
-              size="sm"
-              variant="bordered"
-              className="mr-2 mt-2"
-            >
-              {groups.length}
-            </Chip>
+            <CountBadge count={groups.length} active={match} />
           </div>
         </CardBody>
         <CardFooter className="pt-1">

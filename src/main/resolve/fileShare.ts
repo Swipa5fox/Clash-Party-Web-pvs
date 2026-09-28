@@ -212,10 +212,6 @@ export async function startFileShareServer(): Promise<void> {
   logger.info(`file share server listening on http://${host}:${port}/`)
 }
 
-export async function restartFileShareServer(): Promise<void> {
-  await startFileShareServer()
-}
-
 export async function getFileShareServerState(): Promise<IFileShareServerState> {
   const { fileShare = {} } = await getAppConfig()
   return {

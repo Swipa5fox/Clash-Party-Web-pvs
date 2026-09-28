@@ -1,6 +1,4 @@
-import React, { createContext, useContext, ReactNode, useCallback, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { showError } from '@renderer/utils/error-display'
+import React, { createContext, useContext, ReactNode, useEffect } from 'react'
 import useSWR, { KeyedMutator } from 'swr'
 
 interface ConfigContextValue<T> {
@@ -43,26 +41,4 @@ export function createConfigContext<T>(options: CreateConfigContextOptions<T>) {
   }
 
   return { Provider, useConfig, Context }
-}
-
-interface ActionOptions {
-  errorKey: string
-}
-
-export function useConfigAction<T>(
-  mutate: KeyedMutator<T>,
-  action: () => Promise<void>,
-  options: ActionOptions
-): () => Promise<void> {
-  const { t } = useTranslation()
-
-  return useCallback(async () => {
-    try {
-      await action()
-    } catch (e) {
-      await showError(e, t(options.errorKey))
-    } finally {
-      mutate()
-    }
-  }, [mutate, action, t, options.errorKey])
 }

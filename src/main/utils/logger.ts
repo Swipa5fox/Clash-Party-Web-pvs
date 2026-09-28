@@ -99,13 +99,8 @@ export const createLogger = (moduleName: string): Logger => {
 // 统一的应用日志实例 - 所有模块共享同一个日志文件
 export const appLogger = createLogger('app')
 
-// 为了保持向后兼容性，创建各模块的日志实例（都指向同一个应用日志）
-export const coreLogger = createLogger('mihomo-core')
-export const apiLogger = createLogger('mihomo-api')
-export const configLogger = createLogger('config')
 export const systemLogger = createLogger('system')
 export const initLogger = createLogger('init')
-export const ipcLogger = createLogger('ipc')
 export const proxyLogger = createLogger('sysproxy')
 export const managerLogger = createLogger('manager')
 export const factoryLogger = createLogger('factory')

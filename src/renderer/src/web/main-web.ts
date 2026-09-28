@@ -23,10 +23,7 @@ const validInvokeChannels: readonly string[] = [
   'mihomoUpgradeGeo',
   'mihomoUpgrade',
   'mihomoProxyDelay',
-  'mihomoGroupDelay',
   'patchMihomoConfig',
-  'mihomoSmartGroupWeights',
-  'mihomoSmartFlushCache',
   // Config
   'getAppConfig',
   'patchAppConfig',
@@ -35,8 +32,6 @@ const validInvokeChannels: readonly string[] = [
   // Profile
   'getProfileConfig',
   'setProfileConfig',
-  'getCurrentProfileItem',
-  'getProfileItem',
   'getProfileStr',
   'setProfileStr',
   'addProfileItem',
@@ -44,11 +39,9 @@ const validInvokeChannels: readonly string[] = [
   'updateProfileItem',
   'changeCurrentProfile',
   'addProfileUpdater',
-  'removeProfileUpdater',
   // Override
   'getOverrideConfig',
   'setOverrideConfig',
-  'getOverrideItem',
   'addOverrideItem',
   'removeOverrideItem',
   'updateOverrideItem',
@@ -64,7 +57,6 @@ const validInvokeChannels: readonly string[] = [
   'convertMrsRuleset',
   'getRuntimeConfig',
   'getRuntimeConfigStr',
-  'getSmartOverrideContent',
   'getRuleStr',
   'setRuleStr',
   // Core
@@ -72,18 +64,12 @@ const validInvokeChannels: readonly string[] = [
   'mihomoHotReloadConfig',
   // System
   'triggerSysProxy',
-  'checkTunPermissions',
-  'checkAdminPrivileges',
-  'checkMihomoCorePermissions',
-  'checkHighPrivilegeCore',
-  'setupFirewall',
   'getInterfaces',
   'setNativeTheme',
   'copyEnvText',
   // Update
   'getVersion',
   'platform',
-  'getDeploymentEnv',
   'fetchMihomoTags',
   'installSpecificMihomoCore',
   'clearMihomoVersionCache',
@@ -93,8 +79,6 @@ const validInvokeChannels: readonly string[] = [
   'listWebdavBackups',
   'webdavDelete',
   'reinitWebdavBackupScheduler',
-  'exportLocalBackup',
-  'importLocalBackup',
   'exportLocalBackupBase64',
   'importLocalBackupFromContent',
   // Theme
@@ -144,9 +128,6 @@ const validListenChannels: readonly string[] = [
   'rulesUpdated',
   'pluginConfigUpdated'
 ]
-
-// 允许的 send channels 白名单：桌面壳（托盘/悬浮窗/首屏等待器）删除后主进程已无接收方，置空
-const validSendChannels: readonly string[] = []
 
 // ---- WebSocket 桥 ----
 const RECONNECT_BASE_DELAY = 1000
@@ -387,11 +368,6 @@ const electronAPI = {
         }
       })
     },
-    send: (channel: string, ...args: unknown[]): void => {
-      if (validSendChannels.includes(channel)) {
-        sendRaw({ type: 'send', channel, args })
-      }
-    },
     on: (channel: string, listener: IpcListener): void => {
       if (validListenChannels.includes(channel)) {
         if (!listenerMap.has(channel)) {
@@ -416,17 +392,9 @@ const electronAPI = {
   process: processInfo
 }
 
-const api = {
-  webUtils: {
-    // 浏览器拿不到绝对路径，降级返回文件名（与 electron webUtils 同签名）
-    getPathForFile: (file: File) => file.name
-  }
-}
-
 // window.process 不在 DOM 类型中，且与 @types/node 的全局 process 交集，需受控断言访问
 const browserWindow = window as unknown as { process: { platform: NodeJS.Platform } }
 
 window.electron = electronAPI
-window.api = api
 
 connect()

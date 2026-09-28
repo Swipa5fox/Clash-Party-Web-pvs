@@ -1,4 +1,3 @@
-import type { LookupFunction } from 'net'
 import { parse } from '../../utils/yaml'
 import { requestOnce } from './http-client'
 
@@ -6,7 +5,6 @@ const MAX_BYTES = 10 * 1024 * 1024
 
 export interface GatewayNet {
   timeout: number
-  lookup?: LookupFunction
   proxy?: { host: string; port: number }
 }
 
@@ -43,11 +41,6 @@ function urlOf(t: GatewayTarget, ep: keyof IGatewayEndpoints): string {
   return u.toString()
 }
 
-// 本改造版不再默认注入 guarded lookup（SSRF 防护），以支持内网 IP 直连；调用方可通过 net.lookup 自定义。
-function lookupFor(net: GatewayNet): LookupFunction | undefined {
-  return net.lookup
-}
-
 // DNS 解析失败 / 连接拒绝 / TLS 失败 → 缓存网关“不可达/已退役”信号（spec §5），交由编排层重新发现。
 // 超时（'Request timed out' / ETIMEDOUT）、5xx、429、SSRF/重定向/大小拦截仍按瞬时失败退避，不在此列。
 const UNREACHABLE_CODES = new Set([
@@ -79,7 +72,6 @@ async function postJson(url: string, body: unknown, net: GatewayNet): Promise<Ra
       body: JSON.stringify(body),
       timeout: net.timeout,
       maxBytes: MAX_BYTES,
-      lookup: lookupFor(net),
       proxy: net.proxy
     })
   } catch (e) {

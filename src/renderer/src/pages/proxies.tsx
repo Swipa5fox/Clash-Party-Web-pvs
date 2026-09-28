@@ -20,7 +20,7 @@ import {
   mihomoCloseAllConnections,
   mihomoProxyDelay
 } from '@renderer/utils/ipc'
-import { FaLocationCrosshairs, FaRegTrashCan } from 'react-icons/fa6'
+import { FaLocationCrosshairs, FaRegTrashCan, FaEllipsisVertical } from 'react-icons/fa6'
 import { CgDetailsLess, CgDetailsMore } from 'react-icons/cg'
 import { TbCircleLetterD } from 'react-icons/tb'
 import { RxLetterCaseCapitalize } from 'react-icons/rx'
@@ -34,10 +34,6 @@ import {
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { GroupedVirtuoso, GroupedVirtuosoHandle } from 'react-virtuoso'
 import ProxyItem from '@renderer/components/proxies/proxy-item'
-import NestedGroupPanel from '@renderer/components/proxies/nested-group-panel'
-import TabbedGroupPanel, {
-  splitUniformLineFamily
-} from '@renderer/components/proxies/tabbed-group-panel'
 import { IoIosArrowBack } from 'react-icons/io'
 import { useGroups } from '@renderer/hooks/use-groups'
 import CollapseInput from '@renderer/components/base/collapse-input'
@@ -52,6 +48,14 @@ import CustomLineGroupsModal from '@renderer/components/proxies/custom-line-grou
 
 const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
 const EMPTY_GROUPS: IMihomoMixedGroup[] = []
+
+// 展开区单行: sub 有值 = 子组头行(名称/类型/当前选中); rowNodes 有值 = 节点网格行;
+// owner = 该行选中/测速/置顶作用的目标组(直接节点=入口组, 子组节点=子组本身)
+interface RenderRow {
+  sub?: IMihomoMixedGroup
+  rowNodes?: IMihomoProxy[]
+  owner?: IMihomoMixedGroup
+}
 
 interface GroupExpandState {
   byName: Record<string, boolean>
@@ -173,6 +177,8 @@ const Proxies: React.FC = () => {
   const [showLineGroups, setShowLineGroups] = useState(false)
   // 组头快捷删除的目标自定义线路组名(null = 关闭确认弹窗)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  // 组头 ⋯ 菜单编辑的目标自定义线路组 id(null = 关闭编辑弹窗)
+  const [editGroupId, setEditGroupId] = useState<string | null>(null)
   const { groups: customGroups, saveGroups } = useCustomLineGroups()
   // 自定义线路组 入口组名 -> 专属端口 映射, 供组头端口徽章使用
   const portByGroupName = useMemo(() => {
@@ -229,51 +235,63 @@ const Proxies: React.FC = () => {
     []
   )
 
-  // 数据分区: 组展开后成员拆两份 —— subgroups(含 'all' 的子组成员,保持配置顺序不排序)
-  // 与 allProxies(仅节点,排序/隐藏不可用只作用于节点);搜索对两区都过滤
-  const { groupCounts, allProxies, subgroups } = useMemo(() => {
+  // 数据分区: 组展开后渲染 直接节点行 + 子组区段(头行 + 该子组节点行)。
+  // 修复: 自定义线路组入口组成员全是子组, 旧版把子组一律过滤导致"展开为空"。
+  const { groupCounts, allRows, nodeTotals } = useMemo(() => {
     const groupCounts: number[] = []
-    const allProxies: IMihomoProxy[][] = []
-    const subgroups: IMihomoMixedGroup[][] = []
+    const allRows: RenderRow[][] = []
+    const nodeTotals: number[] = []
+
+    const nodeVisible = (
+      proxy: IMihomoProxy | IMihomoMixedGroup,
+      search: string
+    ): proxy is IMihomoProxy => {
+      if (!proxy || typeof proxy !== 'object' || 'all' in proxy) return false
+      if (!includesIgnoreCase(proxy.name, search)) return false
+      if (appConfig?.hideUnavailableProxies) {
+        if (!proxy.history || proxy.history.length === 0) return true
+        const lastDelay = proxy.history[proxy.history.length - 1].delay
+        if (lastDelay === 0) return false
+      }
+      return true
+    }
 
     groups.forEach((group, index) => {
       if (isOpen[index]) {
-        const filtered = group.all.filter((proxy) => {
-          if (!proxy) return false
-          if (!includesIgnoreCase(proxy.name, searchValue[index])) {
-            return false
+        const search = searchValue[index] ?? ''
+        const rows: RenderRow[] = []
+        let total = 0
+        // owner = 行内节点选中/测速/置顶作用的目标组; 直接节点归入口组
+        const pushNodeRows = (nodes: IMihomoProxy[], owner: IMihomoMixedGroup): void => {
+          total += nodes.length
+          const sorted = sortProxies(nodes, proxyDisplayOrder)
+          for (let i = 0; i < sorted.length; i += cols) {
+            rows.push({ rowNodes: sorted.slice(i, i + cols), owner })
           }
-          if (appConfig?.hideUnavailableProxies) {
-            // 子组不受「隐藏不可用节点」影响
-            if ('all' in proxy) {
-              return true
-            }
-            if (!proxy.history || proxy.history.length === 0) {
-              return true
-            }
-            const lastDelay = proxy.history[proxy.history.length - 1].delay
-            if (lastDelay === 0) {
-              return false
-            }
-          }
-          return true
+        }
+        // 直接节点成员(前置): 保持节点在前
+        pushNodeRows(
+          group.all.filter((p) => nodeVisible(p, search)),
+          group
+        )
+        // 子组成员: 头行 + 该子组的节点行; 搜索时无命中节点的子组整段隐藏
+        group.all.forEach((member) => {
+          if (!member || typeof member !== 'object' || !('all' in member)) return
+          const subNodes = (member.all || []).filter((p) => nodeVisible(p, search))
+          if (search && subNodes.length === 0) return
+          rows.push({ sub: member })
+          pushNodeRows(subNodes, member)
         })
-        const subs = filtered.filter((p): p is IMihomoMixedGroup => 'all' in p)
-        const nodes = filtered.filter((p): p is IMihomoProxy => !('all' in p))
-        const sortedNodes = sortProxies(nodes, proxyDisplayOrder)
-        // 同线路子组族(自动/故障/手动/全局)合并为一个 tab 容器,虚拟行数相应扣减
-        const { family } = splitUniformLineFamily(subs)
-        const panelRows = subs.length - (family ? family.length - 1 : 0)
-        groupCounts.push(panelRows + Math.ceil(sortedNodes.length / cols))
-        subgroups.push(subs)
-        allProxies.push(sortedNodes)
+        groupCounts.push(rows.length)
+        allRows.push(rows)
+        nodeTotals.push(total)
       } else {
         groupCounts.push(0)
-        subgroups.push([])
-        allProxies.push([])
+        allRows.push([])
+        nodeTotals.push(0)
       }
     })
-    return { groupCounts, allProxies, subgroups }
+    return { groupCounts, allRows, nodeTotals }
   }, [
     groups,
     isOpen,
@@ -327,17 +345,34 @@ const Proxies: React.FC = () => {
         (current) => {
           if (!current) return current
           let changed = false
+          // 递归写回: 组测速含子组节点(自定义线路组), 嵌套层级里也要更新 history
+          const mapAll = (
+            all: (IMihomoProxy | IMihomoMixedGroup)[],
+            groupResults: Map<string, { time: string; delay: number }>
+          ): (IMihomoProxy | IMihomoMixedGroup)[] => {
+            let groupChanged = false
+            const next = all.map((p) => {
+              const entry = p && groupResults.get(p.name)
+              if (entry) {
+                groupChanged = true
+                return { ...p, history: [...p.history, entry] }
+              }
+              if (p && 'all' in p && Array.isArray(p.all)) {
+                const subAll = mapAll(p.all, groupResults)
+                if (subAll !== p.all) {
+                  groupChanged = true
+                  return { ...p, all: subAll }
+                }
+              }
+              return p
+            })
+            return groupChanged ? next : all
+          }
           const next = current.map((group) => {
             const groupResults = results.get(group.name)
             if (!groupResults || groupResults.size === 0) return group
-            let groupChanged = false
-            const all = group.all.map((p) => {
-              const entry = groupResults.get(p.name)
-              if (!entry) return p
-              groupChanged = true
-              return { ...p, history: [...p.history, entry] }
-            })
-            if (!groupChanged) return group
+            const all = mapAll(group.all, groupResults)
+            if (all === group.all) return group
             changed = true
             return { ...group, all }
           })
@@ -385,13 +420,8 @@ const Proxies: React.FC = () => {
 
   const onGroupDelay = useCallback(
     async (index: number): Promise<void> => {
-      // 分区后 allProxies 仅直接节点,组测速全集 = 直接节点 + 各子组的直接节点
-      const testTargets = [
-        ...allProxies[index],
-        ...subgroups[index].flatMap((sub) =>
-          sub.all.filter((p): p is IMihomoProxy => !('all' in p))
-        )
-      ]
+      // 测试目标 = 展开区全部节点(直接成员 + 子组成员)
+      const testTargets = allRows[index]?.flatMap((r) => r.rowNodes ?? []) ?? []
       if (testTargets.length === 0) {
         setIsOpen((prev) => {
           const newOpen = [...prev]
@@ -449,15 +479,7 @@ const Proxies: React.FC = () => {
       await Promise.all(result)
       flushDelayResults()
     },
-    [
-      allProxies,
-      subgroups,
-      groups,
-      delayTestConcurrency,
-      scheduleFlushDelayResults,
-      flushDelayResults,
-      setIsOpen
-    ]
+    [allRows, groups, delayTestConcurrency, scheduleFlushDelayResults, flushDelayResults, setIsOpen]
   )
 
   const calcCols = useCallback(
@@ -550,7 +572,7 @@ const Proxies: React.FC = () => {
                           size="sm"
                           variant="flat"
                           color="primary"
-                          className="ml-1 h-5 text-[10px] cursor-pointer shrink-0"
+                          className="ml-1 text-primary cursor-pointer shrink-0"
                           title={`${t('customLines.port')}: ${portByGroupName[groups[index].name]} | ${t('proxies.portCopyTip')}`}
                           onClick={(e) => {
                             // 阻止冒泡: 组头点击是折叠/展开, 徽章点击是复制
@@ -562,7 +584,10 @@ const Proxies: React.FC = () => {
                               .catch(() => toast.error(t('common.error.copyFailed')))
                           }}
                         >
-                          :{portByGroupName[groups[index].name]}
+                          {t('customLines.port')}:{' '}
+                          <span className="font-semibold tabular-nums">
+                            {portByGroupName[groups[index].name]}
+                          </span>
                         </Chip>
                       )}
                     </div>
@@ -586,7 +611,7 @@ const Proxies: React.FC = () => {
                   >
                     {proxyDisplayMode === 'full' && (
                       <Chip size="sm" className="my-1 mr-2">
-                        {groups[index].all.length}
+                        {nodeTotals[index]}
                       </Chip>
                     )}
                     <CollapseInput
@@ -600,19 +625,6 @@ const Proxies: React.FC = () => {
                         })
                       }}
                     />
-                    {/* 自定义线路组: 组头快捷删除(确认后删组与端口,免开编辑弹窗) */}
-                    {portByGroupName[groups[index].name] && (
-                      <Button
-                        title={t('customLines.deleteTitle')}
-                        variant="light"
-                        size="sm"
-                        isIconOnly
-                        className="text-danger"
-                        onPress={() => setDeleteTarget(groups[index].name)}
-                      >
-                        <FaRegTrashCan className="text-lg" />
-                      </Button>
-                    )}
                     <Button
                       title={t('proxies.locate')}
                       variant="light"
@@ -630,22 +642,13 @@ const Proxies: React.FC = () => {
                         for (let j = 0; j < index; j++) {
                           i += groupCounts[j]
                         }
-                        // 当前选中是子组 → 定位到该子组面板行(族内子组合并在第 0 行 tab 容器);
-                        // 否则计入面板偏移后定位到节点网格行
-                        const { family, rest } = splitUniformLineFamily(subgroups[index])
-                        const familyHit = family?.some((sub) => sub.name === groups[index].now)
-                        const restIdx = rest.findIndex((sub) => sub.name === groups[index].now)
-                        if (familyHit || restIdx >= 0) {
-                          i += familyHit ? 0 : (family ? 1 : 0) + restIdx
-                        } else {
-                          i +=
-                            subgroups[index].length +
-                            Math.floor(
-                              allProxies[index].findIndex(
-                                (proxy) => proxy.name === groups[index].now
-                              ) / cols
-                            )
-                        }
+                        // 当前选中是节点 → 定位到该节点所在行(含子组区段);
+                        // 选中的是子组(仅头行展示)或未找到 → 停在组头
+                        const rows = allRows[index] ?? []
+                        const nodeIdx = rows.findIndex((row) =>
+                          row.rowNodes?.some((p) => p.name === groups[index].now)
+                        )
+                        if (nodeIdx >= 0) i += nodeIdx
                         virtuosoRef.current?.scrollToIndex({
                           index: Math.floor(i),
                           align: 'start'
@@ -666,6 +669,48 @@ const Proxies: React.FC = () => {
                     >
                       <MdOutlineSpeed className="text-lg text-foreground-500" />
                     </Button>
+                    {/* 自定义线路组: 组头 ⋯ 扩展菜单(编辑信息) + 快捷删除(确认后删组与端口) */}
+                    {portByGroupName[groups[index].name] && (
+                      <Dropdown placement="bottom-end">
+                        <DropdownTrigger>
+                          <Button
+                            title={t('customLines.more')}
+                            variant="light"
+                            size="sm"
+                            isIconOnly
+                            className="app-nodrag"
+                          >
+                            <FaEllipsisVertical className="text-lg text-foreground-500" />
+                          </Button>
+                        </DropdownTrigger>
+                        <DropdownMenu
+                          aria-label={t('customLines.more')}
+                          className="min-w-40 p-1"
+                          onAction={(key) => {
+                            if (key === 'edit') {
+                              const g = (customGroups ?? []).find(
+                                (x) => x.name === groups[index].name
+                              )
+                              if (g) setEditGroupId(g.id)
+                            }
+                          }}
+                        >
+                          <DropdownItem key="edit">{t('customLines.editInfo')}</DropdownItem>
+                        </DropdownMenu>
+                      </Dropdown>
+                    )}
+                    {portByGroupName[groups[index].name] && (
+                      <Button
+                        title={t('customLines.deleteTitle')}
+                        variant="light"
+                        size="sm"
+                        isIconOnly
+                        className="group"
+                        onPress={() => setDeleteTarget(groups[index].name)}
+                      >
+                        <FaRegTrashCan className="text-lg text-foreground-500 transition-colors group-hover:text-danger" />
+                      </Button>
+                    )}
                   </div>
                   <IoIosArrowBack
                     className={`transition duration-200 ml-2 h-8 text-lg text-foreground-500 ${isOpen[index] ? '-rotate-90' : ''}`}
@@ -689,123 +734,80 @@ const Proxies: React.FC = () => {
       delaying,
       mutate,
       setIsOpen,
-      allProxies,
-      subgroups,
-      cols,
+      nodeTotals,
       virtuosoRef,
       onGroupDelay,
-      portByGroupName
+      portByGroupName,
+      allRows,
+      customGroups
     ]
   )
 
   const renderItemContent = useCallback(
     (index: number, groupIndex: number) => {
-      let innerIndex = index
-      groupCounts.slice(0, groupIndex).forEach((count) => {
-        innerIndex -= count
-      })
-      if (!allProxies[groupIndex]) {
+      const row = allRows[groupIndex]?.[index]
+      if (!row) {
         return <div>Never See This</div>
       }
-      const subs = subgroups[groupIndex]
-      const nodes = allProxies[groupIndex]
-      // 两区都非空时才显示分区小标题(渲染进对应分区首行 item 内部顶部,不增加虚拟行数)
-      const showSectionTitles = subs.length > 0 && nodes.length > 0
-      const isLastRow =
-        groupIndex === groupCounts.length - 1 && innerIndex === groupCounts[groupIndex] - 1
-      // 子组面板区: 同线路子组族(自动/故障/手动/全局)合并为一个 tab 容器虚拟 item,
-      // 其余子组每个独占一个全宽虚拟 item(族首恒为第 0 项)
-      if (innerIndex < subs.length) {
-        const { family, rest } = splitUniformLineFamily(subs)
+      // 子组区段头行: 展示 子组名/类型/当前选中, 非交互(选节点仍通过网格行)
+      if (row.sub) {
+        const sub = row.sub
+        const isLastRow =
+          groupIndex === groupCounts.length - 1 && index === groupCounts[groupIndex] - 1
         return (
-          <div className="px-2 pt-2">
-            {showSectionTitles && innerIndex === 0 && (
-              <div className="text-[10px] text-foreground-400 px-4 pt-2">
-                {t('proxies.subgroups')}
-              </div>
-            )}
-            {innerIndex === 0 && family && (
-              <TabbedGroupPanel
-                family={family}
-                parentGroup={groups[groupIndex]}
-                mutateProxies={mutate}
-                onProxyDelay={onProxyDelay}
-                onSelect={onChangeProxy}
-                proxyDisplayMode={proxyDisplayMode}
-                isGroupTesting={false}
-                pathKey={`${groups[groupIndex].name}::${family[0].name}`}
-              />
-            )}
-            {(() => {
-              const sub = rest[innerIndex - (family ? 1 : 0)]
-              if (!sub) return null
-              return (
-                <NestedGroupPanel
-                  key={sub.name}
-                  mutateProxies={mutate}
-                  onProxyDelay={onProxyDelay}
-                  onSelect={onChangeProxy}
-                  subproxy={sub}
-                  parentGroup={groups[groupIndex]}
-                  pathKey={`${groups[groupIndex].name}::${sub.name}`}
-                  proxyDisplayMode={proxyDisplayMode}
-                  selected={sub.name === groups[groupIndex].now}
-                  isGroupTesting={delaying[groupIndex]?.has(sub.name) ?? false}
-                />
-              )
-            })()}
+          <div className={`flex items-center gap-2 px-3 pt-3 ${isLastRow ? 'pb-2' : ''}`}>
+            <Chip size="sm" variant="flat" color="primary" className="max-w-[40%]">
+              <span className="flag-emoji truncate inline-block" title={sub.name}>
+                {sub.name}
+              </span>
+            </Chip>
+            <span className="text-foreground-500 text-xs shrink-0">{sub.type}</span>
+            <span className="text-foreground-400 text-xs truncate" title={sub.now}>
+              → {sub.now}
+            </span>
           </div>
         )
       }
-      // 节点网格区: 扣除子组面板偏移得到节点行号
-      const nodeRow = innerIndex - subs.length
+      const nodes = row.rowNodes ?? []
+      // 选中/置顶/测速作用于归属组: 子组区段的节点对子组操作(url-test 组无手选, 点击仅刷新)
+      const owner = row.owner ?? groups[groupIndex]
+      const isLastRow =
+        groupIndex === groupCounts.length - 1 && index === groupCounts[groupIndex] - 1
       return (
-        <>
-          {showSectionTitles && nodeRow === 0 && (
-            <div className="text-[10px] text-foreground-400 px-4 pt-2">{t('proxies.nodes')}</div>
-          )}
-          <div
-            style={
-              proxyCols !== 'auto'
-                ? { gridTemplateColumns: `repeat(${proxyCols}, minmax(0, 1fr))` }
-                : {}
-            }
-            className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} ${isLastRow ? 'pb-2' : ''} gap-2 pt-2 mx-2`}
-          >
-            {Array.from({ length: cols }).map((_, i) => {
-              const item = nodes[nodeRow * cols + i]
-              if (!item) return null
-              return (
-                <ProxyItem
-                  key={item.name}
-                  mutateProxies={mutate}
-                  onProxyDelay={onProxyDelay}
-                  onSelect={onChangeProxy}
-                  proxy={item}
-                  group={groups[groupIndex]}
-                  proxyDisplayMode={proxyDisplayMode}
-                  selected={item.name === groups[groupIndex].now}
-                  isGroupTesting={delaying[groupIndex]?.has(item.name) ?? false}
-                />
-              )
-            })}
-          </div>
-        </>
+        <div
+          style={
+            proxyCols !== 'auto'
+              ? { gridTemplateColumns: `repeat(${proxyCols}, minmax(0, 1fr))` }
+              : {}
+          }
+          className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} ${isLastRow ? 'pb-2' : ''} gap-2 pt-2 mx-2`}
+        >
+          {nodes.map((item) => (
+            <ProxyItem
+              key={item.name}
+              mutateProxies={mutate}
+              onProxyDelay={onProxyDelay}
+              onSelect={onChangeProxy}
+              proxy={item}
+              group={owner}
+              proxyDisplayMode={proxyDisplayMode}
+              selected={item.name === owner.now}
+              isGroupTesting={delaying[groupIndex]?.has(item.name) ?? false}
+            />
+          ))}
+        </div>
       )
     },
     [
       groupCounts,
-      allProxies,
-      subgroups,
+      allRows,
       proxyCols,
-      cols,
       groups,
       proxyDisplayMode,
       delaying,
       mutate,
       onProxyDelay,
-      onChangeProxy,
-      t
+      onChangeProxy
     ]
   )
 
@@ -981,6 +983,14 @@ const Proxies: React.FC = () => {
         onClose={() => setShowLineGroups(false)}
         groups={customGroups ?? []}
         onSave={saveGroups}
+      />
+      {/* 组头 ⋯ 菜单编辑入口: 单组编辑弹窗(改端口/名字/模式/线路, 保存按 id 合并回全量) */}
+      <CustomLineGroupsModal
+        isOpen={editGroupId !== null}
+        onClose={() => setEditGroupId(null)}
+        groups={customGroups ?? []}
+        onSave={saveGroups}
+        editGroupId={editGroupId}
       />
       {/* 组头快捷删除确认: 删除该自定义线路组及其专属端口 */}
       {deleteTarget && (

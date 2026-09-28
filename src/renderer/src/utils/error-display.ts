@@ -32,18 +32,7 @@ function shouldShowDetailedError(message: string): boolean {
   return DETAILED_ERROR_KEYWORDS.some((keyword) => message.includes(keyword))
 }
 
-export async function showError(error: unknown, title?: string): Promise<void> {
-  const message = error instanceof Error ? error.message : String(error)
-  const defaultTitle = i18next.t('common.error.default')
-
-  if (shouldShowDetailedError(message)) {
-    toast.detailedError(message, title || defaultTitle)
-  } else {
-    toast.error(message, title)
-  }
-}
-
-export function showErrorSync(error: unknown, title?: string): void {
+export function showError(error: unknown, title?: string): void {
   const message = error instanceof Error ? error.message : String(error)
   const defaultTitle = i18next.t('common.error.default')
 

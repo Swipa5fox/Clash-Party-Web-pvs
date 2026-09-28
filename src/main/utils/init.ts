@@ -3,7 +3,6 @@ import { existsSync } from 'fs'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
-import { app, dialog } from 'electron'
 import { startPacServer } from '../resolve/server'
 import { startFileShareServer } from '../resolve/fileShare'
 import { triggerSysProxy } from '../sys/sysproxy'
@@ -15,6 +14,7 @@ import {
 } from '../config'
 import { startSSIDCheck } from '../sys/ssid'
 import i18next, { resources } from '../../shared/i18n'
+import { systemLocale } from '../runtime'
 import {
   DEFAULT_MIHOMO_LAN_ALLOWED_IPS,
   DEFAULT_MIHOMO_SKIP_AUTH_PREFIXES,
@@ -53,28 +53,21 @@ let isRuntimeFilesCompleted = false
 let initBasicPromise: Promise<void> | null = null
 let runtimeFilesPromise: Promise<void> | null = null
 
-// Web UI 模式判定与 index.ts 保持一致：宿主无窗口时 dialog.showErrorBox 的模态框会冻结桥连接。
-const webMode = process.argv.includes('--web') || !!process.env.CP_WEB_MODE
-
+// 错误以日志输出（渲染层已有 toast/错误边界），服务器上无宿主弹窗可用。
 export function safeShowErrorBox(titleKey: string, message: string): void {
   let title: string
   try {
     title = i18next.t(titleKey)
     if (!title || title === titleKey) throw new Error('Translation not ready')
   } catch {
-    const isZh = app.getLocale().startsWith('zh')
+    const isZh = systemLocale().startsWith('zh')
     const lang = isZh ? resources['zh-CN'].translation : resources['en-US'].translation
     title = lang[titleKey] || (isZh ? '错误' : 'Error')
   }
-  if (webMode) {
-    // web 模式：降级为日志（渲染层已有 toast/错误边界），避免宿主模态框冻结事件循环。
-    void initLogger.error(`[web] error box suppressed: ${title}`, message)
-    return
-  }
-  dialog.showErrorBox(title, message)
+  void initLogger.error(`[web] error box suppressed: ${title}`, message)
 }
 
-async function isSourceNewer(sourcePath: string, targetPath: string): Promise<boolean> {
+export async function isSourceNewer(sourcePath: string, targetPath: string): Promise<boolean> {
   try {
     const [sourceStats, targetStats] = await Promise.all([stat(sourcePath), stat(targetPath)])
     return sourceStats.mtime > targetStats.mtime
@@ -132,7 +125,7 @@ async function killOldMihomoProcesses(): Promise<void> {
 
   try {
     const execFilePromise = promisify(execFile)
-    const coreNames = new Set(['mihomo.exe', 'mihomo-alpha.exe', 'mihomo-smart.exe'])
+    const coreNames = new Set(['mihomo.exe'])
     const { stdout } = await execFilePromise('tasklist', ['/FO', 'CSV', '/NH'], {
       windowsHide: true,
       timeout: 3000,
@@ -254,7 +247,7 @@ async function cleanup(): Promise<void> {
     .map((file) => rm(path.join(dataDir(), file)).catch(() => {}))
 
   // 清理过期日志
-  const { maxLogDays = 7 } = await getAppConfig()
+  const { maxLogDays = 14 } = await getAppConfig()
   const maxAge = maxLogDays * 24 * 60 * 60 * 1000
   const datePattern = /\d{4}-\d{2}-\d{2}/
 

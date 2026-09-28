@@ -2,4 +2,4 @@
 set -e
 
 echo "Running pre-commit checks..."
-node scripts/run-pre-commit-checks.mjs
+pnpm run review

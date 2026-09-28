@@ -2,7 +2,8 @@ const js = require('@eslint/js')
 const react = require('eslint-plugin-react')
 const reactHooks = require('eslint-plugin-react-hooks')
 const importPlugin = require('eslint-plugin-import')
-const { configs } = require('@electron-toolkit/eslint-config-ts')
+const tseslint = require('typescript-eslint')
+const globals = require('globals')
 
 module.exports = [
   {
@@ -10,7 +11,7 @@ module.exports = [
   },
 
   js.configs.recommended,
-  ...configs.recommended,
+  ...tseslint.configs.recommended,
 
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
@@ -51,7 +52,10 @@ module.exports = [
   },
 
   {
-    files: ['**/*.cjs', '**/*.mjs', '**/tailwind.config.js', '**/postcss.config.js'],
+    files: ['**/*.cjs', '**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.node }
+    },
     rules: {
       '@typescript-eslint/no-require-imports': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off'

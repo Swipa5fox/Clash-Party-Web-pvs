@@ -11,29 +11,36 @@ import tlsLib from 'node:tls'
 import { readFileSync } from 'node:fs'
 
 // 配置加载: 环境变量 > 脚本同目录 lines.config.json > 报错
-// lines.config.json 示例(不分享): {"host":"192.168.x.x","token":"xxxx"}
+// lines.config.json 示例(不分享): {"host":"192.168.x.x","user":"admin","password":"****","panelToken":"****"}
+//   user/password: Web UI 账号(v1.3+ 账号密码登录, 先 POST /api/login 拿 cp_session 再连 /ws 桥;
+//                  旧版 {"host","token"} + ?token= URL 参数已失效——upgrade 阶段只认 Cookie 会话)
+//   panelToken:    gateway :8080 面板/mihomo API 的 PANEL_TOKEN(list/switch/verify 走的
+//                  REST 需要 :8080 可达; 未部署 gateway 时可省, 对应命令会 401)
 function loadCfg() {
   let host = process.env.LINES_HOST,
-    token = process.env.LINES_TOKEN
-  if (!host || !token) {
+    user = process.env.LINES_USER,
+    password = process.env.LINES_PASSWORD,
+    panelToken = process.env.LINES_PANEL_TOKEN
+  if (!host || !user || !password) {
     try {
       const c = JSON.parse(readFileSync(new URL('./lines.config.json', import.meta.url), 'utf8'))
       host = host || c.host
-      token = token || c.token
+      user = user || c.user
+      password = password || c.password
+      panelToken = panelToken || c.panelToken
     } catch {
       /* 忽略: 配置缺失或已销毁 */
     }
   }
-  if (!host || !token) {
+  if (!host || !user || !password) {
     console.error(
-      '[lines][FAIL] 缺配置: 设 LINES_HOST/LINES_TOKEN 环境变量, 或在脚本同目录放 lines.config.json: {"host":"<ip>","token":"<web-token>"}'
+      '[lines][FAIL] 缺配置: 设 LINES_HOST/LINES_USER/LINES_PASSWORD 环境变量, 或在脚本同目录放 lines.config.json: {"host":"<ip>","user":"<user>","password":"<pass>"}'
     )
     process.exit(1)
   }
-  return { host, token }
+  return { host, user, password, panelToken }
 }
-const { host: HOST, token: TOKEN } = loadCfg()
-const WS_URL = `ws://${HOST}:3999/ws?token=${TOKEN}`
+const { host: HOST, user: USER, password: PASSWORD, panelToken: PANEL_TOKEN } = loadCfg()
 const API = `http://${HOST}:8080`
 const [cmd, ...a] = process.argv.slice(2)
 const log = console.log
@@ -42,25 +49,55 @@ const die = (m) => {
   process.exit(1)
 }
 
+// gateway :8080 的面板门: 先用 PANEL_TOKEN 登录拿会话 cookie, 再请求 REST。
+let panelCookie = null
+async function panelLogin() {
+  const r = await fetch(`${API}/panel/login`, {
+    method: 'POST',
+    redirect: 'manual', // 成功即 302 + set-cookie, fetch 默认会把 3xx 当 !ok
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token: PANEL_TOKEN })
+  })
+  const setCookie = r.headers.get('set-cookie') ?? ''
+  panelCookie = setCookie.split(';')[0] // "cpx_panel=<sig>"
+  if (r.status !== 302 || !panelCookie) {
+    throw new Error(`panel login ${r.status}(PANEL_TOKEN 对?)`)
+  }
+}
+
+// cookie 是进程启动时现取的(TTL 8h), 脚本生命周期秒级, 无需过期重试。
 const rest = async (method, path, body) => {
+  if (!panelCookie) await panelLogin()
   const r = await fetch(API + path, {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: panelCookie },
     body: body ? JSON.stringify(body) : undefined
   })
   if (!r.ok) throw new Error(`${method} ${path} -> ${r.status}`)
   return r.status === 204 ? null : r.json()
 }
 
+// 登录拿 cp_session cookie，再带 Cookie 连 WS 桥（v1.3+ 同源会话鉴权）。
 async function bridge() {
-  const ws = new WebSocket(WS_URL)
+  const loginRes = await fetch(`http://${HOST}:3999/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: USER, password: PASSWORD })
+  })
+  if (!loginRes.ok) {
+    throw new Error(`登录失败(${loginRes.status}, 账号/密码见 lines.config.json)`)
+  }
+  const setCookie = loginRes.headers.get('set-cookie') ?? ''
+  const cookie = setCookie.split(';')[0] // "cp_session=<sid>"
+  const ws = new WebSocket(`ws://${HOST}:3999/ws`, { headers: { Cookie: cookie } })
   const pending = new Map()
   ws.addEventListener('message', (e) => {
     const m = JSON.parse(e.data)
     if (m.type === 'result' && pending.has(m.id)) {
       const p = pending.get(m.id)
       pending.delete(m.id)
-      m.ok ? p.resolve(m.data) : p.reject(new Error(m.error))
+      if (m.ok) p.resolve(m.data)
+      else p.reject(new Error(m.error))
     }
   })
   await new Promise((res, rej) => {
@@ -71,11 +108,11 @@ async function bridge() {
     }
     ws.addEventListener('open', ok)
     ws.addEventListener('message', (e) => {
-      JSON.parse(e.data).type === 'hello' && ok()
+      if (JSON.parse(e.data).type === 'hello') ok()
     })
     ws.addEventListener('error', () => {
       clearTimeout(t)
-      rej(new Error('WS 连接失败(token/3999?)'))
+      rej(new Error('WS 连接失败(cookie/3999?)'))
     })
   })
   const call = (ch, ...args) =>
@@ -372,10 +409,7 @@ if (cmd === 'push') {
   })
   await call('restartCore')
   log(`覆写已推送: ${id} (${name || id}) [${ext}] ${src.length} 字符, 内核已重启`)
-  if (ext === 'js')
-    log(
-      `核对执行结果: docker exec <party容器> cat /data/.config/mihomo-party-dev/override/${id}.log`
-    )
+  if (ext === 'js') log(`核对执行结果: docker exec <party容器> cat /data/override/${id}.log`)
   else log(`核对生效: node lines.mjs list 或 REST /rules 看 InName 规则`)
   ws.close()
   process.exit(0)

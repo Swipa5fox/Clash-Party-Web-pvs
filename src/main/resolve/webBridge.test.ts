@@ -28,7 +28,6 @@ interface BridgeMessage {
 }
 
 let handle: WebBridgeHandle
-let onSend: ReturnType<typeof vi.fn>
 let wsUrl: string
 let httpOrigin: string
 let staticRoot: string
@@ -38,7 +37,8 @@ beforeAll(async () => {
   mockDataDir.value = mkdtempSync(join(tmpdir(), 'cp-web-auth-'))
   staticRoot = mkdtempSync(join(tmpdir(), 'cp-web-static-'))
   writeFileSync(join(staticRoot, 'web.html'), '<!DOCTYPE html><html><body>app</body></html>')
-  onSend = vi.fn()
+  writeFileSync(join(staticRoot, 'favicon.ico'), Buffer.alloc(256, 7))
+  writeFileSync(join(staticRoot, 'logo.png'), Buffer.alloc(128, 9))
   const rpc = createRpcRouter(
     {
       echo: async (v: unknown) => ({ echoed: v }),
@@ -54,8 +54,7 @@ beforeAll(async () => {
     platform: 'test-platform',
     version: '1.2.3',
     staticRoot,
-    rpc,
-    onSend
+    rpc
   })
   httpOrigin = `http://127.0.0.1:${handle.port}`
   wsUrl = `ws://127.0.0.1:${handle.port}/ws`
@@ -135,6 +134,26 @@ describe('web auth flow (cookie session)', () => {
     const res = await fetch(`${httpOrigin}/login`)
     expect(res.status).toBe(200)
     expect(await res.text()).toContain('/api/login')
+  })
+
+  it('serves the login page with a favicon link and cat logo', async () => {
+    const res = await fetch(`${httpOrigin}/login`)
+    const html = await res.text()
+    expect(html).toContain('href="/favicon.ico"')
+    expect(html).toContain('src="/logo.png"')
+  })
+
+  it('serves favicon.ico without a session (public path before the gate)', async () => {
+    const res = await fetch(`${httpOrigin}/favicon.ico`, { redirect: 'manual' })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('image/')
+    expect((await res.arrayBuffer()).byteLength).toBeGreaterThan(100)
+  })
+
+  it('serves logo.png without a session (login page branding)', async () => {
+    const res = await fetch(`${httpOrigin}/logo.png`, { redirect: 'manual' })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('image/')
   })
 
   it('rejects a wrong password with 401', async () => {
@@ -248,16 +267,6 @@ describe('webBridge rpc', () => {
 })
 
 describe('webBridge events', () => {
-  it('forwards send messages to onSend', async () => {
-    const ws = await connectAuthed()
-    const seen = new Promise<[string, unknown[]]>((resolve) => {
-      onSend.mockImplementationOnce((channel: string, args: unknown[]) => resolve([channel, args]))
-    })
-    ws.send(JSON.stringify({ type: 'send', channel: 'updateTrayMenu', args: [1, 'two'] }))
-    expect(await seen).toEqual(['updateTrayMenu', [1, 'two']])
-    ws.close()
-  })
-
   it('broadcasts events to all authed clients', async () => {
     const wsA = await connectAuthed()
     const wsB = await connectAuthed()

@@ -1,120 +1,88 @@
-# cpx-party — Clash Party full Web UI in a container.
+# clash-party — v1.3+ 纯 Node Web UI + mihomo sidecar（Docker，多阶段构建）。
 #
-# Runs the app in its official headless web mode (CP_WEB_MODE=1 / --web):
-# no window, no tray — the Electron main process serves out/renderer/web.html
-# plus the WS RPC bridge on :3999 and manages its own mihomo sidecar core.
+# 构建上下文：仓库根（不是本目录）：
+#   docker build -t clash-party:latest -f deploy/party/Dockerfile .
+#   （或由 deploy/gateway/deploy.sh 统一构建）
 #
-# Build context: REPOSITORY ROOT (not this directory):
-#   docker build -t cpx-party:local -f deploy/party/Dockerfile .
+# v1.3 起主进程脱离 Electron：builder 里 pnpm install + vite + esbuild 出
+#   dist/server.cjs（单文件，生产依赖全内联，运行时无 node_modules）
+#   dist/renderer/（静态前端）
+# 运行时镜像只需 node + Linux mihomo sidecar + geo 资源。
 #
-# Host-side fixed ports (compose runs network_mode: host):
-#   3999 web UI (CP_WEB_PORT)   7890 mihomo mixed proxy (HTTP+SOCKS5)
-#   + any custom line-group listener added at runtime from the Web UI.
-# The controller (127.0.0.1:9090) is loopback-only — the cpx-gateway proxies
-# it on :8080; LAN clients never reach it directly.
+# Host 侧固定端口（compose 用 network_mode: host）：
+#   3999 Web UI（CP_WEB_PORT）  7890 mihomo mixed 代理（HTTP+SOCKS5）
+#   + Web UI 运行时新增的自定义线路组监听口。
+# 控制器（127.0.0.1:9090）仅回环——clash-party-gateway 在 :8080 反代它，
+# LAN 客户端直连不到。
+#
+# 鉴权：账号密码登录（初始凭据见 deploy.sh 部署汇总）。旧 CP_WEB_TOKEN 已随 v1.3 移除。
 
 # ------------------------------------------------------------------ builder --
 FROM node:22-slim AS builder
 
-# npm registry override (deploy.sh defaults to a mirror for CN networks);
-# also used by corepack to fetch the pnpm binary itself.
-# ELECTRON_MIRROR / ELECTRON_BUILDER_BINARIES_MIRROR: postinstall (electron
-# install.js + electron-builder install-app-deps) pulls the ~100MB Electron
-# zip from github.com — the one remaining GitHub dependency of the build,
-# which defeats the offline core-assets flow. Default mirrors track CN
-# networks; override per-build if you use another registry ecosystem.
-ARG NPM_REGISTRY=https://registry.npmjs.org
-ARG ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
-ARG ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/
-# GitHub 加速前缀(留空=直连 github.com)。云服务器/受限网络里 github.com 常不可达:
-# 那样 prepare.mjs 回退下载内核/geo 会卡死, 设为 https://gh-proxy.com/ 即可走镜像。
+# npm registry 覆盖（deploy.sh 默认 npmmirror，境内网络用）；corepack 也用它拉 pnpm。
+# GitHub 加速前缀（留空=直连 github.com）。内核/geo 资源有两个来源：
+#   1. 已同步进 extra/（deploy.sh 从 /opt/cpx-core-assets 拷贝，或本机 pnpm prepare
+#      已下载）——构建不碰 github.com
+#   2. 兜底：scripts/prepare.mjs 下载（需要 github.com 或 GITHUB_MIRROR）
+ARG NPM_REGISTRY=https://registry.npmmirror.com
 ARG GITHUB_MIRROR=
 ENV COREPACK_NPM_REGISTRY=${NPM_REGISTRY} \
-    ELECTRON_MIRROR=${ELECTRON_MIRROR} \
-    ELECTRON_BUILDER_BINARIES_MIRROR=${ELECTRON_BUILDER_BINARIES_MIRROR} \
     GITHUB_MIRROR=${GITHUB_MIRROR}
 
 WORKDIR /src
 
-# corepack reads "packageManager": pnpm@x from package.json.
+# corepack 依据 package.json 的 "packageManager": pnpm@x 启用。
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY src/native/sysproxy ./src/native/sysproxy
 
-# "file:src\native\sysproxy" (windows backslashes) is not a valid path on linux —
-# normalize it before install. The lockfile resolution already uses forward
-# slashes, so pnpm reuses it (--no-frozen-lockfile just tolerates the specifier
-# diff; nothing gets re-resolved from the registry).
-# The "prepare" lifecycle script is dropped: it runs scripts/… which is not
-# copied yet at install time (chicken-and-egg); prepare.mjs runs explicitly
-# below instead. postinstall (electron download + install-app-deps) is kept.
-RUN sed -i -e 's|file:src..native..sysproxy|file:src/native/sysproxy|' \
-           -e '/"prepare":/d' package.json \
+# "prepare" 生命周期脚本（prepare.mjs 下载内核/geo）此刻 scripts/ 还没 COPY 进来
+# （鸡生蛋），先剥掉再装依赖；内核/geo 在依赖装完后显式跑一次。
+RUN sed -i '/"prepare":/d' package.json \
     && pnpm install --no-frozen-lockfile --registry="${NPM_REGISTRY}"
 
 COPY . .
 
-# Core assets: mihomo sidecar x3 + sysproxy .node + geo data. Two sources:
-#   1. Pre-synced by deploy.sh from /opt/cpx-core-assets (extracted from an
-#      already-built image) — the build then never touches github.com.
-#   2. Fallback: scripts/prepare.mjs downloads them (requires github.com).
-# Vendored files may arrive without exec bits (Windows checkout / tar), so the
-# chmod is not optional.
+# 内核/geo 资源：已在 extra/（Windows 本机 pnpm prepare 产物同步、或 deploy.sh
+# 从 /opt/cpx-core-assets 预置）则直接用——注意 Windows 检出的 extra/sidecar 里
+# 可能是 mihomo.exe（win32-x64），那对 Linux 容器没用，必须换成 linux 内核。
+# 只有存在 Linux ELF 内核时才跳过下载。
 RUN if [ -f extra/sidecar/mihomo ] && [ -f extra/files/geoip.metadb ]; then \
       echo '[build] using pre-synced core assets (skip prepare.mjs)'; \
     else \
       echo '[build] core assets missing, downloading via prepare.mjs'; \
       node scripts/prepare.mjs; \
     fi \
-    && chmod 755 extra/sidecar/mihomo extra/sidecar/mihomo-alpha extra/sidecar/mihomo-smart \
-    && pnpm exec electron-vite build \
-    && node -e "const e=require('./package.json');console.log('built', e.version)"
+    && chmod 755 extra/sidecar/mihomo \
+    && pnpm run build
 
 # ------------------------------------------------------------------ runtime --
 FROM node:22-slim
 
-# Electron/Chromium runtime libs. The *-t64 rename (bookworm -> trixie) is
-# handled with wildcards so this works on either Debian suite.
+# mihomo 是 Go 二进制，在 Linux 上读系统 CA 信任库（不内置）——
+# 缺了它订阅 HTTPS 拉取会证书校验失败；node 自带 CA 不受影响。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       xvfb xauth \
-       libnss3 libnspr4 libxss1 libxtst6 libxrandr2 libxkbcommon0 \
-       libdrm2 libgbm1 libpango-1.0-0 libcairo2 \
-       'libgtk-3-0*' 'libasound2*' 'libatk1.0-0*' 'libatk-bridge2.0-0*' 'libcups2*' \
+    && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY --from=builder /src/out ./out
-COPY --from=builder /src/extra ./extra
-# Offline panel UI (zashboard dist). extra/panel-ui is part of the core-assets
-# sync (deploy.sh /opt/cpx-core-assets); when absent the COPY below would fail,
-# hence the guard. Runtime behavior: entrypoint seeds it into work/ui so mihomo
-# never downloads external-ui from github.com at first boot.
-RUN if [ -d extra/panel-ui ] && [ -n "$(ls -A extra/panel-ui 2>/dev/null)" ]; then \
-      echo '[build] offline panel UI present (extra/panel-ui)'; \
-    else \
-      mkdir -p extra/panel-ui && echo '[build] no offline panel UI — panel falls back to runtime download'; \
-    fi
-# pnpm links the file: dep node_modules/sysproxy-rs -> ../../src/native/sysproxy,
-# so the symlink target must exist in the image too.
-COPY --from=builder /src/src/native/sysproxy ./src/native/sysproxy
-COPY --from=builder /src/node_modules ./node_modules
-COPY --from=builder /src/package.json ./
-COPY deploy/party/entrypoint.sh /usr/local/bin/cpx-party-entrypoint
-RUN chmod +x /usr/local/bin/cpx-party-entrypoint
+# tarball 同构布局：server.cjs + package.json（runtime.ts 探测根/版本用）+
+# renderer/ + resources/（sidecar 内核与 geo）。runtime.ts 在 /app 下发现
+# package.json 即认定根；resources/ 存在 → resourcesDir()= /app/resources，
+# 数据目录落 CP_DATA_DIR。
+COPY --from=builder /src/dist/server.cjs ./server.cjs
+COPY --from=builder /src/package.json ./package.json
+COPY --from=builder /src/dist/renderer ./renderer
+COPY --from=builder /src/extra ./resources
+COPY deploy/party/entrypoint.sh /usr/local/bin/clash-party-entrypoint
+RUN chmod +x /usr/local/bin/clash-party-entrypoint
 
-# HOME=/data makes the unpackaged app's userData land in the named volume:
-# /data/.config/mihomo-party-dev (config.yaml / mihomo.yaml / profiles / logs).
-ENV HOME=/data \
-    CP_WEB_MODE=1 \
+# CP_DATA_DIR=/data：订阅/覆写/凭据/日志全部落卷，容器重建不丢。
+# CP_WEB_HOST=0.0.0.0 是 LAN 部署的硬要求（代码默认 127.0.0.1，见 index.ts）。
+ENV CP_DATA_DIR=/data \
     CP_WEB_HOST=0.0.0.0 \
-    CP_WEB_PORT=3999 \
     NODE_ENV=production
 
-VOLUME /data
-EXPOSE 3999 7890
-
-# --no-sandbox: required when Chromium runs as root inside a container.
-ENTRYPOINT ["cpx-party-entrypoint"]
+ENTRYPOINT ["clash-party-entrypoint"]

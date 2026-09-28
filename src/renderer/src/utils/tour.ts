@@ -1,7 +1,6 @@
 import { driver } from 'driver.js'
 import { TFunction } from 'i18next'
 import { NavigateFunction } from 'react-router-dom'
-import { isWeb } from './init'
 
 let driverInstance: ReturnType<typeof driver> | null = null
 
@@ -128,16 +127,4 @@ export function createTourDriver(t: TFunction, navigate: NavigateFunction): void
       }
     ]
   })
-}
-
-export function startTourIfNeeded(): void {
-  // Web 模式(浏览器访问 :3999)下不自动启动: driver.js 的遮罩会拦截整页点击,
-  // 首次打开(无 tourShown 标记)时表现为「点什么都没反应」——实测确认过。
-  // 桌面端行为不变;Web 端仍可从「设置 → 操作 → 引导」手动打开。
-  if (isWeb) return
-  const tourShown = window.localStorage.getItem('tourShown')
-  if (!tourShown && driverInstance) {
-    window.localStorage.setItem('tourShown', 'true')
-    driverInstance.drive()
-  }
 }

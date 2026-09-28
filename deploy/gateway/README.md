@@ -1,10 +1,10 @@
-# cpx-gateway + cpx-party 部署
+# clash-party-gateway + clash-party 部署
 
 一套面向可信内网的 Docker 部署：**Clash Party 完整 Web UI + 机场插件网关 + 局域网共享代理**，一条 `./deploy.sh` 全自动构建启动。
 
 ```text
                     ┌────────────────────────────────────────────────┐
-LAN 浏览器 ──:3999──►│ party 容器（Clash Party headless Web 模式）      │
+LAN 浏览器 ──:3999──►│ party 容器（Clash Party 纯 Node Web 服务器）     │
                     │  ├─ 完整 React 界面（订阅/覆写/主题）            │
                     │  └─ 自带 mihomo 内核（sidecar 子进程）            │
                     │      ├─ :7890 混合代理口 HTTP+SOCKS5（直绑宿主机）│
@@ -13,7 +13,7 @@ LAN 浏览器 ──:3999──►│ party 容器（Clash Party headless Web �
                     └───────────────┬────────────────────────────────┘
                                     │ 反代 panel/REST/WS
 LAN 客户端 ───:8080──►┌──────────────▼────────────────┐
-                    │ gateway 容器（cpx-gateway）      │
+                    │ gateway 容器（clash-party-gateway）│
                     │  ├─ 机场插件 v2 API（订阅发放）   │
                     │  └─ :8080 面板 + mihomo API 反代 │
                     └─────────────────────────────────┘
@@ -22,7 +22,7 @@ LAN 设备 ────:7890───► party 的 mihomo 内核（HTTP + SOCKS5
 
 它提供：
 
-- **Clash Party Web UI**（`:3999`）：与桌面端完全一致的界面，token 鉴权
+- **Clash Party Web UI**（`:3999`）：与桌面端完全一致的界面，账号密码登录（初始 admin/admin123，首次登录后改密）
 - **机场插件网关**（`:8080`）：`/.well-known/cpx-gateway` 发现、`/oauth/authorize` 登录页、`/enroll` `/challenge` `/config` `/revoke` 四个网关接口、SQLite 账号/设备管理
 - **控制面板**（`:8080/`）：zashboard 面板 + mihomo REST/WebSocket，经网关反代 party 内核，单端口访问；由 `PANEL_TOKEN` 门控，每个浏览器验证一次（会话 cookie，默认 8 小时）
 - **局域网共享代理**（`:7890`，HTTP+SOCKS5 混合口）：全部设备可用，订阅在 Web UI 里统一管理
@@ -52,20 +52,20 @@ cd deploy/gateway
 首次运行会：
 
 1. 复制 `.env.example` 为 `.env`，询问网关地址（`IP:port`，如 `192.168.1.100:8080`）写入 `PUBLIC_ORIGIN`
-2. **自动生成随机 `CP_WEB_TOKEN`**（Web UI 访问令牌，写入 `.env`，可随时改）
-3. 构建两个镜像：`cpx-gateway`（Node 网关）+ `cpx-party`（Electron headless + 前端 + mihomo 内核 + geo 资源，走 npmmirror 源）
-4. 启动容器并做四项健康检查（网关发现 / Web UI / 代理端口 / 面板反代），成功后打印带 token 的访问链接
+2. **自动生成随机 `PANEL_TOKEN`**（`:8080` 面板令牌，写入 `.env`，可随时改）
+3. 构建两个镜像：`clash-party-gateway`（Node 网关）+ `clash-party`（纯 Node 服务器 + 前端 + mihomo 内核 + geo 资源，走 npmmirror 源）
+4. 启动容器并做四项健康检查（网关发现 / Web UI / 代理端口 / 面板反代），成功后打印访问链接
 
 首次构建约 10–30 分钟（网络决定）；之后各层走缓存，重建仅数分钟。
 
 ### deploy.sh 常用选项
 
 ```bash
-./deploy.sh                            # 默认：构建并部署 gateway + party
+./deploy.sh                            # 默认：构建并部署 gateway + party（tag=版本号）
 ./deploy.sh --services gateway         # 只动网关（跳过 party 漫长构建）
 ./deploy.sh --services party           # 只动 party
 ./deploy.sh --no-cache                 # 无缓存彻底重建
-./deploy.sh --tag v4.1-prod            # 自定义镜像 tag
+./deploy.sh --tag prod-20260928        # 自定义镜像 tag
 ./deploy.sh --env-only                 # 只生成 .env，不构建不启动
 ./deploy.sh --registry reg.local:5000 --push  # 构建并推私有仓库
 GATEWAY_ADDR=192.168.1.100:8080 ./deploy.sh   # CI 无人值守（免交互）
@@ -76,28 +76,28 @@ NPM_REGISTRY=https://registry.npmjs.org ./deploy.sh  # 覆盖默认 npm 镜像�
 
 | 访问项                   | 地址                                                                                                                                                 |
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Clash Party Web UI       | `http://<IP>:3999/?token=<CP_WEB_TOKEN>`（token 首开后自动存 sessionStorage）                                                                        |
+| Clash Party Web UI       | `http://<IP>:3999/`（账号密码登录，初始 admin/admin123，首次登录后改密）                                                                             |
 | 控制面板（zashboard）    | `http://<IP>:8080/`（首次输入 `PANEL_TOKEN` 验证，之后自动配置后端）                                                                                 |
 | 网关发现文件             | `curl http://<IP>:8080/.well-known/cpx-gateway`                                                                                                      |
 | LAN 代理（设备手动配置） | `http://<IP>:7890`（HTTP+SOCKS5 混合口）                                                                                                             |
 | 国家专线（可选）         | `:17890` AU 通用 / `:17891` AU 全局 / `:8888` JP 通用 / `:8889` JP 全局（host 网络模式直接绑宿主机；先在 Web UI 加订阅，再用 `mihomo-lines` 写覆写） |
 
-忘记 token 时：`grep CP_WEB_TOKEN .env` 或 `docker compose logs party | grep 'Web UI'`。
+忘记面板令牌时：`grep PANEL_TOKEN .env`。
 
 ---
 
 ## 首次启动与订阅管理
 
-party 容器首次启动时自动写入种子 `mihomo.yaml`（`allow-lan: true` + 控制器 `0.0.0.0:9090`，仅 compose 内网可达），之后该文件归用户所有，可在 Web UI 修改。
+party 容器首次启动时自动写入种子 `mihomo.yaml`（`allow-lan: true` + 控制器 `127.0.0.1:9090`，仅回环可达），之后该文件归用户所有，可在 Web UI 修改。
 
 **订阅管理全部在 Web UI 完成**（"订阅"页添加/更新/切换），无需编辑任何配置文件——这是与旧版 mihomo 容器最大的区别。
 
 ### 国家双口线路（AU / JP，可选）
 
-每国一对端口：通用口走分流（国内直连、国外落本国池），全局口无差别全走本国节点。由 `mihomo-lines` skill 管理，**本目录不放脚本**：
+每国一对端口：通用口走分流（国内直连、国外落本国池），全局口无差别全走本国节点。由 `mihomo-lines` skill 管理，**本目录不放脚本**（登录走 Web UI 同款账号密码拿 `cp_session` cookie，再连 `/ws` 桥；旧版 `?token=` URL 参数已失效）：
 
 ```bash
-cd <repo>/.codebuddy/skills/mihomo-lines/scripts
+cd <repo>/tools/mihomo-lines/scripts
 node lines.mjs add AU 17890 '澳洲|Australia|Sydney|悉尼|🇦🇺'   # 加澳洲线
 node lines.mjs add JP 8888  '日本|Japan|Tokyo|东京|大阪|🇯🇵'   # 加日本线
 node lines.mjs list                                          # 查看已部署线路+当前节点
@@ -127,7 +127,7 @@ Web UI 中少数宿主机桌面专属功能在容器内**不可用**，点击时
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | 系统代理开关                      | 提示"容器部署不支持系统代理"，引导设备手动配置 `:7890`（系统代理只能修改 Clash Party 所在宿主机的系统设置，容器内无桌面环境） |
 | TUN 模式开关                      | 提示"容器不可用（未授予 NET_ADMIN / TUN 设备）"（透明代理需宿主机路由能力）                                                   |
-| 托盘/悬浮窗/全局快捷键/应用内更新 | Web 模式下隐藏或禁用（官方 web 模式行为）                                                                                     |
+| 托盘/悬浮窗/全局快捷键/应用内更新 | Web 形态下不存在（v1.3 纯 Node 服务器无桌面概念）                                                                             |
 
 其余功能（订阅、节点选择、连接/日志、覆写、主题、WebDAV 备份等）全部可用。
 
@@ -180,54 +180,50 @@ docker compose up -d party     # 改 .env 后生效（compose 会重建容器）
 
 构建与运行对 github.com 的全部依赖已消除或可选化：
 
-| 依赖            | 来源                                                                         | 兜底                              |
-| --------------- | ---------------------------------------------------------------------------- | --------------------------------- |
-| npm 依赖        | `NPM_REGISTRY`（默认 npmmirror）                                             | 换源重跑                          |
-| Electron 二进制 | `ELECTRON_MIRROR`（默认 npmmirror 镜像）                                     | 换镜像重跑                        |
-| mihomo/geo 资源 | `/opt/cpx-core-assets/extra`（从已构建镜像提取，deploy.sh 自动同步进上下文） | `scripts/prepare.mjs` 联网下载    |
-| GitHub 直连     | `GITHUB_MIRROR`（如 `https://gh-proxy.com/`，默认空=直连 github.com）        | 云主机无 GitHub 出口时**必须设**  |
-| zashboard 面板  | core-assets 里的 `extra/panel-ui`（entrypoint 首启落位 `work/ui`）           | 内核首启按 `external-ui-url` 下载 |
+| 依赖            | 来源                                                                  | 兜底                              |
+| --------------- | --------------------------------------------------------------------- | --------------------------------- |
+| npm 依赖        | `NPM_REGISTRY`（默认 npmmirror）                                      | 换源重跑                          |
+| mihomo/geo 资源 | `/opt/cpx-core-assets/extra`（预置，deploy.sh 自动同步进上下文）      | `scripts/prepare.mjs` 联网下载    |
+| GitHub 直连     | `GITHUB_MIRROR`（如 `https://gh-proxy.com/`，默认空=直连 github.com） | 云主机无 GitHub 出口时**必须设**  |
+| zashboard 面板  | core-assets 里的 `extra/panel-ui`（entrypoint 首启落位 `work/ui`）    | 内核首启按 `external-ui-url` 下载 |
 
 > 云服务器（尤其境内/受限网络）常常**直连 github.com 完全不通**（`curl` 返回 000），此时
 > `prepare.mjs` 的内核/geo 下载会卡死重试。两个解法：拷 `/opt/cpx-core-assets` 过去（最快），
 > 或 `GITHUB_MIRROR=https://gh-proxy.com/ ./deploy.sh` 走镜像。`GITHUB_MIRROR` 只作用于
-> `prepare.mjs`，其余走 `NPM_REGISTRY` / `ELECTRON_MIRROR`。
+> `prepare.mjs`，其余走 `NPM_REGISTRY`。
 
 提取 core-assets（首次联网构建成功后执行一次，之后完全离线重建）：
 
 ```bash
-docker create --name cpx-extract cpx-party:local
-docker cp cpx-extract:/app/extra /opt/cpx-core-assets-extract
+docker create --name cpx-extract clash-party:latest
+docker cp cpx-extract:/app/resources /opt/cpx-core-assets-extract
 docker rm cpx-extract
 mkdir -p /opt/cpx-core-assets
 cp -a /opt/cpx-core-assets-extract/. /opt/cpx-core-assets/
 # zashboard 面板一并固化: 内核首启后 work/ui 即为面板, 拷进 panel-ui
 docker run --rm -v <party_data卷>:/data -v /opt/cpx-core-assets:/out alpine \
-  sh -c 'cp -a /data/.config/mihomo-party-dev/work/ui/. /out/extra/panel-ui/'
+  sh -c 'mkdir -p /out/extra && cp -a /data/work/ui/. /out/extra/panel-ui/'
 rm -rf /opt/cpx-core-assets-extract
 ```
 
 之后 `./deploy.sh --no-cache` 重建也不碰 GitHub。
 
-### 轮换 Web UI 令牌
+### 轮换 Web UI 密码
 
-`CP_WEB_TOKEN` 由 compose 在**创建容器时**从 `.env` 插值进容器（`docker-compose.yml` 的 `environment`），所以 `restart` 不会换值，必须 `up -d` 重建：
+Web UI 鉴权是账号密码（v1.3+）：凭据 scrypt 哈希存 `party_data` 卷内 `/data/web-auth.json`。改密在 Web UI 的设置页完成，无需改任何文件或重建容器（改 `.env` 无效，那里已没有 Web UI 凭据项）。忘记密码时删掉卷里的 `web-auth.json` 并重启容器，即回到初始 `admin/admin123`：
 
 ```bash
-cd deploy/gateway
-sed -i 's|^CP_WEB_TOKEN=.*|CP_WEB_TOKEN=<新令牌>|' .env && chmod 600 .env
-docker compose up -d party          # 重建；party_data 卷保留，订阅/覆写不丢
-docker compose exec party printenv CP_WEB_TOKEN   # 确认已是新值
+docker compose exec party rm /data/web-auth.json
+docker compose restart party
+# 首次登录 admin/admin123 后立刻改密
 ```
-
-旧令牌即刻失效。别忘了同步更新本地 `tools/mihomo-lines/scripts/lines.config.json`（或 `LINES_TOKEN`）和浏览器书签。新令牌可用 `head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n'` 生成。
 
 数据全部持久化在命名卷，重建容器不丢：
 
-| 卷             | 内容                                                                                          |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `gateway_data` | 网关 SQLite `/data/gateway.db`                                                                |
-| `party_data`   | `/data/.config/mihomo-party-dev`（config.yaml / mihomo.yaml / profiles / 覆写 / 主题 / 日志） |
+| 卷             | 内容                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------ |
+| `gateway_data` | 网关 SQLite `/data/gateway.db`                                                       |
+| `party_data`   | `/data`（config.yaml / mihomo.yaml / profiles / 覆写 / web-auth.json / 主题 / 日志） |
 
 备份网关数据库：
 
@@ -244,13 +240,12 @@ docker compose up -d
 
 ### 常见问题
 
-| 现象                                               | 原因与处理                                                                                                                             |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 首次构建磁盘写满                                   | 构建缓存 + 双镜像峰值大，`docker builder prune -af` 后重试，保留 ≥8GB 空间                                                             |
-| party 容器起不来，日志有 `xauth command not found` | 镜像残缺（旧版构建），`./deploy.sh --services party` 重建                                                                              |
-| electron 不启动、Xvfb 起了但无输出                 | compose 已内置 `init: true`（tini 转发 SIGUSR1）；若自改过 compose 移除了该行会复现                                                    |
-| npm 依赖下载极慢/超时                              | 默认已走 npmmirror；也可 `NPM_REGISTRY=... ./deploy.sh` 覆盖                                                                           |
-| 面板 `:8080/` 打不开或循环                         | 确认 party 容器健康（`docker compose ps`）；面板文件优先由镜像离线预置（core-assets 含 `panel-ui` 时），否则由内核首启时从 GitHub 下载 |
+| 现象                       | 原因与处理                                                                                                                             |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 首次构建磁盘写满           | 构建缓存 + 双镜像峰值大，`docker builder prune -af` 后重试，保留 ≥8GB 空间                                                             |
+| party 容器起不来           | `docker compose logs party` 看服务端日志；纯 Node 版无 xvfb/Electron 依赖（旧版 `xauth command not found` 类问题已随形态移除）         |
+| npm 依赖下载极慢/超时      | 默认已走 npmmirror；也可 `NPM_REGISTRY=... ./deploy.sh` 覆盖                                                                           |
+| 面板 `:8080/` 打不开或循环 | 确认 party 容器健康（`docker compose ps`）；面板文件优先由镜像离线预置（core-assets 含 `panel-ui` 时），否则由内核首启时从 GitHub 下载 |
 
 ---
 
@@ -258,24 +253,23 @@ docker compose up -d
 
 完整模板见 [`.env.example`](.env.example)。常用项：
 
-| 变量                               | 默认值                            | 说明                                                          |
-| ---------------------------------- | --------------------------------- | ------------------------------------------------------------- |
-| `PUBLIC_ORIGIN`                    | 无（必填）                        | 网关 origin `http://IP:port`，写入发现文件                    |
-| `CP_WEB_TOKEN`                     | 首次自动生成                      | Web UI 访问令牌，改后 `docker compose up -d party` 生效       |
-| `PARTY_WEB_PORT`                   | `3999`                            | Web UI 宿主机端口                                             |
-| `MIHOMO_MIXED_PORT`                | `7890`                            | LAN 混合代理端口（HTTP+SOCKS5）                               |
-| `DEVICE_LIMIT_DEFAULT`             | `3`                               | 新用户默认设备数上限                                          |
-| `MIHOMO_API_SECRET`                | 空                                | party 内核若在 UI 设置了控制器密钥，此处镜像一份供反代注入    |
-| `PANEL_TOKEN`                      | 首次自动生成（同 `CP_WEB_TOKEN`） | `:8080` 面板与 mihomo API 的访问令牌；留空=关闭门控（不推荐） |
-| `RETIRED`                          | `false`                           | 网关退役信号                                                  |
-| `SUB_TIMEOUT_MS` / `SUB_MAX_BYTES` | `30000` / `10485760`              | 拉取隐藏订阅的超时与大小上限                                  |
+| 变量                               | 默认值               | 说明                                                          |
+| ---------------------------------- | -------------------- | ------------------------------------------------------------- |
+| `PUBLIC_ORIGIN`                    | 无（必填）           | 网关 origin `http://IP:port`，写入发现文件                    |
+| `PANEL_TOKEN`                      | 首次自动生成         | `:8080` 面板与 mihomo API 的访问令牌；留空=关闭门控（不推荐） |
+| `PARTY_WEB_PORT`                   | `3999`               | Web UI 宿主机端口                                             |
+| `MIHOMO_MIXED_PORT`                | `7890`               | LAN 混合代理端口（HTTP+SOCKS5）                               |
+| `DEVICE_LIMIT_DEFAULT`             | `3`                  | 新用户默认设备数上限                                          |
+| `MIHOMO_API_SECRET`                | 空                   | party 内核若在 UI 设置了控制器密钥，此处镜像一份供反代注入    |
+| `RETIRED`                          | `false`              | 网关退役信号                                                  |
+| `SUB_TIMEOUT_MS` / `SUB_MAX_BYTES` | `30000` / `10485760` | 拉取隐藏订阅的超时与大小上限                                  |
 
 ---
 
 ## 开发和自测
 
 - 网关（本目录）：零依赖，Node ≥ 22.5.0，`npm test` / `npm start`
-- party 镜像构建细节见 [`deploy/party/Dockerfile`](../party/Dockerfile)；本地跑完整 Web 模式用仓库根 `pnpm run dev:web`
+- party 镜像构建细节见 [`deploy/party/Dockerfile`](../party/Dockerfile)（独立部署 compose 见 [`deploy/party/docker-compose.yml`](../party/docker-compose.yml)）；本地开发用仓库根 `pnpm dev`
 
 ## 安全边界
 
@@ -283,5 +277,5 @@ docker compose up -d
 - 密码 scrypt hash 保存；code 与 nonce 均一次性短 TTL；登录按 IP 限流。
 - mihomo 控制器 `:9090` 不发布宿主机，只在 compose 网络内可达。但网关把它反代到了唯一发布端口 `:8080` 上，所以**这道网络隔离本身不构成防线**——`:8080` 上的 REST/WebSocket 就是完整的管理面（切节点、改配置、掐连接）。真正的门是 `PANEL_TOKEN`：未通过验证的请求在网关处被 401/302 拦下，不会转发到内核，也不会注入 `MIHOMO_API_SECRET`。留空即退回无门状态，启动日志会告警。
 - 面板门用签名会话 cookie（`expiry.HMAC`，无服务端存储），`HttpOnly` + `SameSite=Lax` 兼顾 CSRF 防护；纯 HTTP 下不带 `Secure`，这是可信内网前提下的有意取舍。
-- Web UI 由 `CP_WEB_TOKEN` 鉴权；22 个桌面危险 channel（杀进程/宿主弹窗/路径暴露类）在 web 模式统一拒绝；`getFileStr`/`setFileStr` 限定 dataDir 内。
+- Web UI 由账号密码登录鉴权（`cp_session` cookie，7 天有效；凭据 scrypt 哈希存卷内 `web-auth.json`，初始 admin/admin123）；22 个桌面危险 channel（杀进程/宿主弹窗/路径暴露类）在 web 模式统一拒绝；`getFileStr`/`setFileStr` 限定 dataDir 内。
 - 日志不记录密码、完整订阅 URL、code、nonce 或完整 Clash YAML。

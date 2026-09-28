@@ -20,21 +20,18 @@
 <img width='90%' src="./images/preview.jpg">
 </div>
 
-基于 [Clash Party](https://github.com/mihomo-party-org/mihomo-party)（Mihomo / Clash Meta 的 Electron 图形客户端，fork 自 v2.0.2）重建的**内网自用版本**：把桌面客户端装进容器，用浏览器访问与桌面端一致的完整界面，由网关统一承担机场插件与面板反代。
+基于 [Clash Party](https://github.com/mihomo-party-org/mihomo-party)（Mihomo / Clash Meta 的 Electron 图形客户端，fork 自 v2.0.2）重建的**内网自用版本**：主进程已脱离 Electron、改为纯 Node 服务器，部署到 Linux 主机上，用浏览器访问完整界面，由网关统一承担机场插件与面板反代。
 
 > ⚠️ 本项目面向**可信内网**自用：为支持内网直连，移除了传输加密、SSRF 防护与设备签名，凭据改为明文落盘。**不要暴露到公网，也不要对外分发。**
 
-## 当前版本 v1.2（2026-09-25）
+## 当前版本 v1.3（2026-09-25）
 
-自 v1.1 以来的核心更新（详见 [changelog.md](./changelog.md)）：
+自 v1.2 以来的核心更新（详见 [changelog.md](./changelog.md)）：
 
-- **收窄为 Windows x64 Web 服务**：安装器不再注册 URI 协议 / `.cpx` 关联与桌面快捷方式；删除 mac / Linux 打包目标、AUR 包与 macOS 专属代码，CI 只留 Windows 流水线
-- **修复局域网 http 下剪贴板失效**：非安全上下文不暴露 `navigator.clipboard`，复制改走 `execCommand` 兜底（读取端引导手动粘贴），全仓 13 处调用点统一走 `@renderer/utils/clipboard`
-- **修复便携版标记**：`portable.7z` 解压后进入便携模式，数据落 exe 同级 `data/`
-- **可选中文本补齐**：弹窗正文、报错堆栈、toast、文件分享校验详情等不再禁止选中
-- 安装包见 [GitHub Release v1.2.0](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases/tag/v1.2.0)（仅 Windows x64）
-
-完整分类清单见 [changelog.md](./changelog.md) 与 [GitHub Release](https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases)。
+- **主进程脱离 Electron，成为纯 Node 服务器**：删除 electron / electron-builder / electron-vite 全链路与 Windows 安装包，产物改为 Linux tarball（server.cjs + renderer + mihomo 内核 + systemd unit）
+- sysproxy-rs 改为 win32 动态加载（Linux 无桌面代理设置可写），`net.request`/`session` 网络栈换 axios + proxy-agent
+- 退出清理改挂 SIGINT/SIGTERM（适配 systemd），`CP_WEB_HOST` 默认 `0.0.0.0`，数据目录 `CP_DATA_DIR` 环境变量化
+- 迁移细节见 [changelog.md](./changelog.md)
 
 ## 重要功能
 
@@ -48,10 +45,8 @@
 
 ### 重建版新增
 
-- **Web UI 模式**：以 `--web`（或 `CP_WEB_MODE=1`）headless 启动，浏览器打开即用完整 React 界面，token 鉴权；内核、订阅定时更新照常运行
-- **`cpx-party` 容器**：官方 Web 模式进 Docker（Electron + 运行库 + xvfb + 自带 mihomo 内核与 geo 资源），订阅/覆写/主题全部在浏览器管理，数据落命名卷、重建不丢
-- **`cpx-gateway` 网关**：机场插件 v2 服务端（发现 / 登录 / 领取订阅 / 撤销）+ 单端口面板反代（zashboard 与 mihomo REST/WebSocket），零第三方依赖
-- **一键部署**：`./deploy.sh` 六阶段流水线（预检 → 配置 → 构建 → 推送 → 启动 → 健康检查），首次运行自动生成 `CP_WEB_TOKEN`；`deploy/opt/bootstrap.sh` 覆盖 `/opt` 从零构筑全流程
+- **纯 Node 服务器**：主进程无 Electron（express + WS 桥，esbuild 单文件打包），Linux x64/arm64 部署，账号密码登录（初始 admin/admin123，凭据哈希落盘）
+- **`clash-party-gateway` 网关**：机场插件 v2 服务端（发现 / 登录 / 领取订阅 / 撤销）+ 单端口面板反代（zashboard 与 mihomo REST/WebSocket），零第三方依赖
 - **国家双口线路**（`tools/mihomo-lines`）：每国一对端口（通用分流口 + 全局口），AU/JP 预置，纯 YAML 覆写 + `include-all`/`filter` 正则自适应机场节点；经 WS 桥远程下发，全程无需 ssh
 - **自定义线路组**：在界面上为「选定节点集合 + 专属端口」生成代理组与监听端口，子组支持 url-test / fallback / select 独立开关，无需手写覆写
 - **离线内核构建**：`deploy.sh` 自动把 `/opt/cpx-core-assets` 预置资源同步进构建上下文，构建不再依赖 github.com 可达性，换网络环境不重下 238MB
@@ -62,15 +57,15 @@
 
 | 层           | 选型                                                                        |
 | ------------ | --------------------------------------------------------------------------- |
-| 运行时       | Electron 43（主进程 / 预加载 / 渲染层三进程模型）                           |
+| 运行时       | Node 22+（纯 Node 主进程，无 Electron）                                     |
 | 内核         | mihomo（Clash Meta）、mihomo-alpha、mihomo-smart 三个 sidecar 可切换        |
 | 语言         | TypeScript 5.9                                                              |
 | 界面         | React 19 + HeroUI + Tailwind CSS 4，配 react-virtuoso、Monaco、d3、chart.js |
 | 状态与国际化 | SWR、i18next / react-i18next                                                |
-| 构建         | electron-vite 4（Vite 7）+ electron-builder，渲染层单入口 `web`             |
-| 主进程与桥接 | Node 22、express（Web 模式静态服务）、ws（RPC 桥）                          |
+| 构建         | Vite 7（渲染层单入口 `web`）+ esbuild（主进程单文件 server.cjs）            |
+| 主进程与桥接 | express（静态服务）、ws（RPC 桥）、axios + http(s)-proxy-agent（出站请求）  |
 | 网关         | Node ≥ 22.5，零第三方依赖，使用内置 `node:sqlite`                           |
-| 容器         | Docker + Compose v2，多阶段构建，依赖默认走 npmmirror                       |
+| 部署         | Linux tarball + systemd（TUN 走 AmbientCapabilities=CAP_NET_ADMIN）         |
 | 质量保障     | vitest（单元 / 集成）、eslint + prettier、tsc 类型检查                      |
 
 ## 实现方式
@@ -80,33 +75,32 @@
 - `src/main`：内核启停与配置生成、订阅更新、覆写执行，IPC handler 集中在单一字典中注册
 - `src/renderer`：React 应用，统一通过 `window.electron.ipcRenderer` 调用全部能力
 
-### Web 模式：WebSocket RPC 桥
+### Web UI：WebSocket RPC 桥
 
-浏览器中没有 Electron IPC，因此 Web 端以「同形状 shim + 服务端桥」对齐桌面端：
+浏览器中无 Node IPC，Web 端以「同形状 shim + 服务端桥」提供全部能力：
 
-- 主进程用 express 托管 `out/renderer/web.html` 静态资源，并在同端口（默认 `:3999`）挂 WebSocket
+- 主进程（server.cjs）用 express 托管 `dist/renderer/web.html` 静态资源，并在同端口（默认 `:3999`）挂 WebSocket
 - `src/renderer/src/web/main-web.ts` 在浏览器实现 `window.electron`：invoke 发 `{type:'invoke', id, channel, args}`，结果按 id 回填；事件按 `{type:'event', channel, payload}` 广播
-- 服务端复用主进程同一份 handler 字典（约 150 个 invoke channel），因此 Web 端与桌面端功能对齐
-- 桌面专属能力（杀进程、宿主弹窗、路径暴露等 20 余个 channel）在 Web 模式统一拒绝；本地文件读写类能力改由「内容直传」通道替代（备份 base64、主题内容导入等）
-- token 经 URL `?token=` 进入后写入 sessionStorage 并从地址栏清除；无效或过期以 4001 关闭码进入终端提示态
+- 服务端 handler 字典（约 150 个 invoke channel）即唯一能力面；HTTP 与 WS 同源、共用 Cookie 会话（登录后签发，TTL 7 天）
+- 账号密码登录（初始 admin/admin123，哈希落 `web-auth.json`），失败限次锁定
 
-### 容器部署拓扑
+### 部署拓扑
 
 ```text
 LAN 浏览器 ──:3999──►┌────────────────────────────────────────┐
-                    │ party 容器（Clash Party --web 模式）     │
-                    │  ├─ out/renderer/web.html + WS RPC 桥   │
+                    │ Linux 服务器（node server.cjs）          │
+                    │  ├─ dist/renderer/web.html + WS RPC 桥  │
                     │  └─ 自带 mihomo 内核（sidecar 子进程）   │
                     │       ├─ :7890 混合代理（HTTP+SOCKS5）   │
-                    │       └─ :9090 控制器（仅 compose 内网） │
+                    │       └─ :9090 控制器（仅本机回环）      │
                     └───────────────┬────────────────────────┘
-                                    │ 反代 panel / REST / WS
+                                    │ 反代 panel / REST / WS（可选）
 LAN 客户端 ────:8080──►┌───────────▼────────────────┐
-                    │ gateway 容器（cpx-gateway）│
+                    │ gateway（clash-party-gateway）│
                     │  ├─ 机场插件 v2 API        │
                     │  └─ 面板与 mihomo API 反代 │
                     └────────────────────────────┘
-LAN 设备 ─────:7890───► party 内核（HTTP + SOCKS5 共享代理）
+LAN 设备 ─────:7890───► 服务器内核（HTTP + SOCKS5 共享代理）
 ```
 
 ### 配置生成流水线
@@ -132,60 +126,63 @@ LAN 设备 ─────:7890───► party 内核（HTTP + SOCKS5 共享�
 
 ### 构建与资源
 
-- 主进程 / 预加载 / 渲染层由 electron-vite 统一构建，产物落 `out/`
-- 内核与 geo 资源由 `scripts/prepare.mjs` 获取；容器构建改由服务器侧 `/opt/cpx-core-assets` 预置（`deploy.sh` 同步进构建上下文），构建过程不依赖 GitHub
-- `deploy/opt/bootstrap.sh` 用于新机器一键构筑：解压源码 → 预检（docker / 外网）→ 写 `.env` 与线路端口映射 → 调用 `deploy.sh` 构建启动 → 输出访问入口
+- 主进程（纯 Node，无 Electron）由 esbuild 打成单文件 `dist/server.cjs`；渲染层由 vite 直出 `dist/renderer/`
+- `pnpm run build:tarball` 组装 `dist/clash-party-<platform>-<version>-<arch>.tar.gz`（server.cjs + renderer + mihomo 内核 + geo 资源 + systemd unit）
+- 内核与 geo 资源由 `scripts/prepare.mjs` 获取（Linux x64/arm64 映射齐备）
 
 ## 目录结构
 
 ```text
 src/
-  main/         主进程：内核管理、配置生成与覆写、订阅、IPC handler 字典
-  preload/      预加载：channel 白名单与 window.electron 暴露面
-  renderer/     React 界面（index / floating / web 三入口）
+  main/         主进程：内核管理、配置生成与覆写、订阅、handler 字典（纯 Node）
+  runtime.ts    纯 Node 运行时环境探测（根目录/版本/语言/数据目录解析）
+  renderer/     React 界面（web 单入口）
   shared/       主进程与渲染层共用的类型、i18n 资源
 deploy/
-  build/        electron-builder 打包资源（Windows 图标、安装器脚本）
-  gateway/      cpx-gateway：机场插件网关 + 面板反代（零依赖 Node）
-  party/        cpx-party：Clash Party Web 容器（Dockerfile + entrypoint）
-  opt/          bootstrap.sh 新机器构筑脚本、订阅备份脚本
+  gateway/      clash-party-gateway：机场插件网关 + 面板反代（零依赖 Node）
+  clash-party.service  systemd unit（TUN 用 AmbientCapabilities）
 docs/plugin/    机场服务端对接指南（v2）
 tools/          mihomo-lines：国家双口线路管理（YAML 覆写 + WS 桥下发）
-scripts/        构建期资源准备与打包脚本
+scripts/        构建期资源准备、esbuild 打包、tarball 组装
 ```
 
 ## 快速开始
 
-### Windows 安装版 / 便携版
+### Linux 服务器部署（systemd）
 
 ```bash
 pnpm install
-pnpm run dev          # 开发（Web 模式，浏览器访问 :3999）
-pnpm run build:win    # 打包（Windows x64）
+pnpm run prepare      # 下载 mihomo 内核与 geo 资源到 extra/
+pnpm run build:tarball
+
+# 服务器上：
+tar -xzf dist/clash-party-linux-*-x64.tar.gz -C /opt/
+sudo cp /opt/clash-party/deploy/clash-party.service /etc/systemd/system/
+sudo systemctl enable --now clash-party
+# 浏览器访问 http://<服务器IP>:3999（初始账号 admin/admin123，首登后请改密）
 ```
 
-安装后为无窗口后台服务，浏览器访问 `http://127.0.0.1:3999`；安装器不创建桌面快捷方式、不注册 `clash://` 协议与 `.cpx` 文件关联。
+- TUN 模式需要 `CAP_NET_ADMIN`（unit 已配置 `AmbientCapabilities`）与 `/dev/net/tun`
+- 数据目录默认 `CP_DATA_DIR`（unit 中为 `/var/lib/clash-party`）；本机开发默认 `~/.local/share/clash-party`
 
-### 容器部署（内网推荐）
+### 本机开发
 
 ```bash
-cd deploy/gateway
-./deploy.sh           # 构建 gateway + party 并启动，结束后打印带 token 的 Web UI 地址
+pnpm install
+pnpm run dev          # vite dev server + tsx 主进程，浏览器访问 :3999
 ```
 
-无源码的新机器可用 `deploy/opt/bootstrap.sh`（用法见脚本头部注释）。完整选项、运维命令、账号管理与 FAQ 见 [`deploy/gateway/README.md`](deploy/gateway/README.md)。
-
-| 端口   | 用途                                                                             |
-| ------ | -------------------------------------------------------------------------------- |
-| `8080` | 网关：机场插件 API + 面板与控制器反代                                            |
-| `3999` | Clash Party Web UI（token 鉴权）                                                 |
-| `7890` | 局域网共享代理（HTTP + SOCKS5 混合口）                                           |
-| 任意   | 自定义线路组端口：Web UI 即写即生效（host 网络模式直接绑宿主机，仅需放行防火墙） |
+| 端口   | 用途                                                         |
+| ------ | ------------------------------------------------------------ |
+| `8080` | 网关：机场插件 API + 面板与控制器反代（可选部署 gateway 时） |
+| `3999` | Clash Party Web UI（账号密码登录，Cookie 会话鉴权）          |
+| `7890` | 局域网共享代理（HTTP + SOCKS5 混合口）                       |
+| 任意   | 自定义线路组端口：Web UI 即写即生效（仅需放行防火墙）        |
 
 ## 文档
 
 - 官方使用文档：<https://clashparty.org>
-- 容器部署与运维：[`deploy/gateway/README.md`](deploy/gateway/README.md)
+- 网关部署与运维：[`deploy/gateway/README.md`](deploy/gateway/README.md)
 - 机场服务端对接：[`docs/plugin/机场服务端对接指南-v2.md`](docs/plugin/机场服务端对接指南-v2.md)
 - 版本变更记录：[`changelog.md`](changelog.md)
 
@@ -196,7 +193,7 @@ cd deploy/gateway
 - 客户端与网关允许纯 HTTP 与内网 host，不强制 HTTPS，也不拦截私网地址（便于订阅源放内网）
 - 移除 Ed25519 设备签名，防重放改由一次性 nonce 承担
 - vault 明文 JSON 落盘，不再使用系统 Keychain / safeStorage 加密
-- Web UI 由单枚 `CP_WEB_TOKEN` 鉴权，拿到即等同完全控制该实例，请勿外泄；mihomo 控制器仅绑 `127.0.0.1`，面板与控制 API 经网关反代并由 `PANEL_TOKEN` 门禁（默认与 `CP_WEB_TOKEN` 同值）
+- Web UI 账号密码登录 + Cookie 会话；凭据哈希落盘但无 HTTPS 时口令经内网明文传输，请勿暴露公网；mihomo 控制器仅绑 `127.0.0.1`，面板与控制 API 经网关反代并由 `PANEL_TOKEN` 门禁
 
 ## 许可证与致谢
 

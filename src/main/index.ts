@@ -1,10 +1,7 @@
 import { execFile } from 'child_process'
-import { join } from 'path'
 import { promisify } from 'util'
-import { electronApp } from '@electron-toolkit/utils'
-import { app, ipcMain } from 'electron'
 import { initI18n } from '../shared/i18n'
-import { asyncHandlers, registerIpcMainHandlers, syncHandlers } from './utils/ipc'
+import { asyncHandlers, syncHandlers } from './utils/ipc'
 import { getAppConfig, patchAppConfig } from './config'
 import {
   beginCoreInitialization,
@@ -18,15 +15,15 @@ import {
 } from './core/manager'
 import { startWebBridge, createRpcRouter, WEB_BLOCKED_CHANNELS } from './resolve/webBridge'
 import { broadcastEvent, setBroadcaster } from './resolve/broadcaster'
-import { init, initBasic, safeShowErrorBox } from './utils/init'
+import { safeShowErrorBox, init, initBasic } from './utils/init'
 import { initProfileUpdater } from './core/profileUpdater'
 import { createLogger } from './utils/logger'
 import { initWebdavBackupScheduler } from './resolve/backup'
-import { setupPlatformSpecifics, setupAppLifecycle, getSystemLanguage } from './lifecycle'
+import { setupLifecycle, getSystemLanguage } from './lifecycle'
 import { configureAppPaths } from './utils/dirs'
+import { appVersion, rendererRoot } from './runtime'
 
-// Web-Only 启动编排：仍以 Electron 运行时承载（app.whenReady 等），
-// 但全程无 BrowserWindow/托盘/快捷键，唯一 UI 出口是 :3999 WS 桥。
+// 纯 Node 服务器入口：无窗口无托盘，唯一 UI 出口是 :3999 WS 桥。
 
 async function getWindowsPowerShellMajorVersion(): Promise<number | null> {
   // 仅 PS 3.0+ 写入 \3\ 键（\1\ 键恒为 2.0，不可用）。
@@ -51,7 +48,7 @@ async function getWindowsPowerShellMajorVersion(): Promise<number | null> {
   }
 }
 
-// 尽早并行检查，不阻塞 Electron 初始化。
+// 尽早并行检查，不阻塞服务初始化。
 const windowsPowerShellVersionPromise =
   process.platform === 'win32' ? getWindowsPowerShellMajorVersion() : Promise.resolve(null)
 
@@ -59,8 +56,6 @@ async function ensureSupportedWindowsPowerShell(): Promise<boolean> {
   const major = await windowsPowerShellVersionPromise
   if (major === null || major >= 5) return true
 
-  // Web-Only（headless）下无宿主弹窗可用，原 dialog + app.quit 交互流程
-  // 降级为日志（参照 safeShowErrorBox 的 web 降级做法），服务不退出。
   const isZh = Intl.DateTimeFormat().resolvedOptions().locale?.startsWith('zh')
   mainLogger.warn(
     isZh
@@ -74,145 +69,123 @@ configureAppPaths()
 
 const mainLogger = createLogger('Main')
 
-const gotTheLock = app.requestSingleInstanceLock()
-if (!gotTheLock) {
-  app.quit()
-}
+async function main(): Promise<void> {
+  setupLifecycle()
 
-setupPlatformSpecifics()
-setupAppLifecycle()
+  try {
+    await initBasic()
+    const cfg = await getAppConfig()
+    if (!cfg.language) {
+      const systemLanguage = getSystemLanguage()
+      await patchAppConfig({ language: systemLanguage })
+      cfg.language = systemLanguage
+    }
+    await initI18n({ lng: cfg.language })
+  } catch (e) {
+    safeShowErrorBox('common.error.initFailed', `${e}`)
+    process.exit(1)
+  }
 
-const initPromise = (async () => {
-  await initBasic()
+  beginCoreInitialization()
 
   const adminPromise: Promise<boolean> =
     process.platform === 'win32' ? checkAdminPrivileges().catch(() => false) : Promise.resolve(true)
 
-  const appConfigPromise = (async () => {
-    try {
-      const cfg = await getAppConfig()
-      if (!cfg.language) {
-        const systemLanguage = getSystemLanguage()
-        await patchAppConfig({ language: systemLanguage })
-        cfg.language = systemLanguage
+  // 安全检查尽早并行执行，但只用一个布尔 gate 控制核心启动。
+  const startupSafetyPromise = (async (): Promise<boolean> => {
+    const isAdmin = await adminPromise
+    await initAdminStatus()
+    if (!(await ensureSupportedWindowsPowerShell())) return false
+
+    // high-privilege core 检查：headless 下无宿主弹窗与 admin 重启交互，
+    // 仅保留纯检测（checkHighPrivilegeCore）并记录日志，进程不退出。
+    if (!isAdmin) {
+      try {
+        if (await checkHighPrivilegeCore()) {
+          mainLogger.warn(
+            '[web] high-privilege residual core detected; continuing without host dialog or admin restart'
+          )
+        }
+      } catch (e) {
+        mainLogger.error('[web] Failed to check high privilege core', e)
       }
-      await initI18n({ lng: cfg.language })
-      return cfg
+    }
+    return true
+  })().catch((error) => {
+    mainLogger.error('Startup safety checks failed', error)
+    return false
+  })
+
+  const bridge = await startWebBridge({
+    platform: process.platform,
+    version: appVersion(),
+    staticRoot: rendererRoot(),
+    // dev 注入 CP_RENDERER_URL 时 web 桥反代 Vite dev server；生产走静态产物。
+    devServerUrl: process.env.CP_RENDERER_URL,
+    rpc: createRpcRouter(asyncHandlers, syncHandlers, WEB_BLOCKED_CHANNELS)
+  })
+  // 主进程事件推送出口接到 WS 桥（替代原 setMainWindowStub(bridge.broadcast)）
+  setBroadcaster(bridge.broadcast)
+  const host = process.env.CP_WEB_HOST || '0.0.0.0'
+  // 账号密码登录（初始账号 admin，凭据哈希存 dataDir/web-auth.json，首次启动自动生成）
+  // stdout 是服务器场景下唯一的启动提示通道（systemd journal 收录）
+  // eslint-disable-next-line no-console
+  console.log(`[web] Clash Party Web UI: http://${host}:${bridge.port}`)
+
+  // 后台服务初始化（PAC/sysproxy/SSID 巡检等）与核心启动并行。
+  const runtimeInitPromise = startupSafetyPromise
+    .then(async (canContinue) => {
+      if (!canContinue) return
+      await init()
+    })
+    .catch((error) => {
+      mainLogger.error('Failed to initialize background services', error)
+    })
+
+  let coreStarted = false
+  const coreStartPromise = (async (): Promise<void> => {
+    if (!(await startupSafetyPromise)) {
+      completeCoreInitialization(false)
+      return
+    }
+
+    try {
+      initCoreWatcher()
+      const startPromises = await startCoreForStartup()
+      if (startPromises.length > 0) {
+        startPromises[0].then(async () => {
+          await Promise.allSettled([
+            initProfileUpdater().catch((e) => mainLogger.warn('Failed to init profile updater', e)),
+            initWebdavBackupScheduler().catch((e) =>
+              mainLogger.warn('Failed to init webdav backup scheduler', e)
+            ),
+            checkAdminRestartForTun().catch((e) =>
+              mainLogger.warn('Failed admin-restart-for-tun follow-up', e)
+            )
+          ])
+        })
+      }
+      coreStarted = true
     } catch (e) {
-      safeShowErrorBox('common.error.initFailed', `${e}`)
-      app.quit()
-      throw e
+      safeShowErrorBox('mihomo.error.coreStartFailed', `${e}`)
+    } finally {
+      // 安全检查通过后，即使自动启动失败，也允许用户手动重试。
+      completeCoreInitialization(true)
     }
   })()
 
-  return { appConfig: await appConfigPromise, adminPromise }
-})()
+  void runtimeInitPromise
+  await coreStartPromise
 
-app
-  .whenReady()
-  .then(async () => {
-    electronApp.setAppUserModelId('party.mihomo.app')
+  if (coreStarted) {
+    // 通知已连接的 Web 客户端核心就绪
+    broadcastEvent('core-started')
+  }
+}
 
-    const { adminPromise } = await initPromise
-    beginCoreInitialization()
-
-    // 安全检查尽早并行执行，但只用一个布尔 gate 控制核心启动。
-    const startupSafetyPromise = (async (): Promise<boolean> => {
-      const isAdmin = await adminPromise
-      await initAdminStatus()
-      if (!(await ensureSupportedWindowsPowerShell())) return false
-
-      // high-privilege core 检查：headless 下无宿主弹窗与 admin 重启交互，
-      // 仅保留纯检测（checkHighPrivilegeCore）并记录日志，进程不退出。
-      if (!isAdmin) {
-        try {
-          if (await checkHighPrivilegeCore()) {
-            mainLogger.warn(
-              '[web] high-privilege residual core detected; continuing without host dialog or admin restart'
-            )
-          }
-        } catch (e) {
-          mainLogger.error('[web] Failed to check high privilege core', e)
-        }
-      }
-      return true
-    })().catch((error) => {
-      mainLogger.error('Startup safety checks failed', error)
-      return false
-    })
-
-    registerIpcMainHandlers()
-
-    const bridge = await startWebBridge({
-      platform: process.platform,
-      version: app.getVersion(),
-      staticRoot: join(__dirname, '../renderer'),
-      // electron-vite dev 注入的是 ELECTRON_RENDERER_URL；容器/生产下为空，
-      // web 桥接走静态产物。
-      devServerUrl: process.env['ELECTRON_RENDERER_URL'],
-      rpc: createRpcRouter(asyncHandlers, syncHandlers, WEB_BLOCKED_CHANNELS),
-      onSend: (channel, args) => ipcMain.emit(channel, ...args)
-    })
-    // 主进程事件推送出口接到 WS 桥（替代原 setMainWindowStub(bridge.broadcast)）
-    setBroadcaster(bridge.broadcast)
-    const host = process.env.CP_WEB_HOST || '127.0.0.1'
-    // 账号密码登录（初始账号 admin，凭据哈希存 dataDir/web-auth.json，首次启动自动生成）
-    console.log(`[web] Clash Party Web UI: http://${host}:${bridge.port}`)
-
-    // 后台服务初始化（PAC/sysproxy/SSID 巡检等）与核心启动并行。
-    const runtimeInitPromise = startupSafetyPromise
-      .then(async (canContinue) => {
-        if (!canContinue) return
-        await init()
-      })
-      .catch((error) => {
-        mainLogger.error('Failed to initialize background services', error)
-      })
-
-    let coreStarted = false
-    const coreStartPromise = (async (): Promise<void> => {
-      if (!(await startupSafetyPromise)) {
-        completeCoreInitialization(false)
-        return
-      }
-
-      try {
-        initCoreWatcher()
-        const startPromises = await startCoreForStartup()
-        if (startPromises.length > 0) {
-          startPromises[0].then(async () => {
-            await Promise.allSettled([
-              initProfileUpdater().catch((e) =>
-                mainLogger.warn('Failed to init profile updater', e)
-              ),
-              initWebdavBackupScheduler().catch((e) =>
-                mainLogger.warn('Failed to init webdav backup scheduler', e)
-              ),
-              checkAdminRestartForTun().catch((e) =>
-                mainLogger.warn('Failed admin-restart-for-tun follow-up', e)
-              )
-            ])
-          })
-        }
-        coreStarted = true
-      } catch (e) {
-        safeShowErrorBox('mihomo.error.coreStartFailed', `${e}`)
-      } finally {
-        // 安全检查通过后，即使自动启动失败，也允许用户手动重试。
-        completeCoreInitialization(true)
-      }
-    })()
-
-    void runtimeInitPromise
-    await coreStartPromise
-
-    if (coreStarted) {
-      // 通知已连接的 Web 客户端核心就绪
-      broadcastEvent('core-started')
-    }
-  })
-  .catch((error) => {
-    mainLogger.error('Application startup failed', error)
-    safeShowErrorBox('common.error.initFailed', `${error}`)
-    app.quit()
-  })
+main().catch((error) => {
+  console.error('[main] Application startup failed:', error)
+  mainLogger.error('Application startup failed', error)
+  safeShowErrorBox('common.error.initFailed', `${error}`)
+  process.exit(1)
+})

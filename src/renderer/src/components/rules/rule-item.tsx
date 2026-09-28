@@ -85,7 +85,6 @@ const RuleItem: React.FC<RuleItemProps> = (props) => {
           isSelected={isEnabled}
           onValueChange={handleToggle}
           aria-label="Toggle rule"
-          classNames={{ wrapper: 'h-4 w-8', thumb: 'h-3 w-3 group-data-[selected=true]:ms-4' }}
         />
       </div>
     </div>

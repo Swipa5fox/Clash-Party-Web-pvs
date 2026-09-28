@@ -137,20 +137,3 @@ export async function getProxyStatsByHost(
 
   return sortAggregatedData(map)
 }
-
-export async function getDevicesByProxyAndHost(
-  proxy: string,
-  host: string,
-  startTime: number,
-  endTime: number
-): Promise<AggregatedData[]> {
-  const map = new Map<string, AggregatedData>()
-
-  await db.iterate(startTime, endTime, (log) => {
-    if (log.outbound === proxy && log.host === host) {
-      addAggregatedLog(map, log.sourceIP, log)
-    }
-  })
-
-  return sortAggregatedData(map)
-}

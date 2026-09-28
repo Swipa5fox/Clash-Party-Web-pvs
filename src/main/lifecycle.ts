@@ -1,9 +1,8 @@
 import { spawn, execFileSync } from 'child_process'
-import { app, powerMonitor } from 'electron'
 import { stopCoreForExit, cleanupCoreWatcher } from './core/manager'
 import { primeAdminPrivilegesCache } from './core/admin'
 import { disableSysProxySync } from './sys/sysproxy'
-import { exePath } from './utils/dirs'
+import { systemLocale } from './runtime'
 
 export function customRelaunch(): void {
   const script = `while kill -0 ${process.pid} 2>/dev/null; do
@@ -18,27 +17,6 @@ exit
   })
 }
 
-export function setupPlatformSpecifics(): void {
-  if (process.platform === 'linux') {
-    app.relaunch = customRelaunch
-  }
-
-  // https://github.com/electron/electron/issues/43278
-  // https://github.com/electron/electron/issues/36698
-  const electronMajor = parseInt(process.versions.electron.split('.')[0], 10) || 0
-  if (process.platform === 'win32' && !exePath().startsWith('C') && electronMajor < 38) {
-    app.commandLine.appendSwitch('in-process-gpu')
-  }
-
-  if (process.platform === 'win32') {
-    const elevated = isWindowsElevatedSync()
-    if (elevated === true) {
-      primeAdminPrivilegesCache(true)
-      app.commandLine.appendSwitch('disable-gpu-sandbox')
-    }
-  }
-}
-
 function isWindowsElevatedSync(): boolean | null {
   if (process.platform !== 'win32') return false
   try {
@@ -50,7 +28,14 @@ function isWindowsElevatedSync(): boolean | null {
   }
 }
 
-export function setupAppLifecycle(): void {
+export function setupLifecycle(): void {
+  if (process.platform === 'win32') {
+    const elevated = isWindowsElevatedSync()
+    if (elevated === true) {
+      primeAdminPrivilegesCache(true)
+    }
+  }
+
   let sysProxyDisabled = false
   let cleanupPromise: Promise<void> | null = null
 
@@ -87,25 +72,22 @@ export function setupAppLifecycle(): void {
     return cleanupPromise
   }
 
-  app.on('before-quit', async (e) => {
-    e.preventDefault()
-    await cleanupBeforeExit()
-    app.exit()
-  })
-
-  powerMonitor.on('shutdown', async () => {
-    await cleanupBeforeExit()
-    app.exit()
-  })
-
-  app.on('will-quit', () => {
-    if (!sysProxyDisabled) {
-      disableSysProxySync()
-    }
-  })
+  // SIGINT/SIGTERM（systemd stop / Ctrl-C）：清理内核与系统代理后退出。
+  let signaled = false
+  const shutdown = (signal: NodeJS.Signals): void => {
+    if (signaled) return
+    signaled = true
+    void cleanupBeforeExit().finally(() => {
+      if (!sysProxyDisabled) disableSysProxySync()
+      // 不能用 process.kill(pid, signal) 自杀：Linux 上重发的信号仍进本 handler
+      //（signaled=true 直接 return，默认终止已被监听器取代），进程永不退出，挂到 systemd 超时 SIGKILL
+      process.exit(signal === 'SIGINT' ? 130 : 143)
+    })
+  }
+  process.on('SIGINT', () => shutdown('SIGINT'))
+  process.on('SIGTERM', () => shutdown('SIGTERM'))
 }
 
 export function getSystemLanguage(): 'zh-CN' | 'en-US' {
-  const locale = app.getLocale()
-  return locale.startsWith('zh') ? 'zh-CN' : 'en-US'
+  return systemLocale()
 }

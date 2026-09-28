@@ -21,7 +21,7 @@ const SAMPLE_INTERVAL_MS = 10_000
 type RuleOrderBy = 'index' | 'type' | 'payload' | 'proxy' | 'hitCount' | 'hitRate' | 'hitAt'
 type SortDirection = 'asc' | 'desc'
 
-// 排序取值：无 extra（非 Smart 内核）的命中类字段按 0 参与排序
+// 排序取值：无 extra（命中数不可用）的命中类字段按 0 参与排序
 const sortValue = (rule: IMihomoRulesDetail, key: RuleOrderBy): string | number => {
   switch (key) {
     case 'type':
@@ -241,7 +241,7 @@ const Rules: React.FC = () => {
             />
             <SortHeader keyName="hitAt" labelKey="rules.sort.hitAt" className="w-12 text-right" />
             <span className="w-[80px] shrink-0" aria-hidden="true" />
-            <span className="w-8 shrink-0" aria-hidden="true" />
+            <span className="w-10 shrink-0" aria-hidden="true" />
           </div>
         </div>
         <Divider />

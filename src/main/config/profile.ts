@@ -5,9 +5,9 @@ import { isAbsolute, join, relative, resolve } from 'path'
 import { promisify } from 'util'
 import { randomBytes } from 'crypto'
 import { tmpdir } from 'os'
-import { app } from 'electron'
 import i18next from 'i18next'
 import axios, { AxiosResponse } from 'axios'
+import { appVersion } from '../runtime'
 import { parse, stringify } from '../utils/yaml'
 import { defaultProfile } from '../utils/template'
 import { decryptAgeContent } from '../utils/age'
@@ -95,12 +95,12 @@ export async function getProfileConfig(force = false): Promise<IProfileConfig> {
   }
   if (typeof profileConfig !== 'object') profileConfig = { items: [] }
   if (!Array.isArray(profileConfig.items)) profileConfig.items = []
-  return JSON.parse(JSON.stringify(profileConfig))
+  return structuredClone(profileConfig)
 }
 
 export async function setProfileConfig(config: IProfileConfig): Promise<void> {
   await profileConfigWriteQueue.run(async () => {
-    const nextConfig = JSON.parse(JSON.stringify(config)) as IProfileConfig
+    const nextConfig = structuredClone(config)
     await atomicWriteFile(profileConfigPath(), stringify(nextConfig), { encoding: 'utf8' })
     profileConfig = nextConfig
   })
@@ -116,10 +116,10 @@ export async function updateProfileConfig(
       throw new Error('Profile config is invalid')
     }
     if (!Array.isArray(currentConfig.items)) currentConfig.items = []
-    const nextConfig = await updater(JSON.parse(JSON.stringify(currentConfig)))
+    const nextConfig = await updater(structuredClone(currentConfig))
     await atomicWriteFile(profileConfigPath(), stringify(nextConfig), { encoding: 'utf8' })
     profileConfig = nextConfig
-    return JSON.parse(JSON.stringify(nextConfig)) as IProfileConfig
+    return structuredClone(nextConfig)
   })
 }
 
@@ -468,7 +468,7 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
     const baseOptions: Omit<FetchOptions, 'useProxy' | 'timeout'> = {
       url: profileUrl,
       mixedPort,
-      userAgent: item.userAgent || userAgent || `mihomo.party/v${app.getVersion()} (clash.meta)`,
+      userAgent: item.userAgent || userAgent || `mihomo.party/v${appVersion()} (clash.meta)`,
       ageSecretKey: newItem.ageSecretKey,
       authToken: item.authToken
     }
@@ -490,7 +490,6 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
           directError
         )
         try {
-          // smart fallback
           result = await fetchSub(true, subscriptionTimeout)
         } catch {
           throw directError
@@ -749,8 +748,4 @@ export async function upsertPluginProfile(
     const created = await getProfileItem(meta.profileId)
     if (created) await addProfileUpdater(created)
   }
-}
-
-export async function removePluginProfileContent(profileId: string): Promise<void> {
-  await removeProfileItem(profileId)
 }

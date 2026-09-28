@@ -29,11 +29,7 @@ interface IpcApi {
   mihomoUpgradeGeo: () => Promise<void>
   mihomoUpgrade: () => Promise<void>
   mihomoProxyDelay: (proxy: string, url?: string, provider?: string) => Promise<IMihomoDelay>
-  mihomoGroupDelay: (group: string, url?: string) => Promise<IMihomoGroupDelay>
   patchMihomoConfig: (patch: Partial<IMihomoConfig>) => Promise<void>
-  mihomoSmartGroupWeights: (groupName: string) => Promise<Record<string, number>>
-  mihomoSmartFlushCache: (configName?: string) => Promise<void>
-  getSmartOverrideContent: () => Promise<string | null>
   // Config
   getAppConfig: (force?: boolean) => Promise<IAppConfig>
   patchAppConfig: (patch: Partial<IAppConfig>) => Promise<void>
@@ -42,8 +38,6 @@ interface IpcApi {
   // Profile
   getProfileConfig: (force?: boolean) => Promise<IProfileConfig>
   setProfileConfig: (config: IProfileConfig) => Promise<void>
-  getCurrentProfileItem: () => Promise<IProfileItem>
-  getProfileItem: (id: string | undefined) => Promise<IProfileItem>
   getProfileStr: (id: string) => Promise<string>
   setProfileStr: (id: string, str: string) => Promise<void>
   addProfileItem: (item: Partial<IProfileItem>) => Promise<void>
@@ -51,11 +45,9 @@ interface IpcApi {
   updateProfileItem: (item: IProfileItem) => Promise<void>
   changeCurrentProfile: (id: string) => Promise<void>
   addProfileUpdater: (item: IProfileItem) => Promise<void>
-  removeProfileUpdater: (id: string) => Promise<void>
   // Override
   getOverrideConfig: (force?: boolean) => Promise<IOverrideConfig>
   setOverrideConfig: (config: IOverrideConfig) => Promise<void>
-  getOverrideItem: (id: string) => Promise<IOverrideItem | undefined>
   addOverrideItem: (item: Partial<IOverrideItem>) => Promise<void>
   removeOverrideItem: (id: string) => Promise<void>
   updateOverrideItem: (item: IOverrideItem) => Promise<void>
@@ -78,18 +70,12 @@ interface IpcApi {
   mihomoHotReloadConfig: () => Promise<void>
   // System
   triggerSysProxy: (enable: boolean) => Promise<void>
-  checkTunPermissions: () => Promise<boolean>
-  checkAdminPrivileges: () => Promise<boolean>
-  checkMihomoCorePermissions: () => Promise<boolean>
-  checkHighPrivilegeCore: () => Promise<boolean>
-  setupFirewall: () => Promise<void>
   getInterfaces: () => Promise<Record<string, NetworkInterfaceInfo[]>>
   setNativeTheme: (theme: 'system' | 'light' | 'dark') => Promise<void>
   copyEnvText: (type?: 'bash' | 'cmd' | 'powershell' | 'fish' | 'nushell') => Promise<string>
   // Update
   getVersion: () => Promise<string>
   platform: () => Promise<NodeJS.Platform>
-  getDeploymentEnv: () => Promise<'desktop' | 'container'>
   fetchMihomoTags: (
     forceRefresh?: boolean
   ) => Promise<{ name: string; zipball_url: string; tarball_url: string }[]>
@@ -101,8 +87,6 @@ interface IpcApi {
   listWebdavBackups: () => Promise<string[]>
   webdavDelete: (filename: string) => Promise<void>
   reinitWebdavBackupScheduler: () => Promise<void>
-  exportLocalBackup: () => Promise<boolean>
-  importLocalBackup: () => Promise<boolean>
   exportLocalBackupBase64: () => Promise<string>
   importLocalBackupFromContent: (content: string) => Promise<void>
   // Theme
@@ -164,11 +148,7 @@ export const {
   mihomoUpgradeGeo,
   mihomoUpgrade,
   mihomoProxyDelay,
-  mihomoGroupDelay,
   patchMihomoConfig,
-  mihomoSmartGroupWeights,
-  mihomoSmartFlushCache,
-  getSmartOverrideContent,
   // Config
   getAppConfig,
   patchAppConfig,
@@ -177,8 +157,6 @@ export const {
   // Profile
   getProfileConfig,
   setProfileConfig,
-  getCurrentProfileItem,
-  getProfileItem,
   getProfileStr,
   setProfileStr,
   addProfileItem,
@@ -186,11 +164,9 @@ export const {
   updateProfileItem,
   changeCurrentProfile,
   addProfileUpdater,
-  removeProfileUpdater,
   // Override
   getOverrideConfig,
   setOverrideConfig,
-  getOverrideItem,
   addOverrideItem,
   removeOverrideItem,
   updateOverrideItem,
@@ -213,11 +189,6 @@ export const {
   mihomoHotReloadConfig,
   // System
   triggerSysProxy,
-  checkTunPermissions,
-  checkAdminPrivileges,
-  checkMihomoCorePermissions,
-  checkHighPrivilegeCore,
-  setupFirewall,
   getInterfaces,
   setNativeTheme,
   copyEnvText,
@@ -232,8 +203,6 @@ export const {
   listWebdavBackups,
   webdavDelete,
   reinitWebdavBackupScheduler,
-  exportLocalBackup,
-  importLocalBackup,
   exportLocalBackupBase64,
   importLocalBackupFromContent,
   // Theme
@@ -265,8 +234,7 @@ export const {
   revokeFileShareFile,
   getFileShareUrls,
   setFileShareFileMeta,
-  renameFileShareGroup,
-  getDeploymentEnv
+  renameFileShareGroup
 } = ipc
 
 // platform 需要重命名导出

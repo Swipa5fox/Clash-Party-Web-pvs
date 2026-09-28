@@ -34,9 +34,7 @@ const GeneralConfig: React.FC = () => {
     disableAnimations = false,
     customTheme = 'default.css',
     envType = [platform === 'win32' ? 'powershell' : 'bash'],
-    autoCheckUpdate = true,
     autoUpdateProfileOnStart = true,
-    silentUpdate = true,
     githubProxy = 'auto',
     appTheme = 'system',
     language = 'zh-CN',
@@ -116,24 +114,6 @@ const GeneralConfig: React.FC = () => {
             isSelected={autoUpdateProfileOnStart}
             onValueChange={(v) => {
               patchAppConfig({ autoUpdateProfileOnStart: v })
-            }}
-          />
-        </SettingItem>
-        <SettingItem title={t('settings.autoCheckUpdate')} divider>
-          <Switch
-            size="sm"
-            isSelected={autoCheckUpdate}
-            onValueChange={(v) => {
-              patchAppConfig({ autoCheckUpdate: v })
-            }}
-          />
-        </SettingItem>
-        <SettingItem title={t('settings.silentUpdate')} divider>
-          <Switch
-            size="sm"
-            isSelected={silentUpdate}
-            onValueChange={(v) => {
-              patchAppConfig({ silentUpdate: v })
             }}
           />
         </SettingItem>

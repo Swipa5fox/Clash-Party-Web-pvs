@@ -31,14 +31,11 @@ import NetworkCard from '@renderer/components/sider/network-card'
 import UsageCard from '@renderer/components/sider/usage-card'
 import FileShareCard from '@renderer/components/sider/file-share-card'
 import { useTrafficLogger } from '@renderer/hooks/use-traffic-logger'
-import { createTourDriver, getDriver, startTourIfNeeded } from '@renderer/utils/tour'
+import { createTourDriver } from '@renderer/utils/tour'
 import 'driver.js/dist/driver.css'
 import { useTranslation } from 'react-i18next'
 import { DEFAULT_ENABLE_TRAFFIC_LOGGER, DEFAULT_SIDER_ORDER } from '../../shared/appConfig'
-import MihomoIcon from './components/base/mihomo-icon'
 import { SIDER_CARD_ROUTES, getSiderCardByPath, mergeSiderOrder } from './utils/sider'
-
-export { getDriver }
 
 const App: React.FC = () => {
   const { t } = useTranslation()
@@ -103,7 +100,6 @@ const App: React.FC = () => {
     if (!tourInitialized.current) {
       tourInitialized.current = true
       createTourDriver(t, navigate)
-      startTourIfNeeded()
     }
   }, [t, navigate])
 
@@ -187,7 +183,7 @@ const App: React.FC = () => {
       {siderWidthValue === narrowWidth ? (
         <div style={{ width: `${narrowWidth}px` }} className="side h-full flex flex-col">
           <div className="app-drag flex shrink-0 justify-center items-center z-40 bg-transparent h-11.25">
-            <MihomoIcon className="h-8 leading-8 text-lg mx-px" />
+            <img src="/logo.png" alt="Clash Party" className="h-8 w-8 mx-px" />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
             <div className="min-h-full w-full flex flex-col gap-2">
@@ -219,8 +215,8 @@ const App: React.FC = () => {
         >
           <div className="app-drag sticky top-0 z-40 backdrop-blur bg-transparent h-12.25">
             <div className="flex justify-between p-2">
-              <div className="flex ml-1">
-                <MihomoIcon className="h-8 leading-8 text-lg mx-px" />
+              <div className="flex ml-1 items-center">
+                <img src="/logo.png" alt="Clash Party" className="h-8 w-8 mx-px shrink-0" />
                 <h3 className="text-lg font-bold leading-8">Clash Party</h3>
               </div>
               <Button

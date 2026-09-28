@@ -1,5 +1,4 @@
 import { randomBytes } from 'crypto'
-import { closeSync, fsyncSync, openSync, renameSync, rmSync, writeFileSync } from 'fs'
 import { open, rename, rm, type FileHandle } from 'fs/promises'
 import { basename, dirname, join } from 'path'
 
@@ -37,37 +36,6 @@ export async function atomicWriteFile(
   } finally {
     if (handle) await handle.close().catch(() => {})
     await rm(tempPath, { force: true }).catch(() => {})
-  }
-}
-
-export function atomicWriteFileSync(
-  filePath: string,
-  data: string | Uint8Array,
-  options: AtomicWriteOptions = {}
-): void {
-  const tempPath = temporaryPath(filePath)
-  let fd: number | undefined
-
-  try {
-    fd = openSync(tempPath, 'wx', options.mode)
-    writeFileSync(fd, data, options.encoding ?? 'utf8')
-    fsyncSync(fd)
-    closeSync(fd)
-    fd = undefined
-    renameSync(tempPath, filePath)
-  } finally {
-    if (fd !== undefined) {
-      try {
-        closeSync(fd)
-      } catch {
-        // Best effort cleanup after the original write error.
-      }
-    }
-    try {
-      rmSync(tempPath, { force: true })
-    } catch {
-      // Best effort cleanup after the original write error.
-    }
   }
 }
 

@@ -133,6 +133,7 @@ export const LOGIN_PAGE_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/x-icon" href="/favicon.ico" />
 <title>Clash Party - Login</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -146,6 +147,12 @@ export const LOGIN_PAGE_HTML = `<!DOCTYPE html>
     background: hsl(240 5% 14%); border: 1px solid hsl(240 5% 22%);
     box-shadow: 0 12px 40px rgba(0,0,0,.45);
   }
+  .cat {
+    display: block; width: 60px; height: 60px; margin: 0 auto 10px;
+    animation: floaty 3.2s ease-in-out infinite;
+  }
+  @keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  @media (prefers-reduced-motion: reduce) { .cat { animation: none; } }
   h1 { font-size: 20px; text-align: center; margin-bottom: 6px; }
   .sub { font-size: 13px; color: hsl(240 5% 65%); text-align: center; margin-bottom: 28px; }
   label { display: block; font-size: 13px; color: hsl(240 5% 70%); margin: 14px 0 6px; }
@@ -165,6 +172,7 @@ export const LOGIN_PAGE_HTML = `<!DOCTYPE html>
 </head>
 <body>
   <div class="card">
+    <img class="cat" src="/logo.png" alt="Clash Party">
     <h1>Clash Party</h1>
     <div class="sub">Web 控制台登录</div>
     <form id="form">

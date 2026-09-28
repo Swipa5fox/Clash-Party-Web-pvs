@@ -15,7 +15,7 @@ let appConfig: IAppConfig // config.yaml
 const appConfigWriteQueue = new WriteQueue()
 
 function cloneDefaultConfig(): IAppConfig {
-  return JSON.parse(JSON.stringify(defaultConfig)) as IAppConfig
+  return structuredClone(defaultConfig)
 }
 
 export async function getAppConfig(force = false): Promise<IAppConfig> {
@@ -41,10 +41,7 @@ export async function getAppConfig(force = false): Promise<IAppConfig> {
 export async function patchAppConfig(patch: Partial<IAppConfig>): Promise<void> {
   await appConfigWriteQueue.run(async () => {
     const replaceNameserverPolicy = Object.prototype.hasOwnProperty.call(patch, 'nameserverPolicy')
-    const nextConfig = deepMerge(
-      JSON.parse(JSON.stringify(appConfig ?? cloneDefaultConfig())) as IAppConfig,
-      patch
-    )
+    const nextConfig = deepMerge(structuredClone(appConfig ?? cloneDefaultConfig()), patch)
     if (replaceNameserverPolicy) {
       nextConfig.nameserverPolicy = patch.nameserverPolicy ?? {}
     }

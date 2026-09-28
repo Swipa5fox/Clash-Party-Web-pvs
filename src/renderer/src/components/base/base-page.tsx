@@ -5,7 +5,6 @@ interface Props {
   title?: React.ReactNode
   header?: React.ReactNode
   children?: React.ReactNode
-  contentClassName?: string
 }
 
 const BasePage = forwardRef<HTMLDivElement, Props>((props, ref) => {
@@ -13,7 +12,7 @@ const BasePage = forwardRef<HTMLDivElement, Props>((props, ref) => {
 
   useEffect(() => {
     try {
-      // @ts-ignore windowControlsOverlay
+      // @ts-expect-error windowControlsOverlay
       const windowControlsOverlay = window.navigator.windowControlsOverlay
       // 浏览器（非 PWA）中该 API 存在但矩形宽度为 0，会把避让宽度算成整个窗口宽度，
       // 导致标题栏右侧溢出、标题被压缩成竖排；仅在 overlay 真实可见时才采用测量值。
