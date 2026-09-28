@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases">
-    <img src="https://img.shields.io/badge/release-v1.1-blue">
+    <img src="https://img.shields.io/badge/release-v1.3.1-blue">
   </a>
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs">
     <img src="https://img.shields.io/badge/upstream-Clash%20Party%20v2.0.2-green">
@@ -24,32 +24,32 @@
 
 > ⚠️ 本项目面向**可信内网**自用：为支持内网直连，移除了传输加密、SSRF 防护与设备签名，凭据改为明文落盘。**不要暴露到公网，也不要对外分发。**
 
-## 当前版本 v1.3（2026-09-25）
+## 当前版本 v1.3.1（2026-09-28）
 
 自 v1.2 以来的核心更新（详见 [changelog.md](./changelog.md)）：
 
-- **主进程脱离 Electron，成为纯 Node 服务器**：删除 electron / electron-builder / electron-vite 全链路与 Windows 安装包，产物改为 Linux tarball（server.cjs + renderer + mihomo 内核 + systemd unit）
+- **主进程脱离 Electron，成为纯 Node 服务器**（v1.3）：删除 electron / electron-builder / electron-vite 全链路与 Windows 安装包，产物改为 Linux tarball（server.cjs + renderer + mihomo 内核 + systemd unit），镜像从 ~2.9GB 降到 ~560MB
+- **部署文件全面对齐**（v1.3.1）：`deploy/party` Dockerfile 多阶段重写 + 独立 compose；gateway / deploy.sh / bootstrap.sh 全链路去 `CP_WEB_TOKEN`（v1.3 起账号密码登录），healthcheck 改探 `/login`
+- **自定义线路组两级选线器**：第一级按订阅维度选（profile id 稳定，换订阅组名不再全变），节点按订阅懒加载并过滤广告/信息节点；注入前与当前订阅求交集，节点改名/换订阅不再让内核拒绝整份配置
 - sysproxy-rs 改为 win32 动态加载（Linux 无桌面代理设置可写），`net.request`/`session` 网络栈换 axios + proxy-agent
 - 退出清理改挂 SIGINT/SIGTERM（适配 systemd），`CP_WEB_HOST` 默认 `0.0.0.0`，数据目录 `CP_DATA_DIR` 环境变量化
-- 迁移细节见 [changelog.md](./changelog.md)
 
 ## 重要功能
 
 ### 代理核心能力（继承上游）
 
 - 开箱即用、无需服务模式的 TUN
-- Smart Core 规则覆写，基于 AI 模型自动选择最优节点（详见 [官方文档](https://clashparty.org/docs/guide/smart-core)）
 - 订阅管理、节点选择、连接与日志、DNS/嗅探配置
-- 覆写系统：任意修订配置文件，支持 JS 脚本与 YAML 补丁、age 加密、Smart 覆写独立时序
+- 覆写系统：任意修订配置文件，支持 JS 脚本与 YAML 补丁、age 加密
 - WebDAV 备份恢复、多种配色主题、多语言（简中 / 英）
 
 ### 重建版新增
 
-- **纯 Node 服务器**：主进程无 Electron（express + WS 桥，esbuild 单文件打包），Linux x64/arm64 部署，账号密码登录（初始 admin/admin123，凭据哈希落盘）
+- **纯 Node 服务器**：主进程无 Electron（express + WS 桥，esbuild 单文件打包），Linux x64 部署，账号密码登录（初始 admin/admin123，凭据哈希落盘）
 - **`clash-party-gateway` 网关**：机场插件 v2 服务端（发现 / 登录 / 领取订阅 / 撤销）+ 单端口面板反代（zashboard 与 mihomo REST/WebSocket），零第三方依赖
-- **国家双口线路**（`tools/mihomo-lines`）：每国一对端口（通用分流口 + 全局口），AU/JP 预置，纯 YAML 覆写 + `include-all`/`filter` 正则自适应机场节点；经 WS 桥远程下发，全程无需 ssh
-- **自定义线路组**：在界面上为「选定节点集合 + 专属端口」生成代理组与监听端口，子组支持 url-test / fallback / select 独立开关，无需手写覆写
-- **离线内核构建**：`deploy.sh` 自动把 `/opt/cpx-core-assets` 预置资源同步进构建上下文，构建不再依赖 github.com 可达性，换网络环境不重下 238MB
+- **覆写模板库**（`tools/mihomo-lines`）：`ad-filter.js` 全量机场垃圾节点过滤（回环地址主判据 + 节点名兜底）、`cn-direct-rules.yaml` 国内直连 + 强制代理（`include-all` 组零订阅组名依赖，换订阅自动适配）；经 WS 桥远程下发，全程无需 ssh
+- **自定义线路组**：在界面上为「选定节点集合 + 专属端口」生成代理组与监听端口，两级选线器（订阅 → 节点，跨订阅混选、广告节点过滤），子组支持 url-test / fallback / select 独立开关，无需手写覆写
+- **内核/geo 资源离线化**：`deploy.sh` 支持把 `/opt/cpx-core-assets` 预置资源同步进构建上下文，构建不依赖 github.com 可达性
 - **容器部署感知**：容器内点击系统代理 / TUN 时给出可操作提示（引导设备手动配置代理口），而非抛出底层错误
 - **发布链路本地化**：自动更新 / 更新说明 / Telegram 通知全部指向本仓库，不再被上游版本覆盖；移除内嵌 Sub-Store（容器场景不可用且拖慢构建）
 
@@ -58,7 +58,7 @@
 | 层           | 选型                                                                        |
 | ------------ | --------------------------------------------------------------------------- |
 | 运行时       | Node 22+（纯 Node 主进程，无 Electron）                                     |
-| 内核         | mihomo（Clash Meta）、mihomo-alpha、mihomo-smart 三个 sidecar 可切换        |
+| 内核         | mihomo（Clash Meta）sidecar                                                 |
 | 语言         | TypeScript 5.9                                                              |
 | 界面         | React 19 + HeroUI + Tailwind CSS 4，配 react-virtuoso、Monaco、d3、chart.js |
 | 状态与国际化 | SWR、i18next / react-i18next                                                |
@@ -110,13 +110,11 @@ LAN 设备 ─────:7890───► 服务器内核（HTTP + SOCKS5 共�
 1. 载入基础订阅配置
 2. 应用普通覆写（JS 脚本 / YAML 补丁，YAML 支持 age 解密）
 3. 应用规则覆写（prepend / append / delete，支持偏移量）
-4. 应用 Smart 覆写
-5. 与受控配置 deepMerge（DNS、嗅探、局域网开关等由应用统一管理）
-6. **注入自定义线路组**
-7. Smart 模式下排除代理服务器 IP 的 TUN 路由（防回环）
-8. 原子写盘，并按需更新运行时配置缓存
+4. 与受控配置 deepMerge（DNS、嗅探、局域网开关等由应用统一管理）
+5. **注入自定义线路组**（节点名与当前订阅求交集，失效名字剔除、整组空则跳过）
+6. 原子写盘，并按需更新运行时配置缓存
 
-自定义线路组的注入（`applyCustomLineGroups`）：每个线路组生成一个入口组，其成员为启用的子组（`url-test` 自动 / `fallback` 故障 / `select` 手动，可单独开关），每个子组挂载所选节点集合；同时创建名为 `<组名>·入口` 的 `mixed` 监听端口。组名冲突时跳过，同名监听端口则覆盖更新。
+自定义线路组的注入（`applyCustomLineGroups`）：每个线路组生成一个入口组，其成员为启用的子组（`url-test` 自动 / `fallback` 故障 / `select` 手动 / `select` 全局，可单独开关），每个子组挂载所选节点集合；同时创建名为 `<组名>·入口` 的 `mixed` 监听端口。组名冲突时跳过，同名监听端口则覆盖更新。
 
 ### 机场插件 v2（网关侧）
 
@@ -140,6 +138,7 @@ src/
   shared/       主进程与渲染层共用的类型、i18n 资源
 deploy/
   gateway/      clash-party-gateway：机场插件网关 + 面板反代（零依赖 Node）
+  party/        Clash Party Web 容器镜像（Dockerfile + 独立 compose）
   clash-party.service  systemd unit（TUN 用 AmbientCapabilities）
 docs/plugin/    机场服务端对接指南（v2）
 tools/          mihomo-lines：国家双口线路管理（YAML 覆写 + WS 桥下发）
@@ -148,7 +147,16 @@ scripts/        构建期资源准备、esbuild 打包、tarball 组装
 
 ## 快速开始
 
-### Linux 服务器部署（systemd）
+### Linux 服务器部署（Docker，推荐）
+
+```bash
+git clone https://github.com/Swipa5fox/Clash-Party-Web-pvs.git
+cd Clash-Party-Web-pvs/deploy/party
+docker compose up -d --build     # host 网络，数据落 /var/lib/clash-party
+# 浏览器访问 http://<服务器IP>:3999（初始账号 admin/admin123，首登后请改密）
+```
+
+### Linux 服务器部署（tarball + systemd）
 
 ```bash
 pnpm install
