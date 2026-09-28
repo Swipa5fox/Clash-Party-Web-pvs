@@ -9,6 +9,7 @@ import {
   DropdownTrigger
 } from '@heroui/react'
 import { toast } from '@renderer/components/base/toast'
+import BaseConfirmModal from '@renderer/components/base/base-confirm-modal'
 import { IoMdMore, IoMdRefresh } from 'react-icons/io'
 import dayjs from '@renderer/utils/dayjs'
 import React, { Key, useMemo, useState } from 'react'
@@ -41,6 +42,7 @@ const OverrideItem: React.FC<Props> = (props) => {
   const { info, addOverrideItem, removeOverrideItem, mutateOverrideConfig, updateOverrideItem } =
     props
   const [updating, setUpdating] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [openInfoEditor, setOpenInfoEditor] = useState(false)
   const [openFileEditor, setOpenFileEditor] = useState(false)
   const [openLog, setOpenLog] = useState(false)
@@ -88,11 +90,15 @@ const OverrideItem: React.FC<Props> = (props) => {
       } as MenuItem
     ]
     if (info.ext === 'yaml') {
-      list.splice(3, 1)
+      // YAML 无执行日志, 移除的是索引 2 的 exec-log; 此前误写 splice(3,1) 把 delete 删掉了
+      list.splice(2, 1)
+      // showDivider 画在"该项底部", 要让横线落在删除之上, 得设在删除的前一项(edit-file)上
+      list[list.length - 2].showDivider = true
     }
     return list
   }, [info, t])
   const onMenuAction = (key: Key): void => {
+    setDropdownOpen(false)
     switch (key) {
       case 'edit-info': {
         setOpenInfoEditor(true)
@@ -107,8 +113,7 @@ const OverrideItem: React.FC<Props> = (props) => {
         break
       }
       case 'delete': {
-        removeOverrideItem(info.id)
-        mutateOverrideConfig()
+        setConfirmDelete(true)
         break
       }
     }
@@ -145,6 +150,19 @@ const OverrideItem: React.FC<Props> = (props) => {
         />
       )}
       {openLog && <ExecLogModal id={info.id} onClose={() => setOpenLog(false)} />}
+      {confirmDelete && (
+        <BaseConfirmModal
+          title={t('override.menuItems.delete')}
+          content={t('override.deleteConfirm.prompt')}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setConfirmDelete(false)
+            removeOverrideItem(info.id)
+            mutateOverrideConfig()
+          }}
+          isOpen={true}
+        />
+      )}
       <Card
         as="div"
         fullWidth

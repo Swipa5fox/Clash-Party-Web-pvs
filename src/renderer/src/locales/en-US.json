@@ -514,6 +514,7 @@
   "override.menuItems.editFile": "Edit File",
   "override.menuItems.execLog": "Execution Log",
   "override.menuItems.delete": "Delete",
+  "override.deleteConfirm.prompt": "This cannot be undone. Delete?",
   "override.labels.global": "Global",
   "connections.title": "Connections",
   "connections.closeAll": "Close All Connections",

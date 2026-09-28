@@ -5,6 +5,7 @@ import { configureMonacoYaml } from 'monaco-yaml'
 import metaSchema from 'meta-json-schema/schemas/meta-json-schema.json'
 import pac from 'types-pac/pac.d.ts?raw'
 import { useTheme } from 'next-themes'
+import { uuidV4 } from '@renderer/utils/uuid'
 type Language = 'yaml' | 'javascript' | 'css' | 'json' | 'text'
 
 interface Props {
@@ -26,7 +27,7 @@ const monacoInitialization = (): void => {
       {
         uri: 'http://example.com/meta-json-schema.json',
         fileMatch: ['**/*.clash.yaml'],
-        // @ts-ignore // type JSONSchema7
+        // @ts-expect-error type JSONSchema7
         schema: {
           ...metaSchema,
           patternProperties: {
@@ -96,10 +97,9 @@ export const BaseEditor: React.FC<Props> = (props) => {
   const editorDidMount = (editor: monaco.editor.IStandaloneCodeEditor): void => {
     editorRef.current = editor
 
-    // ponytail: nanoid 只为生成一个不重复的 monaco URI 后缀,crypto.randomUUID 原生等效
-    const uri = monaco.Uri.parse(
-      `${crypto.randomUUID()}.${language === 'yaml' ? 'clash' : ''}.${language}`
-    )
+    // ponytail: nanoid 只为生成一个不重复的 monaco URI 后缀;randomUUID 走 v4 兜底,
+    // 局域网 http 非安全上下文下 crypto.randomUUID 不存在(53 实测炸过)
+    const uri = monaco.Uri.parse(`${uuidV4()}.${language === 'yaml' ? 'clash' : ''}.${language}`)
     const model = monaco.editor.createModel(value, language, uri)
     editorRef.current?.setModel(model)
   }

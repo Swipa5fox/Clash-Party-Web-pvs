@@ -17,12 +17,12 @@ export async function getOverrideConfig(force = false): Promise<IOverrideConfig>
   }
   if (typeof overrideConfig !== 'object') overrideConfig = { items: [] }
   if (!Array.isArray(overrideConfig.items)) overrideConfig.items = []
-  return JSON.parse(JSON.stringify(overrideConfig)) as IOverrideConfig
+  return structuredClone(overrideConfig)
 }
 
 export async function setOverrideConfig(config: IOverrideConfig): Promise<void> {
   await overrideConfigWriteQueue.run(async () => {
-    const nextConfig = JSON.parse(JSON.stringify(config)) as IOverrideConfig
+    const nextConfig = structuredClone(config)
     await atomicWriteFile(overrideConfigPath(), stringify(nextConfig), { encoding: 'utf8' })
     overrideConfig = nextConfig
   })
@@ -71,7 +71,8 @@ export async function createOverride(item: Partial<IOverrideItem>): Promise<IOve
     id,
     name: item.name || (item.type === 'remote' ? 'Remote File' : 'Local File'),
     type: item.type,
-    ext: item.ext || 'js',
+    // remote 未显式指定 ext 时按 URL 后缀推断, 否则 .yaml 覆写会被当 JS 沙箱执行
+    ext: item.ext || (item.type === 'remote' && /\.ya?ml$/i.test(item.url || '') ? 'yaml' : 'js'),
     url: item.url,
     global: item.global || false,
     updated: new Date().getTime()
@@ -89,6 +90,10 @@ export async function createOverride(item: Partial<IOverrideItem>): Promise<IOve
         },
         responseType: 'text'
       })
+      // chromeRequest 保持 net.request 语义: 非 2xx 不抛错, 这里必须自检, 否则 404 页面会被当成覆写内容落盘
+      if (res.status < 200 || res.status >= 300) {
+        throw new Error(`HTTP ${res.status}`)
+      }
       const data = res.data as string
       await setOverride(id, newItem.ext, data)
       break

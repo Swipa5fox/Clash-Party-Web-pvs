@@ -514,6 +514,7 @@
   "override.menuItems.editFile": "编辑文件",
   "override.menuItems.execLog": "执行日志",
   "override.menuItems.delete": "删除",
+  "override.deleteConfirm.prompt": "删除后不可恢复，确定？",
   "override.labels.global": "全局",
   "connections.title": "连接",
   "connections.closeAll": "关闭全部连接",
