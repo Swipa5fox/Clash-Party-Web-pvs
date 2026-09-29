@@ -106,6 +106,8 @@ const App: React.FC = () => {
   useEffect(() => {
     setNativeTheme(appTheme)
     setTheme(appTheme)
+    // 首帧占位底色(theme-init.js)交还给样式表:next-themes 已接管 .dark 类后清除
+    document.documentElement.style.backgroundColor = ''
   }, [appTheme, systemTheme, setTheme])
 
   useEffect(() => {

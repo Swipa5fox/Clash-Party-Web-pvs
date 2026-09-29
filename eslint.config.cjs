@@ -77,6 +77,14 @@ module.exports = [
   },
 
   {
+    files: ['**/theme-init.js'],
+    languageOptions: {
+      // 浏览器首帧脚本,运行环境是 DOM,不是 Node
+      globals: { ...globals.browser }
+    }
+  },
+
+  {
     files: ['**/logger.ts'],
     rules: {
       'no-console': 'off'

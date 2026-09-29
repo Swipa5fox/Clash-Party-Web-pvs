@@ -3,6 +3,8 @@
   <head>
     <meta charset="UTF-8" lang="zh" />
     <title>Clash Party Web</title>
+    <!-- 首帧闪色修复:先于样式表按 localStorage 主题上 dark 类+画底色,须阻塞解析(放在最前) -->
+    <script src="./theme-init.js"></script>
     <link rel="icon" type="image/x-icon" sizes="any" href="./favicon.ico" />
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <meta
