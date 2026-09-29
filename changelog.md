@@ -2,6 +2,27 @@
 
 本文件集中记录版本变更。README 只描述当前的能力与实现方式，不写版本历史。最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
+## 未发布（2026-09-29）
+
+内网部署简化：移除 clash-party-gateway 网关栈（机场插件 v2 服务端 + `:8080` 面板反代），运行时收敛为单容器；插件对接文档一并移除；线路工具从 gateway REST 迁到 WS 桥。
+
+### 部署形态
+
+- **`deploy/gateway/` 整目录移除**（网关源码/测试/Dockerfile/compose/deploy.sh/README）：插件 v2 服务端与 zashboard 面板反代不再随仓库分发；需要参考实现时从 git 历史取回（最后包含它的提交 `578a197`）
+- **`docs/plugin/` 两份对接指南移除**（机场服务端对接指南 v2，中英双版）：不做机场也不接插件，文档连同参考实现对照一并收掉（git 历史同样可取回）
+- **运行时收敛为单容器**：`:3999` Web UI + `:7890` 共享代理 + 自定义线路口；mihomo 控制器保持 `127.0.0.1:9090` 回环（应急面板走 `ssh -L 9090:127.0.0.1:9090` 隧道），LAN 管理面只剩 Web UI 本身（此前 `:8080` 反代即是完整管理面，仅靠 `PANEL_TOKEN` 一道门）
+- **`deploy/opt/bootstrap.sh` 重写为 party-only**：解压 → 预检（docker/外网）→ 构建镜像（core-assets 同步与 `NPM_REGISTRY`/`GITHUB_MIRROR` build-arg 从 deploy.sh 迁入）→ compose 启动 → 健康检查；去掉 `.env`/`PUBLIC_ORIGIN`/端口门等网关概念；`party_data.tgz` 恢复改为直接解压到数据目录
+
+### 线路工具
+
+- **`tools/mihomo-lines/scripts/lines.mjs` 去 gateway 依赖**：`list` / `add`（节点命中检查）/ `switch` / `verify` / `trace` 从 `:8080` REST（`PANEL_TOKEN`）改走 `:3999` WS 桥——`mihomoProxies` / `mihomoChangeProxy` invoke + `mihomoConnections` 事件流；配置去掉 `panelToken`；`trace` 修 `start` 字段兼容（新版内核为 RFC3339 字符串，`* 1000` 恒 NaN 导致匹配不上）；退出语义改为 `main()` 自然退出（Windows 下 `process.exit` 与 undici WS 关闭竞态会触发 libuv 断言 `!(handle->flags & UV_HANDLE_CLOSING)`）
+- 实测（192.168.110.53，网关栈已清）：`list` / `switch` / `trace` 全通，`trace` 捕获 CONNECT 命中 `RuleSet,china-direct`；`add` 未在生产验证（需写覆写+重启内核）
+
+### 文档与清理
+
+- 根 README：拓扑图 / 端口表 / 目录结构 / 插件章节与对接文档链接移除，安全边界对齐单容器形态；快速开始改为显式 `docker build` + compose（party compose 无 `build:` 段）
+- `deploy/party` 三处注释（Dockerfile / compose / entrypoint）去 gateway 语义；`.gitignore`、`.dockerignore`、`.gitattributes` 清掉 gateway 与 `.env.example` 死条目
+
 ## Rebuild v1.3.1（2026-09-28）
 
 部署文件对齐 v1.3 纯 Node 形态（此前仓库 deploy/ 整套还停在 Electron 时代，直接拿来构建必挂）；自定义线路组选线器两级化。

@@ -4,7 +4,7 @@
 #
 # Seed rationale (defaults from src/main/utils/template.ts are LAN-unfriendly):
 #   allow-lan: false            -> LAN clients could not use the proxy ports
-#   external-controller: ''     -> no TCP API for the clash-party-gateway to proxy
+#   external-controller: ''     -> no TCP API for the out-of-band panel / raw REST
 # The values below are written ONCE; afterwards they are user-owned and can be
 # changed from the Web UI (设置 -> Mihomo 内核). Deleting the volume re-seeds.
 set -euo pipefail
@@ -38,16 +38,16 @@ mixed-port: 7890
 # LAN sharing: the whole point of this deployment.
 allow-lan: true
 bind-address: '*'
-# TCP controller for the clash-party-gateway reverse proxy. The compose stack runs
-# network_mode: host, so 127.0.0.1 keeps the controller reachable by the gateway
-# over localhost while staying invisible to LAN clients — they must
-# use the gated panel on the gateway :8080. CP itself keeps talking to the
-# core over its private unix socket regardless of this setting. Volumes
-# seeded by older versions keep their old value; edit it in the Web UI.
+# TCP controller bound to loopback only: reachable from the host itself, invisible
+# to LAN clients. Kept as an out-of-band management path (zashboard panel via
+# `ssh -L 9090:127.0.0.1:9090`, raw REST for debugging) — the everyday admin
+# surface is the Web UI on :3999. CP itself keeps talking to the core over its
+# private unix socket regardless of this setting. Volumes seeded by older
+# versions keep their old value; edit it in the Web UI.
 external-controller: 127.0.0.1:9090
-# Panel files served through the gateway at :8080/ui (zashboard, CP's default).
-# ui/ is fetched by the core on first start when absent (GitHub); to run fully
-# offline, pre-copy the panel into work/ui/ on the volume.
+# Zashboard files (CP's default external panel) served by the core at /ui on the
+# loopback controller. ui/ is fetched by the core on first start when absent
+# (GitHub); to run fully offline, pre-copy the panel into work/ui/ on the volume.
 external-ui: ui
 external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
 EOF

@@ -4,7 +4,7 @@
 
 ## 环境要求
 
-- 目标机跑着本仓库的 Clash Party Web（`:3999`），可选 gateway（`:8080`，REST 命令需要）
+- 目标机跑着本仓库的 Clash Party Web（`:3999`）——全部命令走 :3999 的 WS 桥（invoke 通道 + 事件流），无 gateway 依赖
 - 本机 Node.js >= 22（内置 WebSocket / fetch）
 - 订阅节点名形如 `🇦🇺 高级 | 澳洲 01`（add 按正则匹配节点名）
 
@@ -15,11 +15,9 @@ v1.3 起登录是账号密码（旧 `?token=` URL 参数已失效）：
 ```bash
 # 方式 A: 环境变量
 export LINES_HOST=192.168.x.x LINES_USER=admin LINES_PASSWORD=****
-# 可选: gateway 面板令牌(list/switch/verify 的 REST 走 :8080)
-export LINES_PANEL_TOKEN=****
 
 # 方式 B: 脚本同目录 lines.config.json（不入库不分享）
-{"host":"192.168.x.x","user":"admin","password":"****","panelToken":"****"}
+{"host":"192.168.x.x","user":"admin","password":"****"}
 ```
 
 user/password 即 Web UI `http://<host>:3999` 的登录账号（初始 admin/admin123）。脚本先 POST `/api/login` 拿 `cp_session` cookie，再连 `/ws` 桥。
@@ -70,5 +68,5 @@ PORT   组名              国外出口  国内出口(应直连)
 1. **覆写源码烘焙字面量，禁止 `process.env`**——内核重载时在 app 进程执行覆写函数，无环境变量；留 env 会 `undefined` 导致节点全丢。
 2. **IN-NAME 必须在 MATCH 前**，否则成死规则，流量穿透到订阅默认 MATCH 组（症状：出口国不是目标国）。
 3. **全局口 listener 必须带 `proxy: GLOB`**，否则国内流量直连（症状：全局口 verify 显示「直连」）。
-4. 排查链：口不通 → 查门(compose 映射/host) → 查规则(REST `/rules` 里 IN-NAME) → 查组(`/proxies/<组>` 的 now)。
+4. 排查链：口不通 → 查门(容器在跑/端口占用) → 查规则(Web UI 内核页或桥通道 `mihomoRules` 里 IN-NAME) → 查组(`mihomoProxies` 里的 now)。
 5. verify 探测源必须带 UA（`curl/8.5.0`），ipip.net 无 UA 静默丢包；3322.org 已停服勿用。

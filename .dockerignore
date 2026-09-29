@@ -19,14 +19,3 @@ release
 extra/sidecar/*.exe
 extra/sidecar/*win32*.node
 extra/sidecar/*darwin*.node
-
-# Desktop packaging assets — the linux container never uses them.
-deploy/build
-
-# Local deployment state / secrets
-deploy/gateway/.env
-deploy/gateway/.env.bak
-deploy/gateway/data
-deploy/gateway/gateway.db
-deploy/gateway/gateway.db-shm
-deploy/gateway/gateway.db-wal
