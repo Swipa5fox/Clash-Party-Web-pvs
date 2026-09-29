@@ -8,16 +8,14 @@ import {
   ModalContent,
   ModalFooter,
   ModalHeader,
-  Select,
-  SelectItem,
   Switch,
   Tooltip
 } from '@heroui/react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FaPlus } from 'react-icons/fa6'
-import { checkPortOccupied, getProfileConfig, getProfileStr } from '@renderer/utils/ipc'
-import { parse } from 'yaml'
+import { checkPortOccupied, mihomoProxies } from '@renderer/utils/ipc'
+import { BUILTIN_POLICIES } from '../../../../shared/customLineGroups'
 
 interface Props {
   isOpen: boolean
@@ -57,84 +55,30 @@ const newDraft = (): Draft => ({
   enabled: true
 })
 
-// 机场广告/信息节点判据: 回环 server 或名字带套餐文案, 与 ad-filter 覆写保持一致
-const JUNK_NAME_RE =
-  /官址|官网|网址|订阅地址|剩余|已用|未用|流量|到期|过期|重置|续费|购买|下单|套餐|客服|公告|通知|防失联|加群|群组|电报|telegram|tg群|t\.me/i
-const DEAD_SERVER_RE = /^(?:127\.\d{1,3}\.\d{1,3}\.\d{1,3}|0\.0\.0\.0|localhost|::1)$/i
-
-// 从订阅 profile 文本提取节点名列表(过滤广告/信息节点)
-const extractProfileNodes = (profileStr: string): string[] => {
-  try {
-    const parsed = parse(profileStr) as { proxies?: { name?: unknown; server?: unknown }[] }
-    return (parsed?.proxies ?? [])
-      .filter(
-        (p) =>
-          !!p &&
-          !JUNK_NAME_RE.test(String(p.name ?? '')) &&
-          !DEAD_SERVER_RE.test(String(p.server ?? ''))
-      )
-      .map((p) => String(p.name ?? ''))
-      .filter(Boolean)
-  } catch {
-    return []
-  }
-}
-
-// 代理选择弹窗: 两级 = 先选订阅, 再多选该订阅的节点; 切订阅不清已选(支持跨订阅混选)
+// 代理选择弹窗: 当前订阅全部节点平铺多选(广告/信息节点剔除)
 const ProxyPicker: React.FC<{
   isOpen: boolean
   onClose: () => void
-  profiles: IProfileItem[]
+  proxies: IMihomoProxy[]
   selected: string[]
-  sourceProfile?: string
   title: string
-  onConfirm: (selected: string[], sourceProfile?: string) => void
-}> = ({ isOpen, onClose, profiles, selected, sourceProfile, title, onConfirm }) => {
+  onConfirm: (selected: string[]) => void
+}> = ({ isOpen, onClose, proxies, selected, title, onConfirm }) => {
   const { t } = useTranslation()
   const [local, setLocal] = useState<string[]>(selected)
-  const [profile, setProfile] = useState<string>('')
-  const [nodes, setNodes] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (isOpen) {
       setLocal(selected)
-      setProfile(sourceProfile && profiles.some((p) => p.id === sourceProfile) ? sourceProfile : '')
       setSearch('')
     }
-  }, [isOpen, selected, sourceProfile, profiles])
-
-  // 选中订阅后读 profile 文件取节点
-  useEffect(() => {
-    if (!isOpen || !profile) {
-      setNodes([])
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    getProfileStr(profile)
-      .then((str) => {
-        if (!cancelled) setNodes(extractProfileNodes(str))
-      })
-      .catch(() => {
-        if (!cancelled) setNodes([])
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen, profile])
+  }, [isOpen, selected])
 
   const filtered = useMemo(() => {
-    if (!search) return nodes
-    return nodes.filter((n) => n.toLowerCase().includes(search.toLowerCase()))
-  }, [nodes, search])
-
-  // 已选但不在当前订阅的名字(切换后仍保留展示)
-  const outsideSelected = useMemo(() => local.filter((n) => !nodes.includes(n)), [local, nodes])
+    if (!search) return proxies
+    return proxies.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
+  }, [proxies, search])
 
   const toggle = (name: string): void => {
     setLocal((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
@@ -151,81 +95,40 @@ const ProxyPicker: React.FC<{
       <ModalContent>
         <ModalHeader className="flex app-drag">{title}</ModalHeader>
         <ModalBody className="max-h-[60vh] overflow-y-auto">
-          <Select
+          <Input
             size="sm"
-            label={t('customLines.pickProfile')}
-            selectedKeys={profile ? new Set([profile]) : new Set<string>()}
-            onSelectionChange={(keys) => {
-              const key = keys instanceof Set ? [...keys][0] : keys.currentKey
-              setProfile(typeof key === 'string' ? key : '')
-            }}
-          >
-            {profiles.map((p) => (
-              <SelectItem key={p.id}>{p.name}</SelectItem>
-            ))}
-          </Select>
-          {profile ? (
-            <>
-              <Input
-                size="sm"
-                placeholder={t('customLines.searchProxy')}
-                value={search}
-                onValueChange={setSearch}
-              />
-              {loading ? (
-                <div className="text-center text-foreground-400 text-sm py-4">
-                  {t('common.loading')}
+            placeholder={t('customLines.searchProxy')}
+            value={search}
+            onValueChange={setSearch}
+          />
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
+            {filtered.map((p) => {
+              const isSelected = local.includes(p.name)
+              return (
+                <div
+                  key={p.name}
+                  className={`cursor-pointer rounded-md border border-divider px-2 py-1 text-sm truncate ${
+                    isSelected ? 'bg-primary/30 border-primary' : 'bg-content2'
+                  }`}
+                  onClick={() => toggle(p.name)}
+                  title={p.name}
+                >
+                  <span className="flag-emoji">{p.name}</span>
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-1">
-                  {filtered.map((name) => {
-                    const isSelected = local.includes(name)
-                    return (
-                      <div
-                        key={name}
-                        className={`cursor-pointer rounded-md border border-divider px-2 py-1 text-sm truncate ${
-                          isSelected ? 'bg-primary/30 border-primary' : 'bg-content2'
-                        }`}
-                        onClick={() => toggle(name)}
-                        title={name}
-                      >
-                        <span className="flag-emoji">{name}</span>
-                      </div>
-                    )
-                  })}
-                  {filtered.length === 0 && (
-                    <div className="col-span-full text-center text-foreground-400 text-sm py-4">
-                      {t('customLines.noProxies')}
-                    </div>
-                  )}
-                </div>
-              )}
-              {outsideSelected.length > 0 && (
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {outsideSelected.map((name) => (
-                    <Chip
-                      key={name}
-                      size="sm"
-                      variant="flat"
-                      onClose={() => setLocal((prev) => prev.filter((n) => n !== name))}
-                    >
-                      <span className="flag-emoji">{name}</span>
-                    </Chip>
-                  ))}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="text-center text-foreground-400 text-sm py-4">
-              {t('customLines.noProfiles')}
-            </div>
-          )}
+              )
+            })}
+            {filtered.length === 0 && (
+              <div className="col-span-full text-center text-foreground-400 text-sm py-4">
+                {t('customLines.noProxies')}
+              </div>
+            )}
+          </div>
         </ModalBody>
         <ModalFooter>
           <Button size="sm" variant="light" onPress={onClose}>
             {t('common.cancel')}
           </Button>
-          <Button size="sm" color="primary" onPress={() => onConfirm(local, profile || undefined)}>
+          <Button size="sm" color="primary" onPress={() => onConfirm(local)}>
             {t('common.confirm')}
           </Button>
         </ModalFooter>
@@ -244,7 +147,7 @@ const CustomLineGroupsModal: React.FC<Props> = ({
   const { t } = useTranslation()
   const isEdit = Boolean(editGroupId)
   const [draft, setDraft] = useState<Draft | null>(null)
-  const [profiles, setProfiles] = useState<IProfileItem[]>([])
+  const [proxies, setProxies] = useState<IMihomoProxy[]>([])
   const [saving, setSaving] = useState(false)
   const [pickerTarget, setPickerTarget] = useState(false)
   const [portIssues, setPortIssues] = useState<Record<string, string>>({})
@@ -254,9 +157,15 @@ const CustomLineGroupsModal: React.FC<Props> = ({
       // 单卡: 编辑带出目标组, 新增给一张空白草稿; 保存都对照全量 groups
       const target = editGroupId ? groups.find((g) => g.id === editGroupId) : undefined
       setDraft(target ? structuredClone(target) : newDraft())
-      getProfileConfig()
-        .then((res) => setProfiles(res.items.filter((p) => p.type !== 'plugin')))
-        .catch(() => setProfiles([]))
+      mihomoProxies()
+        .then((res) => {
+          // 平铺当前订阅全部节点; 过滤组/内建策略/ad-filter 覆写注入的 COMPATIBLE 兜底
+          const list = Object.values(res.proxies).filter(
+            (p): p is IMihomoProxy => !('all' in p) && !BUILTIN_POLICIES.has(p.name)
+          )
+          setProxies(list)
+        })
+        .catch(() => setProxies([]))
     }
   }, [isOpen, groups, editGroupId])
 
@@ -506,12 +415,11 @@ const CustomLineGroupsModal: React.FC<Props> = ({
       <ProxyPicker
         isOpen={pickerTarget}
         onClose={() => setPickerTarget(false)}
-        profiles={profiles}
+        proxies={proxies}
         selected={draft?.proxies ?? []}
-        sourceProfile={draft?.sourceProfile}
         title={t('customLines.pickLines')}
-        onConfirm={(picked, sourceProfile) => {
-          updateDraft({ proxies: picked, ...(sourceProfile ? { sourceProfile } : {}) })
+        onConfirm={(picked) => {
+          updateDraft({ proxies: picked })
           setPickerTarget(false)
         }}
       />

@@ -30,7 +30,7 @@
 
 - **主进程脱离 Electron，成为纯 Node 服务器**（v1.3）：删除 electron / electron-builder / electron-vite 全链路与 Windows 安装包，产物改为 Linux tarball（server.cjs + renderer + mihomo 内核 + systemd unit），镜像从 ~2.9GB 降到 ~560MB
 - **部署文件全面对齐**（v1.3.1）：`deploy/party` Dockerfile 多阶段重写 + 独立 compose；gateway / deploy.sh / bootstrap.sh 全链路去 `CP_WEB_TOKEN`（v1.3 起账号密码登录），healthcheck 改探 `/login`
-- **自定义线路组两级选线器**：第一级按订阅维度选（profile id 稳定，换订阅组名不再全变），节点按订阅懒加载并过滤广告/信息节点；注入前与当前订阅求交集，节点改名/换订阅不再让内核拒绝整份配置
+- **自定义线路组选线器**：平铺当前订阅全部节点多选（广告/信息节点剔除）；注入前与当前订阅求交集，节点改名/换订阅不再让内核拒绝整份配置
 - sysproxy-rs 改为 win32 动态加载（Linux 无桌面代理设置可写），`net.request`/`session` 网络栈换 axios + proxy-agent
 - 退出清理改挂 SIGINT/SIGTERM（适配 systemd），`CP_WEB_HOST` 默认 `0.0.0.0`，数据目录 `CP_DATA_DIR` 环境变量化
 
@@ -47,8 +47,8 @@
 
 - **纯 Node 服务器**：主进程无 Electron（express + WS 桥，esbuild 单文件打包），Linux x64 部署，账号密码登录（初始 admin/admin123，凭据哈希落盘）
 - **`clash-party-gateway` 网关**：机场插件 v2 服务端（发现 / 登录 / 领取订阅 / 撤销）+ 单端口面板反代（zashboard 与 mihomo REST/WebSocket），零第三方依赖
-- **覆写模板库**（`tools/mihomo-lines`）：`ad-filter.js` 全量机场垃圾节点过滤（回环地址主判据 + 节点名兜底）、`cn-direct-rules.yaml` 国内直连 + 强制代理（`include-all` 组零订阅组名依赖，换订阅自动适配）；经 WS 桥远程下发，全程无需 ssh
-- **自定义线路组**：在界面上为「选定节点集合 + 专属端口」生成代理组与监听端口，两级选线器（订阅 → 节点，跨订阅混选、广告节点过滤），子组支持 url-test / fallback / select 独立开关，无需手写覆写
+- **覆写模板库**（`tools/mihomo-lines`）：`ad-filter.js` 全量机场垃圾节点过滤（回环地址主判据 + 节点名兜底）、`cn-direct-rules.yaml` 国内直连（零订阅组名依赖，换订阅自动适配）；经 WS 桥远程下发，全程无需 ssh
+- **自定义线路组**：在界面上为「选定节点集合 + 专属端口」生成代理组与监听端口，平铺选线器（当前订阅节点多选、广告节点过滤），子组支持 url-test / fallback / select 独立开关，无需手写覆写
 - **内核/geo 资源离线化**：`deploy.sh` 支持把 `/opt/cpx-core-assets` 预置资源同步进构建上下文，构建不依赖 github.com 可达性
 - **容器部署感知**：容器内点击系统代理 / TUN 时给出可操作提示（引导设备手动配置代理口），而非抛出底层错误
 - **发布链路本地化**：自动更新 / 更新说明 / Telegram 通知全部指向本仓库，不再被上游版本覆盖；移除内嵌 Sub-Store（容器场景不可用且拖慢构建）

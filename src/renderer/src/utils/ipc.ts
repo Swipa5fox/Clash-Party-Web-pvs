@@ -25,7 +25,6 @@ interface IpcApi {
   mihomoRuleProviders: () => Promise<IMihomoRuleProviders>
   mihomoUpdateRuleProviders: (name: string) => Promise<void>
   mihomoChangeProxy: (group: string, proxy: string) => Promise<IMihomoProxy>
-  mihomoUnfixedProxy: (group: string) => Promise<IMihomoProxy>
   mihomoUpgradeGeo: () => Promise<void>
   mihomoUpgrade: () => Promise<void>
   mihomoProxyDelay: (proxy: string, url?: string, provider?: string) => Promise<IMihomoDelay>
@@ -144,7 +143,6 @@ export const {
   mihomoRuleProviders,
   mihomoUpdateRuleProviders,
   mihomoChangeProxy,
-  mihomoUnfixedProxy,
   mihomoUpgradeGeo,
   mihomoUpgrade,
   mihomoProxyDelay,

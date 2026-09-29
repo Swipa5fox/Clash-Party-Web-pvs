@@ -442,11 +442,6 @@ export const mihomoChangeProxy = async (group: string, proxy: string): Promise<I
   return await instance.put(`/proxies/${encodeURIComponent(group)}`, { name: proxy })
 }
 
-export const mihomoUnfixedProxy = async (group: string): Promise<IMihomoProxy> => {
-  const instance = await getAxios()
-  return await instance.delete(`/proxies/${encodeURIComponent(group)}`)
-}
-
 export const mihomoUpgradeGeo = async (): Promise<void> => {
   const instance = await getAxios()
   return await instance.post('/configs/geo')

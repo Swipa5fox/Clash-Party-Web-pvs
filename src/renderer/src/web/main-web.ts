@@ -19,7 +19,6 @@ const validInvokeChannels: readonly string[] = [
   'mihomoRuleProviders',
   'mihomoUpdateRuleProviders',
   'mihomoChangeProxy',
-  'mihomoUnfixedProxy',
   'mihomoUpgradeGeo',
   'mihomoUpgrade',
   'mihomoProxyDelay',

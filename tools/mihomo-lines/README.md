@@ -48,7 +48,7 @@ PORT   组名              国外出口  国内出口(应直连)
 ## 覆写模板（overrides/）
 
 - `ad-filter.js` — 机场垃圾节点过滤：server 为回环/本地址的主判据 + 节点名关键字兜底（只删节点不动组）
-- `cn-direct-rules.yaml` — 国内直连 + 少量强制代理：自建 `include-all` 的「强制代理」组，零订阅组名依赖，换订阅自动适配
+- `cn-direct-rules.yaml` — 国内直连：零订阅组名依赖，换订阅自动适配
 
 推送：`node lines.mjs push <文件> <覆写id> [显示名]`（幂等，同 id 原地更新）。
 

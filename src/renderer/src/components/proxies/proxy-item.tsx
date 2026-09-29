@@ -1,7 +1,5 @@
 import { Button, Card, CardBody } from '@heroui/react'
-import { mihomoUnfixedProxy } from '@renderer/utils/ipc'
 import React, { useMemo, useState, useCallback } from 'react'
-import { FaMapPin } from 'react-icons/fa6'
 import { useTranslation } from 'react-i18next'
 import { KeyedMutator } from 'swr'
 
@@ -88,21 +86,6 @@ const ProxyItemBase: React.FC<Props> = (props) => {
                   {proxy.name}
                 </div>
               </div>
-              {fixed && (
-                <Button
-                  isIconOnly
-                  title={t('proxies.unpin')}
-                  color="danger"
-                  onPress={async () => {
-                    await mihomoUnfixedProxy(group.name)
-                    mutateProxies()
-                  }}
-                  variant="light"
-                  className="h-5 p-0 text-sm"
-                >
-                  <FaMapPin className="text-md le" />
-                </Button>
-              )}
             </div>
             <div className="flex justify-between items-center pl-1">
               <div className="flex gap-1 items-center">
@@ -142,21 +125,6 @@ const ProxyItemBase: React.FC<Props> = (props) => {
               </div>
             </div>
             <div className="flex justify-end">
-              {fixed && (
-                <Button
-                  isIconOnly
-                  title={t('proxies.unpin')}
-                  color="danger"
-                  onPress={async () => {
-                    await mihomoUnfixedProxy(group.name)
-                    mutateProxies()
-                  }}
-                  variant="light"
-                  className="h-5 p-0 text-sm"
-                >
-                  <FaMapPin className="text-md le" />
-                </Button>
-              )}
               <Button
                 isIconOnly
                 title={proxy.type}

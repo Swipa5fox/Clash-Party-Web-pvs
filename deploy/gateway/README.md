@@ -160,7 +160,7 @@ node scripts/plugin/gen-cpx.mjs http://<ip:8080>/oauth/authorize "Your Airport" 
 
 ## 请求链路（机场插件 v2）
 
-首次登录：客户端请求发现文件 → 生成随机 `deviceId` → 系统浏览器打开 `/oauth/authorize` → 用户输入账密 → 网关签发一次性 `code`（绑定 PKCE/redirect_uri/client_id，TTL 60s）→ `/enroll` 提交 code+verifier+deviceId → 写入设备绑定。
+首次登录：客户端请求发现文件 → 生成随机 `deviceId` → 客户端把 `/oauth/authorize` 授权 URL 写入日志（终端输出与数据目录 `logs/clash-party-<日期>.log`），用户从日志复制到浏览器打开（回调监听客户端本机 `127.0.0.1`，浏览器需同机或经端口转发）→ 用户输入账密 → 网关签发一次性 `code`（绑定 PKCE/redirect_uri/client_id，TTL 60s）→ `/enroll` 提交 code+verifier+deviceId → 写入设备绑定。
 
 订阅更新：`/challenge` 领一次性 nonce → `/config` 回传 nonce → 校验防重放 → 网关用该账号隐藏订阅 URL 拉取 Clash YAML 返回。
 

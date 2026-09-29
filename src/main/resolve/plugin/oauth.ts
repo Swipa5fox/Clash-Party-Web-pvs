@@ -1,5 +1,8 @@
 import http from 'http'
 import { randomBytes, createHash } from 'crypto'
+import { createLogger } from '../../utils/logger'
+
+const logger = createLogger('PluginOAuth')
 
 export const CLIENT_ID = 'mihomo-party'
 const CALLBACK_TIMEOUT_MS = 5 * 60 * 1000
@@ -29,11 +32,11 @@ export interface BrowserLoginOpts {
 export function browserLogin(loginUrl: string, opts: BrowserLoginOpts = {}): Promise<OAuthResult> {
   const { verifier, challenge } = generatePkce()
   const state = randomBytes(16).toString('base64url')
-  // 服务器上无浏览器可开：默认打印授权 URL（stdout 是唯一提示通道），等用户完成授权。
-  // 回调监听在服务器本机 127.0.0.1，远程浏览器 redirect 无法到达——需通过
-  // SSH 端口转发或由调用方传入 open（如反代方案）才能完成 OAuth。
+  // 服务器上无浏览器可开：把授权 URL 写进应用日志（终端输出 + 数据目录 logs/clash-party-*.log），
+  // 用户从日志复制到浏览器打开。回调监听在服务器本机 127.0.0.1，远程浏览器 redirect 无法到达
+  // ——需通过 SSH 端口转发或由调用方传入 open（如反代方案）才能完成 OAuth。
   const open =
-    opts.open ?? ((u: string): void => console.warn(`[oauth] open in your browser: ${u}`))
+    opts.open ?? ((u: string): Promise<void> => logger.warn(`open in your browser: ${u}`))
   const timeoutMs = opts.timeoutMs ?? CALLBACK_TIMEOUT_MS
 
   const p = new Promise<OAuthResult>((resolve, reject) => {

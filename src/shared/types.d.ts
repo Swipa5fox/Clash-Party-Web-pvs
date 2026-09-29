@@ -535,8 +535,6 @@ interface ICustomLineGroup {
   name: string
   port: number
   proxies: string[]
-  // 选线来源订阅(profile id): 仅用于选线器打开时预选回显, 生成期不使用
-  sourceProfile?: string
   testUrl?: string
   interval?: number
   auto: boolean
