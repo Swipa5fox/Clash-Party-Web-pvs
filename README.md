@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases">
-    <img src="https://img.shields.io/badge/release-v1.3.1-blue">
+    <img src="https://img.shields.io/badge/release-v1.4.0-blue">
   </a>
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs">
     <img src="https://img.shields.io/badge/upstream-Clash%20Party%20v2.0.2-green">
@@ -24,15 +24,15 @@
 
 > ⚠️ 本项目面向**可信内网**自用：为支持内网直连，移除了传输加密、SSRF 防护与设备签名，凭据改为明文落盘。**不要暴露到公网，也不要对外分发。**
 
-## 当前版本 v1.3.1（2026-09-28）
+## 当前版本 v1.4.0（2026-09-29）
 
-自 v1.2 以来的核心更新（详见 [changelog.md](./changelog.md)）：
+自 v1.3.1 以来的核心更新（详见 [changelog.md](./changelog.md)）：
 
-- **主进程脱离 Electron，成为纯 Node 服务器**（v1.3）：删除 electron / electron-builder / electron-vite 全链路与 Windows 安装包，产物改为 Linux tarball（server.cjs + renderer + mihomo 内核 + systemd unit），镜像从 ~2.9GB 降到 ~560MB
-- **部署文件全面对齐**（v1.3.1）：`deploy/party` Dockerfile 多阶段重写 + 独立 compose；部署脚本全链路去 `CP_WEB_TOKEN`（v1.3 起账号密码登录），healthcheck 改探 `/login`
-- **自定义线路组选线器**：平铺当前订阅全部节点多选（广告/信息节点剔除）；注入前与当前订阅求交集，节点改名/换订阅不再让内核拒绝整份配置
-- sysproxy-rs 改为 win32 动态加载（Linux 无桌面代理设置可写），`net.request`/`session` 网络栈换 axios + proxy-agent
-- 退出清理改挂 SIGINT/SIGTERM（适配 systemd），`CP_WEB_HOST` 默认 `0.0.0.0`，数据目录 `CP_DATA_DIR` 环境变量化
+- **移除 gateway 网关栈，收敛单容器**：`deploy/gateway/`（机场插件 v2 服务端 + `:8080` 面板反代）与插件对接文档整目录删除；运行时只保留 `:3999` Web UI + `:7890` 共享代理 + 自定义线路口，mihomo 控制器维持 `127.0.0.1:9090` 回环
+- **线路工具去 gateway 依赖**：`tools/mihomo-lines` 的 list / add / switch / verify / trace 全部改走 `:3999` WS 桥（账号登录 + invoke），配置去掉 `panelToken`
+- **三轮死码清理**：Windows 安装器资产 / updater / checksum / Telegram 通知链路 / 上游 issue 模板删除；`@electron-toolkit` 移除，`defaultIcon` 2.37MB→671B
+- **Web UI 刷新首帧闪色修复**：`theme-init.js` 于样式表生效前按存储主题上 `dark` 类并画底色，深色不再闪白、浅色不再闪黑
+- 自 v1.3 以历（继承）：主进程纯 Node 服务器 + Linux tarball 产物（镜像 ~560MB）；自定义线路组平铺选线 + 订阅交集注入；`CP_DATA_DIR` 数据目录环境变量化
 
 ## 重要功能
 

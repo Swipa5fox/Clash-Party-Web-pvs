@@ -2,9 +2,9 @@
 
 本文件集中记录版本变更。README 只描述当前的能力与实现方式，不写版本历史。最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
-## 未发布（2026-09-29）
+## v1.4.0（2026-09-29）
 
-内网部署简化：移除 clash-party-gateway 网关栈（机场插件 v2 服务端 + `:8080` 面板反代），运行时收敛为单容器；插件对接文档一并移除；线路工具从 gateway REST 迁到 WS 桥。
+内网部署简化：移除 clash-party-gateway 网关栈（机场插件 v2 服务端 + `:8080` 面板反代），运行时收敛为单容器；插件对接文档一并移除；线路工具从 gateway REST 迁到 WS 桥；死码三轮清理；Web UI 刷新首帧闪色修复。
 
 ### 部署形态
 
@@ -22,6 +22,16 @@
 
 - 根 README：拓扑图 / 端口表 / 目录结构 / 插件章节与对接文档链接移除，安全边界对齐单容器形态；快速开始改为显式 `docker build` + compose（party compose 无 `build:` 段）
 - `deploy/party` 三处注释（Dockerfile / compose / entrypoint）去 gateway 语义；`.gitignore`、`.dockerignore`、`.gitattributes` 清掉 gateway 与 `.env.example` 死条目
+
+### 死码清理（三轮）
+
+- **`bcfbb5a`**：删过时文件——Windows 安装器资产（NSIS icon/installer.nsh）、`scripts/updater.mjs`+`checksum.mjs`+`telegram.mjs`+`version-utils.mjs`（electron-updater/发 Telegram 链路，v1.3 起无消费方）、上游 `.github/ISSUE_TEMPLATE/` 三件
+- **`2206d12`**：纯 Node 迁移死码清除——去 `@electron-toolkit`、`defaultIcon` 2.37MB→671B、pnpm-lock 减 196 行；permissions/logger/lifecycle 等去 Electron 残留
+- 选线回退平铺（`578a197`）：线路组选线器回退一容器一订阅的平铺模式；移除代理卡片「取消固定」按钮及 `mihomoUnfixedProxy` 全链路
+
+### Web UI
+
+- **刷新首帧闪色修复（`f44a214`）**：深色主题刷新闪白光（`.dark` 类等 React 挂载才加，样式表先按浅色变量渲染一帧）、浅色主题刷新闪黑（无样式画布跟随系统 `prefers-color-scheme`）。`web.html` 新增阻塞式 `theme-init.js`：先于样式表按 localStorage 主题键上 `dark` 类并画黑/白底色，React 挂载后清除占位色交还样式表
 
 ## Rebuild v1.3.1（2026-09-28）
 
