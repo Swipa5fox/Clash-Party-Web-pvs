@@ -28,10 +28,6 @@
     "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web",
     "prepare": "node scripts/prepare.mjs",
     "prepare:dev": "node scripts/update-version.mjs && node scripts/prepare.mjs",
-    "updater": "node scripts/updater.mjs",
-    "checksum": "node scripts/checksum.mjs",
-    "telegram": "node scripts/telegram.mjs release",
-    "telegram:dev": "node scripts/telegram.mjs dev",
     "build": "vite build && node scripts/build-server.mjs",
     "build:tarball": "pnpm run build && node scripts/pack-tarball.mjs",
     "dev": "node scripts/dev.mjs"

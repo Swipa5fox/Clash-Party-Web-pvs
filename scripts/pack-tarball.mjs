@@ -72,7 +72,7 @@ if (existsSync(unitSrc)) {
   copy(unitSrc, path.join(STAGE, 'deploy', 'clash-party.service'))
 }
 
-// 6. tar.gz + sha256（64 字节无换行，与 scripts/checksum.mjs 语义一致）
+// 6. tar.gz + sha256（64 字节 hex 无换行）
 await createTar(
   {
     cwd: path.dirname(STAGE),

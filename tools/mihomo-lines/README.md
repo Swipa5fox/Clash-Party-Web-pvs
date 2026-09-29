@@ -1,35 +1,40 @@
-# mihomo 国家双口线路管理器
+# mihomo-lines — 线路口与覆写远程管理
 
-给 mihomo party 网关加「国家双口线路」：一条分流口（国内直连+国外走该国节点）+ 一条全局口（全部走该国节点）。全程远程操作（WS 覆写桥），不碰服务器。
+对 Clash Party Web（本仓库主程序）做远程运维：双口线路口增删、节点切换、出口验证、链路追踪，以及把仓库里存好的覆写模板推到目标机。全程走 Web UI 的 WS 覆写桥，不 ssh 服务器。
 
 ## 环境要求
 
-- 网关机器跑着 [mihomo-party](https://github.com/mihomo-party-org/mihomo-party)（docker），对外暴露：
-  - `8080` — mihomo 内核 REST API（外部控制器）
-  - `3999` — party Web UI（脚本走它的 WS 桥写覆写）
+- 目标机跑着本仓库的 Clash Party Web（`:3999`），可选 gateway（`:8080`，REST 命令需要）
 - 本机 Node.js >= 22（内置 WebSocket / fetch）
-- 订阅节点名形如 `🇦🇺 高级 | 澳洲 01`（名字含国家关键词即可，正则匹配）
+- 订阅节点名形如 `🇦🇺 高级 | 澳洲 01`（add 按正则匹配节点名）
 
 ## 配置（二选一）
 
+v1.3 起登录是账号密码（旧 `?token=` URL 参数已失效）：
+
 ```bash
 # 方式 A: 环境变量
-export LINES_HOST=192.168.x.x LINES_TOKEN=<party Web token>
+export LINES_HOST=192.168.x.x LINES_USER=admin LINES_PASSWORD=****
+# 可选: gateway 面板令牌(list/switch/verify 的 REST 走 :8080)
+export LINES_PANEL_TOKEN=****
 
 # 方式 B: 脚本同目录 lines.config.json（不入库不分享）
-{"host":"192.168.x.x","token":"<party Web token>"}
+{"host":"192.168.x.x","user":"admin","password":"****","panelToken":"****"}
 ```
 
-token = 打开 Web UI `http://<host>:3999` 用的那个（party 启动日志里也有 `CP_WEB_TOKEN`）。
+user/password 即 Web UI `http://<host>:3999` 的登录账号（初始 admin/admin123）。脚本先 POST `/api/login` 拿 `cp_session` cookie，再连 `/ws` 桥。
 
 ## 用法
 
 ```bash
-node lines.mjs list                                   # 已部署线路 + 当前节点
-node lines.mjs add KR 9998 '韩国|Korea|首尔|KR'        # 加国家: 9998 分流口 / 9999 全局口
-node lines.mjs remove KR                              # 删国家
+node lines.mjs list                                        # 已部署线路 + 当前节点
+node lines.mjs add KR 9998 '韩国|Korea|首尔|KR'            # 加双口: 9998 分流口 / 9999 全局口
+node lines.mjs add KR 9998 '韩国|Korea' --flat             # 平铺版: 入口组直接挂节点(无子组)
+node lines.mjs remove KR                                   # 删双口线路
 node lines.mjs switch 'KR·通用[9998]' '🇰🇷 标准 | 韩国 02'  # 切节点
-node lines.mjs verify                                 # 出口验证: 国外出口国 + 国内是否直连
+node lines.mjs verify                                      # 出口验证: 国外出口国 + 国内直连 + 小红书
+node lines.mjs trace 9998 www.example.com                  # 追一个 CONNECT 实际命中的规则与链路
+node lines.mjs push overrides/cn-direct-rules.yaml cn-direct-rules 'CN 国内直连'  # 推覆写模板
 ```
 
 verify 正确长相（分流口=国内直连，全局口=国内也走代理）：
@@ -40,27 +45,22 @@ PORT   组名              国外出口  国内出口(应直连)
 9999   KR·全局[9999]     KR        走了代理!
 ```
 
+## 覆写模板（overrides/）
+
+- `ad-filter.js` — 机场垃圾节点过滤：server 为回环/本地址的主判据 + 节点名关键字兜底（只删节点不动组）
+- `cn-direct-rules.yaml` — 国内直连 + 少量强制代理：自建 `include-all` 的「强制代理」组，零订阅组名依赖，换订阅自动适配
+
+推送：`node lines.mjs push <文件> <覆写id> [显示名]`（幂等，同 id 原地更新）。
+
 ## 端口门（仅 bridge 网络模式才需要）
 
-默认部署（`deploy/gateway/docker-compose.yml`）已改用 `network_mode: host`：listener 直接绑宿主机，加线路零 ssh、即写即生效，无需任何端口映射。
+默认部署（host 网络）listener 直接绑宿主机，加线路即写即生效。若部署是 bridge + ports 映射，新端口要在 compose 映射后才对外可达（add 完会自动检测并打印提示）。
 
-若你的部署仍是默认 bridge + ports 映射，新端口必须在 `docker-compose.override.yml` 映射后才对外可达：
-
-```yaml
-services:
-  party:
-    ports:
-      - '9998:9998'
-      - '9999:9999'
-```
-
-然后 `docker compose up -d party`。脚本 add 完会自动检测，门没开会打印这段提示。迁移到 host 模式时记得删除 override 里残留的 `ports` 段（与 host 模式冲突会报错）。
-
-## 原理
+## 原理（add）
 
 每次 add = 写一个全局覆写（JS），内核重载配置时执行：
 
-- 按正则筛出该国节点，两位编号尾数排序
+- 按正则筛出目标节点，两位编号尾数排序
 - 建两个 select 组：`<PREFIX>·通用[<base>]` / `<PREFIX>·全局[<base+1>]`
 - 建两个 mixed listener（`0.0.0.0`，支持 UDP）：分流口无绑定走规则，全局口 `proxy:` 绑全局组
 - 在 `MATCH` **之前**插入 `IN-NAME,<prefix>-mix,<POOL>`——分流口的流量先进本国池；国内域名/IP 被订阅自带规则更早命中 DIRECT，实现国内直连
