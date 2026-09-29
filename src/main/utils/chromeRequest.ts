@@ -6,13 +6,7 @@ export interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH'
   headers?: Record<string, string>
   body?: string | Buffer
-  proxy?:
-    | {
-        protocol: 'http' | 'https'
-        host: string
-        port: number
-      }
-    | false
+  proxy?: { host: string; port: number } | false
   timeout?: number
   responseType?: 'text' | 'json' | 'arraybuffer'
 }
@@ -44,7 +38,7 @@ export async function request<T = unknown>(
   let httpAgent: HttpProxyAgent<string> | undefined
   let httpsAgent: HttpsProxyAgent<string> | undefined
   if (proxy) {
-    const proxyUrl = `${proxy.protocol}://${proxy.host}:${proxy.port}`
+    const proxyUrl = `http://${proxy.host}:${proxy.port}`
     httpAgent = new HttpProxyAgent(proxyUrl)
     httpsAgent = new HttpsProxyAgent(proxyUrl)
   }

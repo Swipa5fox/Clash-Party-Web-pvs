@@ -37,7 +37,6 @@ export async function fetchThemes(): Promise<void> {
     responseType: 'arraybuffer',
     headers: { 'Content-Type': 'application/octet-stream' },
     proxy: {
-      protocol: 'http',
       host: '127.0.0.1',
       port: mixedPort
     }

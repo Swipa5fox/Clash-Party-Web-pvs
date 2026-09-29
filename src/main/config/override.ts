@@ -84,7 +84,6 @@ export async function createOverride(item: Partial<IOverrideItem>): Promise<IOve
       if (!item.url) throw new Error('Empty URL')
       const res = await chromeRequest.get(item.url, {
         proxy: {
-          protocol: 'http',
           host: '127.0.0.1',
           port: mixedPort
         },

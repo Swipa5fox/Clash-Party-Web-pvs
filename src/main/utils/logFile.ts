@@ -182,13 +182,6 @@ class CappedLogWritable extends Writable {
   }
 }
 
-export function createCappedLogWritableStream(
-  filePath: LogFilePath,
-  maxBytes = getGlobalMaxLogFileSizeBytes()
-): Writable {
-  return new CappedLogWritable(filePath, maxBytes)
-}
-
 export function createCoreLogWritableStream(
   filePath: LogFilePath,
   maxBytes = getGlobalMaxLogFileSizeBytes()

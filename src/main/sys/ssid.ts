@@ -61,13 +61,6 @@ export async function startSSIDCheck(): Promise<void> {
   ssidCheckInterval = setInterval(checkSSID, 30000)
 }
 
-export function stopSSIDCheck(): void {
-  if (ssidCheckInterval) {
-    clearInterval(ssidCheckInterval)
-    ssidCheckInterval = null
-  }
-}
-
 async function getSSIDByNetsh(): Promise<string | undefined> {
   const execPromise = promisify(exec)
   const { stdout } = await execPromise('netsh wlan show interfaces')

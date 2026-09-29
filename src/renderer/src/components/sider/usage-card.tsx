@@ -51,7 +51,7 @@ const UsageCard: React.FC<Props> = (props) => {
   const transform = tf ? { x: tf.x, y: tf.y, scaleX: 1, scaleY: 1 } : null
   const loggerSwitch = (
     <div
-      className="app-nodrag flex items-center"
+      className=" flex items-center"
       onClick={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >

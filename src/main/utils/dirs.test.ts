@@ -20,7 +20,6 @@ vi.mock('../runtime', async (importOriginal) => {
   const original = await importOriginal<typeof import('../runtime')>()
   return {
     ...original,
-    isDevMode: () => true,
     installRoot: () => path.join(path.sep, 'tmp', 'repo')
   }
 })

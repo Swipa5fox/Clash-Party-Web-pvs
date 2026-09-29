@@ -51,8 +51,6 @@ beforeAll(async () => {
   )
   handle = await startWebBridge({
     port: 0,
-    platform: 'test-platform',
-    version: '1.2.3',
     staticRoot,
     rpc
   })
@@ -104,12 +102,7 @@ async function connectAuthed(): Promise<WebSocket> {
   const ws = connect(wsUrl, sessionCookie)
   const helloP = nextMessage(ws)
   await opened(ws)
-  expect(await helloP).toEqual({
-    type: 'hello',
-    ok: true,
-    platform: 'test-platform',
-    version: '1.2.3'
-  })
+  expect(await helloP).toEqual({ type: 'hello', ok: true })
   return ws
 }
 
@@ -299,13 +292,6 @@ describe('serializeValue', () => {
     expect(encoded).toEqual({ list: [{ __buf: Buffer.from('a').toString('base64') }] })
   })
 
-  it('encodes nativeImage-like objects with toDataURL', () => {
-    const encoded = JSON.parse(
-      JSON.stringify(serializeValue({ data: { toDataURL: () => 'data:image/png;base64,xx' } }))
-    )
-    expect(encoded).toEqual({ data: { __img: 'data:image/png;base64,xx' } })
-  })
-
   it('keeps undefined as undefined and leaves toJSON objects to JSON.stringify', () => {
     expect(serializeValue(undefined)).toBeUndefined()
     const encoded = JSON.parse(JSON.stringify(serializeValue({ at: new Date(0) })))
@@ -386,8 +372,6 @@ describe('webBridge blocked channels wiring', () => {
   beforeAll(async () => {
     blockedHandle = await startWebBridge({
       port: 0,
-      platform: 'test-platform',
-      version: '1.2.3',
       staticRoot: join(tmpdir(), 'clash-party-web-bridge-blocked-no-assets'),
       blockedChannels: ['quitApp']
     })

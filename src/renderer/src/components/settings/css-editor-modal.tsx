@@ -34,7 +34,7 @@ const CSSEditorModal: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent className="h-full w-[calc(100%-100px)]">
-        <ModalHeader className="flex pb-0 app-drag">{t('theme.editor.title')}</ModalHeader>
+        <ModalHeader className="flex pb-0">{t('theme.editor.title')}</ModalHeader>
         <ModalBody className="h-full">
           <BaseEditor
             language="css"

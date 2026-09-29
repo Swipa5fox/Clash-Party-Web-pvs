@@ -37,7 +37,7 @@ const ExecLogModal: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent>
-        <ModalHeader className="flex app-drag">{t('override.execLog.title')}</ModalHeader>
+        <ModalHeader className="flex">{t('override.execLog.title')}</ModalHeader>
         <ModalBody>
           {logs.map((log) => {
             return (

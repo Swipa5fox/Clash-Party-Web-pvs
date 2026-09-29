@@ -25,8 +25,6 @@ export type RpcFn = (channel: string, args: unknown[]) => Promise<RpcResult>
 export interface WebBridgeOptions {
   port?: number
   host?: string
-  platform: string
-  version: string
   staticRoot: string
   devServerUrl?: string
   rpc?: RpcFn
@@ -88,9 +86,6 @@ export function createRpcRouter(
 export function serializeValue(value: unknown): unknown {
   if (Buffer.isBuffer(value)) {
     return { __buf: value.toString('base64') }
-  }
-  if (value && typeof (value as { toDataURL?: unknown }).toDataURL === 'function') {
-    return { __img: (value as { toDataURL: () => string }).toDataURL() }
   }
   if (Array.isArray(value)) {
     return value.map((item) => serializeValue(item))
@@ -329,7 +324,7 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
 
   const sockets = new Set<WebSocket>()
   const authedClients = new Set<WebSocket>()
-  const helloAck = { type: 'hello', ok: true, platform: opts.platform, version: opts.version }
+  const helloAck = { type: 'hello', ok: true }
 
   const sendJson = (ws: WebSocket, msg: unknown): void => {
     if (ws.readyState !== WebSocket.OPEN) return

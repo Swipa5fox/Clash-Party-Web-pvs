@@ -9,7 +9,8 @@ interface ConfigContextValue<T> {
 interface CreateConfigContextOptions<T> {
   swrKey: string
   fetcher: () => Promise<T>
-  ipcEvent: string
+  // 可选：主进程有对应广播事件时订阅刷新；没有则依赖写后 mutate
+  ipcEvent?: string
 }
 
 export function createConfigContext<T>(options: CreateConfigContextOptions<T>) {
@@ -20,6 +21,7 @@ export function createConfigContext<T>(options: CreateConfigContextOptions<T>) {
     const { data: config, mutate } = useSWR(swrKey, fetcher)
 
     useEffect(() => {
+      if (!ipcEvent) return
       const handler = (): void => {
         mutate()
       }

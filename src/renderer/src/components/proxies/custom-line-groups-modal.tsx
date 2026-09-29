@@ -93,7 +93,7 @@ const ProxyPicker: React.FC<{
       size="lg"
     >
       <ModalContent>
-        <ModalHeader className="flex app-drag">{title}</ModalHeader>
+        <ModalHeader className="flex">{title}</ModalHeader>
         <ModalBody className="max-h-[60vh] overflow-y-auto">
           <Input
             size="sm"
@@ -283,7 +283,7 @@ const CustomLineGroupsModal: React.FC<Props> = ({
         size="lg"
       >
         <ModalContent>
-          <ModalHeader className="flex app-drag">
+          <ModalHeader className="flex">
             {isEdit ? t('customLines.editTitle') : t('customLines.addTitle')}
           </ModalHeader>
           <ModalBody className="max-h-[60vh] overflow-y-auto gap-4">

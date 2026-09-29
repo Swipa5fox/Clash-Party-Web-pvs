@@ -1,13 +1,6 @@
-function checkIpcError<T>(response: unknown): T {
-  if (response && typeof response === 'object' && 'invokeError' in response) {
-    throw (response as { invokeError: unknown }).invokeError
-  }
-  return response as T
-}
-
+// WS 桥对失败 invoke 直接 reject 错误字符串，成功值原样返回
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
-  const response = await window.electron.ipcRenderer.invoke(channel, ...args)
-  return checkIpcError<T>(response)
+  return (await window.electron.ipcRenderer.invoke(channel, ...args)) as T
 }
 
 // IPC API 类型定义
@@ -28,7 +21,6 @@ interface IpcApi {
   mihomoUpgradeGeo: () => Promise<void>
   mihomoUpgrade: () => Promise<void>
   mihomoProxyDelay: (proxy: string, url?: string, provider?: string) => Promise<IMihomoDelay>
-  patchMihomoConfig: (patch: Partial<IMihomoConfig>) => Promise<void>
   // Config
   getAppConfig: (force?: boolean) => Promise<IAppConfig>
   patchAppConfig: (patch: Partial<IAppConfig>) => Promise<void>
@@ -146,7 +138,6 @@ export const {
   mihomoUpgradeGeo,
   mihomoUpgrade,
   mihomoProxyDelay,
-  patchMihomoConfig,
   // Config
   getAppConfig,
   patchAppConfig,

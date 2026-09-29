@@ -36,31 +36,30 @@ describe('deployment', () => {
   it('linux + /.dockerenv 存在 → container', async () => {
     stubPlatform('linux')
     dockerEnvExists.mockImplementation((p: string) => p === '/.dockerenv')
-    const { getDeploymentEnv, isContainerDeployment } = await import('./deployment')
+    const { isContainerDeployment } = await import('./deployment')
     expect(isContainerDeployment()).toBe(true)
-    expect(getDeploymentEnv()).toBe('container')
   })
 
-  it('linux + 无 /.dockerenv → desktop', async () => {
+  it('linux + 无 /.dockerenv → 非容器', async () => {
     stubPlatform('linux')
-    const { getDeploymentEnv } = await import('./deployment')
-    expect(getDeploymentEnv()).toBe('desktop')
+    const { isContainerDeployment } = await import('./deployment')
+    expect(isContainerDeployment()).toBe(false)
   })
 
-  it('非 linux 平台即使 /.dockerenv 存在也视为 desktop（不做 fs 探测）', async () => {
+  it('非 linux 平台即使 /.dockerenv 存在也视为非容器（不做 fs 探测）', async () => {
     stubPlatform('win32')
     dockerEnvExists.mockImplementation(() => true)
-    const { getDeploymentEnv } = await import('./deployment')
-    expect(getDeploymentEnv()).toBe('desktop')
+    const { isContainerDeployment } = await import('./deployment')
+    expect(isContainerDeployment()).toBe(false)
     expect(dockerEnvExists).not.toHaveBeenCalled()
   })
 
   it('检测结果被缓存：重复调用不再触碰文件系统', async () => {
     stubPlatform('linux')
     dockerEnvExists.mockImplementation((p: string) => p === '/.dockerenv')
-    const { getDeploymentEnv } = await import('./deployment')
-    getDeploymentEnv()
-    getDeploymentEnv()
+    const { isContainerDeployment } = await import('./deployment')
+    isContainerDeployment()
+    isContainerDeployment()
     expect(dockerEnvExists).toHaveBeenCalledTimes(1)
   })
 })

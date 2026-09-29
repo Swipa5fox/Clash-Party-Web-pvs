@@ -207,28 +207,6 @@ export async function initWebdavBackupScheduler(): Promise<void> {
 }
 
 /**
- * 停止 WebDAV 定时备份任务
- */
-export async function stopWebdavBackupScheduler(): Promise<void> {
-  if (backupCronJob) {
-    backupCronJob.stop()
-    backupCronJob = null
-    await systemLogger.info('WebDAV backup scheduler stopped')
-  }
-}
-
-/**
- * 重新初始化 WebDAV 定时备份任务
- * 先停止现有任务，然后重新启动
- */
-export async function reinitScheduler(): Promise<void> {
-  await systemLogger.info('Reinitializing WebDAV backup scheduler...')
-  await stopWebdavBackupScheduler()
-  await initWebdavBackupScheduler()
-  await systemLogger.info('WebDAV backup scheduler reinitialized successfully')
-}
-
-/**
  * 导出本地备份为 base64（无对话框，web 端由浏览器下载）
  */
 export async function exportBackupToBase64(): Promise<string> {

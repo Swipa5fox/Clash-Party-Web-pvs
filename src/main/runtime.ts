@@ -28,11 +28,6 @@ export function installRoot(): string {
   return root
 }
 
-export function isDevMode(): boolean {
-  // 源码运行（未 bundle）：本文件仍位于 src/main 下。
-  return existsSync(join(root, 'src', 'main'))
-}
-
 export function rendererRoot(): string {
   // tarball: 根/renderer；repo: 构建产物 dist/renderer。
   const bundled = join(root, 'renderer')

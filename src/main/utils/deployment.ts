@@ -17,12 +17,6 @@ export function isContainerDeployment(): boolean {
   return cachedContainer
 }
 
-export type DeploymentEnv = 'desktop' | 'container'
-
-export function getDeploymentEnv(): DeploymentEnv {
-  return isContainerDeployment() ? 'container' : 'desktop'
-}
-
 // 仅供测试重置缓存
 export function resetDeploymentCacheForTest(): void {
   cachedContainer = undefined

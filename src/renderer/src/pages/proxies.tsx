@@ -678,7 +678,6 @@ const Proxies: React.FC = () => {
                             variant="light"
                             size="sm"
                             isIconOnly
-                            className="app-nodrag"
                           >
                             <FaEllipsisVertical className="text-lg text-foreground-500" />
                           </Button>
@@ -820,7 +819,6 @@ const Proxies: React.FC = () => {
             size="sm"
             isIconOnly
             variant="light"
-            className="app-nodrag"
             title={t('customLines.title')}
             onPress={() => setShowLineGroups(true)}
           >
@@ -828,13 +826,7 @@ const Proxies: React.FC = () => {
           </Button>
           <Dropdown placement="bottom-end">
             <DropdownTrigger>
-              <Button
-                size="sm"
-                isIconOnly
-                variant="light"
-                className="app-nodrag"
-                title={t('proxies.settings')}
-              >
+              <Button size="sm" isIconOnly variant="light" title={t('proxies.settings')}>
                 <HiOutlineAdjustmentsHorizontal className="text-lg" />
               </Button>
             </DropdownTrigger>

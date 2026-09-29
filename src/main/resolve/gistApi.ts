@@ -37,7 +37,6 @@ async function listGists(token: string): Promise<GistInfo[]> {
       'X-GitHub-Api-Version': '2022-11-28'
     },
     proxy: {
-      protocol: 'http',
       host: '127.0.0.1',
       port
     },
@@ -62,7 +61,6 @@ async function createGist(token: string, content: string): Promise<void> {
         'X-GitHub-Api-Version': '2022-11-28'
       },
       proxy: {
-        protocol: 'http',
         host: '127.0.0.1',
         port
       }
@@ -85,7 +83,6 @@ async function updateGist(token: string, id: string, content: string): Promise<v
         'X-GitHub-Api-Version': '2022-11-28'
       },
       proxy: {
-        protocol: 'http',
         host: '127.0.0.1',
         port
       }

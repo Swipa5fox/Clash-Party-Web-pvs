@@ -182,7 +182,7 @@ const App: React.FC = () => {
     >
       {siderWidthValue === narrowWidth ? (
         <div style={{ width: `${narrowWidth}px` }} className="side h-full flex flex-col">
-          <div className="app-drag flex shrink-0 justify-center items-center z-40 bg-transparent h-11.25">
+          <div className=" flex shrink-0 justify-center items-center z-40 bg-transparent h-11.25">
             <img src="/logo.png" alt="Clash Party" className="h-8 w-8 mx-px" />
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar">
@@ -196,7 +196,6 @@ const App: React.FC = () => {
           <div className="px-2 pt-2 pb-4 flex shrink-0 flex-col items-center space-y-2">
             <Button
               size="sm"
-              className="app-nodrag"
               isIconOnly
               color={location.pathname.includes('/settings') ? 'primary' : 'default'}
               variant={location.pathname.includes('/settings') ? 'solid' : 'light'}
@@ -213,7 +212,7 @@ const App: React.FC = () => {
           style={{ width: `${siderWidthValue}px` }}
           className="side h-full overflow-y-auto no-scrollbar"
         >
-          <div className="app-drag sticky top-0 z-40 backdrop-blur bg-transparent h-12.25">
+          <div className=" sticky top-0 z-40 backdrop-blur bg-transparent h-12.25">
             <div className="flex justify-between p-2">
               <div className="flex ml-1 items-center">
                 <img src="/logo.png" alt="Clash Party" className="h-8 w-8 mx-px shrink-0" />
@@ -221,7 +220,6 @@ const App: React.FC = () => {
               </div>
               <Button
                 size="sm"
-                className="app-nodrag"
                 isIconOnly
                 color={location.pathname.includes('/settings') ? 'primary' : 'default'}
                 variant={location.pathname.includes('/settings') ? 'solid' : 'light'}

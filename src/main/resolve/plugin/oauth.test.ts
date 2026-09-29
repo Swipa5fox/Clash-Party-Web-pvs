@@ -5,8 +5,6 @@ import { createHash } from 'crypto'
 import { describe, it, expect, vi } from 'vitest'
 import { generatePkce, browserLogin } from './oauth'
 
-vi.mock('electron', () => ({ shell: { openExternal: vi.fn() } }))
-
 function get(url: string): Promise<number> {
   return new Promise((resolve, reject) => {
     http

@@ -41,7 +41,7 @@ const EditInfoModal: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent>
-        <ModalHeader className="flex app-drag">{t('override.editInfo.title')}</ModalHeader>
+        <ModalHeader className="flex">{t('override.editInfo.title')}</ModalHeader>
         <ModalBody>
           <SettingItem title={t('override.editInfo.name')}>
             <Input

@@ -12,8 +12,8 @@ import { createConfigContext } from './create-config-context'
 
 const { Provider, useConfig } = createConfigContext<IOverrideConfig>({
   swrKey: 'getOverrideConfig',
-  fetcher: getOverrideConfig,
-  ipcEvent: 'overrideConfigUpdated'
+  fetcher: getOverrideConfig
+  // 主进程不广播 overrideConfigUpdated；写操作经 withErrorHandling 写后 mutate 刷新
 })
 
 interface OverrideConfigContextType {

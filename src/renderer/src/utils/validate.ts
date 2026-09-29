@@ -38,10 +38,6 @@ const regexSyntaxValidator = (value: string): boolean => {
 
 const domainRegexValidator = regexSyntaxValidator
 
-const portValidator = (value: string): boolean => {
-  return validator.isPort(value)
-}
-
 const ipv4CIDRValidator = (value: string): boolean => {
   // 验证 IPv4 CIDR 格式 (例如：192.168.1.0/24)
   if (!value.includes('/')) return false
@@ -71,36 +67,6 @@ export const getError = (result: ValidationResult): string | undefined => result
 // IP CIDR 验证器（同时支持 IPv4 和 IPv6）
 const ipCIDRValidator = (value: string): boolean => {
   return ipv4CIDRValidator(value) || ipv6CIDRValidator(value)
-}
-
-const sysProxyBypassValidator = (
-  value: string,
-  targetPlatform: NodeJS.Platform | string
-): boolean => {
-  const entry = value.trim()
-  if (entry === '') return false
-
-  if (validator.isIP(entry)) return true
-
-  if (targetPlatform !== 'win32' && validator.isIPRange(entry)) return true
-
-  if (targetPlatform === 'win32' && entry.toLowerCase() === '<local>') {
-    return true
-  }
-
-  if (targetPlatform === 'win32' && /[*?]/.test(entry)) {
-    const normalizedPattern = entry.replace(/\*/g, 'wildcard').replace(/\?/g, 'q')
-    return validator.isFQDN(normalizedPattern, {
-      require_tld: false,
-      allow_numeric_tld: true
-    })
-  }
-
-  return validator.isFQDN(entry, {
-    require_tld: false,
-    allow_numeric_tld: true,
-    allow_wildcard: true
-  })
 }
 
 // DOMAIN-WILDCARD 验证器 - 仅支持 * 和 ? 通配符
@@ -279,12 +245,8 @@ export {
   ruleSetValidator,
   logicRuleValidator,
   subRuleValidator,
-  portValidator,
   portRangeValidator,
-  ipv4CIDRValidator,
-  ipv6CIDRValidator,
-  ipCIDRValidator,
-  sysProxyBypassValidator
+  ipCIDRValidator
 }
 
 // 通用验证结果类型

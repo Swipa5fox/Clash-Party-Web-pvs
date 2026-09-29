@@ -1,21 +1,11 @@
 export function calcTraffic(byte: number): string {
-  if (byte < 1024) return `${formatNumString(byte)} B`
-  byte /= 1024
-  if (byte < 1024) return `${formatNumString(byte)} KB`
-  byte /= 1024
-  if (byte < 1024) return `${formatNumString(byte)} MB`
-  byte /= 1024
-  if (byte < 1024) return `${formatNumString(byte)} GB`
-  byte /= 1024
-  if (byte < 1024) return `${formatNumString(byte)} TB`
-  byte /= 1024
-  if (byte < 1024) return `${formatNumString(byte)} PB`
-  byte /= 1024
-  if (byte < 1024) return `${formatNumString(byte)} EB`
-  byte /= 1024
-  if (byte < 1024) return `${formatNumString(byte)} ZB`
-  byte /= 1024
-  return `${formatNumString(byte)} YB`
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+  let value = byte
+  for (let i = 0; i < units.length; i++) {
+    if (value < 1024 || i === units.length - 1) return `${formatNumString(value)} ${units[i]}`
+    value /= 1024
+  }
+  return `${formatNumString(value)} YB`
 }
 
 function formatNumString(num: number): string {

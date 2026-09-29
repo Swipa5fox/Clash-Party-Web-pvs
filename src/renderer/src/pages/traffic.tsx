@@ -197,7 +197,7 @@ const TrafficPage: React.FC = () => {
     <BasePage
       title={t('sider.cards.traffic')}
       header={
-        <div className="app-nodrag flex items-center gap-2">
+        <div className=" flex items-center gap-2">
           <Tabs
             size="sm"
             selectedKey={timeRange}

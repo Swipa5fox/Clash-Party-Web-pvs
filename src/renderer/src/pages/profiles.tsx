@@ -208,7 +208,6 @@ const Profiles: React.FC = () => {
             title={t('plugins.title')}
             isIconOnly
             variant="light"
-            className="app-nodrag"
             onPress={() => {
               setPluginDropFile(null)
               setShowPluginImport(true)
@@ -219,7 +218,6 @@ const Profiles: React.FC = () => {
           <Button
             size="sm"
             title={t('profiles.updateAll')}
-            className="app-nodrag"
             variant="light"
             isIconOnly
             onPress={async () => {

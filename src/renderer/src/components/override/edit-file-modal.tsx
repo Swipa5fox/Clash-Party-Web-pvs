@@ -33,7 +33,7 @@ const EditFileModal: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent className="h-full w-[calc(100%-100px)]">
-        <ModalHeader className="flex pb-0 app-drag">
+        <ModalHeader className="flex pb-0">
           {t('override.editFile.title', {
             type:
               language === 'javascript'

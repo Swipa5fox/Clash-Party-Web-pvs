@@ -171,7 +171,6 @@ const Override: React.FC = () => {
             variant="light"
             title={t('override.docs')}
             isIconOnly
-            className="app-nodrag"
             onPress={() => {
               open('https://clashparty.org/docs/guide/override')
             }}
@@ -179,7 +178,6 @@ const Override: React.FC = () => {
             <HiOutlineDocumentText className="text-lg" />
           </Button>
           <Button
-            className="app-nodrag"
             title={t('override.repository')}
             isIconOnly
             variant="light"

@@ -31,7 +31,7 @@ const ConfigViewer: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent className="h-full w-[calc(100%-100px)]">
-        <ModalHeader className="flex pb-0 app-drag">{t('sider.cards.config')}</ModalHeader>
+        <ModalHeader className="flex pb-0">{t('sider.cards.config')}</ModalHeader>
         <ModalBody className="h-full">
           <BaseEditor language="yaml" value={currData} readOnly={true} />
         </ModalBody>

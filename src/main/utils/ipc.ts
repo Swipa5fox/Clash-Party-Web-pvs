@@ -18,7 +18,6 @@ import {
   mihomoUpgradeGeo,
   mihomoHotReloadConfig,
   mihomoVersion,
-  patchMihomoConfig,
   mihomoRulesDisable
 } from '../core/mihomoApi'
 import {
@@ -57,9 +56,9 @@ import {
   webdavRestore,
   exportBackupToBase64,
   importBackupFromBase64,
-  reinitScheduler
+  initWebdavBackupScheduler
 } from '../resolve/backup'
-import { getInterfaces } from '../sys/interface'
+import os from 'os'
 import {
   fetchThemes,
   importThemesFromContents,
@@ -202,7 +201,6 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   mihomoUpgradeGeo,
   mihomoUpgrade,
   mihomoProxyDelay,
-  patchMihomoConfig,
   // Config
   getAppConfig,
   patchAppConfig: patchAppConfigAndBroadcast,
@@ -253,7 +251,7 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   webdavRestore,
   listWebdavBackups,
   webdavDelete,
-  reinitWebdavBackupScheduler: reinitScheduler,
+  reinitWebdavBackupScheduler: initWebdavBackupScheduler,
   exportLocalBackupBase64: exportBackupToBase64,
   importLocalBackupFromContent: importBackupFromBase64,
   // Theme
@@ -291,7 +289,7 @@ export const asyncHandlers: Record<string, AsyncFn> = {
 }
 
 export const syncHandlers: Record<string, SyncFn> = {
-  getInterfaces,
+  getInterfaces: os.networkInterfaces,
   setNativeTheme,
   getVersion: () => appVersion(),
   platform: () => process.platform

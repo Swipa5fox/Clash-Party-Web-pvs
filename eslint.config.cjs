@@ -7,7 +7,7 @@ const globals = require('globals')
 
 module.exports = [
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/extra/**', '**/src/native/**']
+    ignores: ['**/node_modules/**', '**/dist/**', '**/out/**', '**/extra/**']
   },
 
   js.configs.recommended,
@@ -54,7 +54,8 @@ module.exports = [
   {
     files: ['**/*.cjs', '**/*.mjs'],
     languageOptions: {
-      globals: { ...globals.node }
+      // globals.node 未收录 Node ≥22 的全局 WebSocket
+      globals: { ...globals.node, WebSocket: 'readonly' }
     },
     rules: {
       '@typescript-eslint/no-require-imports': 'off',

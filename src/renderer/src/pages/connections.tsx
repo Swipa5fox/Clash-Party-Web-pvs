@@ -447,14 +447,14 @@ const Connections: React.FC = () => {
             </span>
           </div>
           <Badge
-            className="app-nodrag pointer-events-none mt-2"
+            className=" pointer-events-none mt-2"
             color="primary"
             variant="flat"
             showOutline={false}
             content={filteredConnections.length}
           >
             <Button
-              className="app-nodrag ml-1"
+              className=" ml-1"
               title={
                 viewMode === 'list'
                   ? t('connections.table.switchToTable')
@@ -476,7 +476,7 @@ const Connections: React.FC = () => {
               )}
             </Button>
             <Button
-              className="app-nodrag ml-1"
+              className=" ml-1"
               title={isPaused ? t('connections.resume') : t('connections.pause')}
               isIconOnly
               size="sm"
@@ -486,7 +486,7 @@ const Connections: React.FC = () => {
               {isPaused ? <IoMdPlay className="text-lg" /> : <IoMdPause className="text-lg" />}
             </Button>
             <Button
-              className="app-nodrag ml-1"
+              className=" ml-1"
               title={t('connections.closeAll')}
               isIconOnly
               size="sm"

@@ -37,7 +37,7 @@ const InterfaceModal: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent>
-        <ModalHeader className="flex app-drag">{t('mihomo.interface.title')}</ModalHeader>
+        <ModalHeader className="flex">{t('mihomo.interface.title')}</ModalHeader>
         <ModalBody>
           {Object.entries(info).map(([key, value]) => {
             return (

@@ -91,7 +91,6 @@ const Sniffer: React.FC = () => {
         changed && (
           <Button
             size="sm"
-            className="app-nodrag"
             color="primary"
             onPress={() =>
               onSave({

@@ -948,7 +948,7 @@ const Mihomo: React.FC = () => {
         scrollBehavior="inside"
       >
         <ModalContent className="h-full w-[calc(100%-100px)]">
-          <ModalHeader className="flex app-drag">{t('mihomo.selectSpecificVersion')}</ModalHeader>
+          <ModalHeader className="flex">{t('mihomo.selectSpecificVersion')}</ModalHeader>
           <ModalBody>
             <div className="flex flex-col gap-4">
               <div className="flex gap-2">

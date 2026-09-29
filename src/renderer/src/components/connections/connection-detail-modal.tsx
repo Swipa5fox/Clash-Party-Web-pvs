@@ -144,7 +144,7 @@ const ConnectionDetailModal: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent className="flag-emoji break-all">
-        <ModalHeader className="flex app-drag">{t('connections.detail.title')}</ModalHeader>
+        <ModalHeader className="flex">{t('connections.detail.title')}</ModalHeader>
         <ModalBody>
           <SettingItem title={t('connections.detail.establishTime')}>
             {dayjs(connection.start).fromNow()}

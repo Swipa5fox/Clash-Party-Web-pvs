@@ -191,9 +191,7 @@ async function checkHighPrivilegeMihomoProcess(): Promise<boolean> {
   return false
 }
 
-export async function validateTunPermissionsOnStartup(
-  _restartCore: () => Promise<void>
-): Promise<void> {
+export async function validateTunPermissionsOnStartup(): Promise<void> {
   const { tun } = await getControledMihomoConfig()
 
   if (!tun?.enable) {
@@ -215,35 +213,4 @@ export async function validateTunPermissionsOnStartup(
   } else {
     managerLogger.info('TUN permissions validated successfully')
   }
-}
-
-export async function checkAdminRestartForTun(restartCore: () => Promise<void>): Promise<void> {
-  if (process.argv.includes('--admin-restart-for-tun')) {
-    managerLogger.info('Detected admin restart for TUN mode, auto-enabling TUN...')
-
-    try {
-      if (process.platform === 'win32') {
-        const hasAdminPrivileges = await checkAdminPrivileges()
-        if (hasAdminPrivileges) {
-          await patchControledMihomoConfig({ tun: { enable: true }, dns: { enable: true } })
-
-          await restartCore()
-
-          managerLogger.info('TUN mode auto-enabled after admin restart')
-
-          broadcastEvent('controledMihomoConfigUpdated')
-        } else {
-          managerLogger.warn('Admin restart detected but no admin privileges found')
-        }
-      }
-    } catch (error) {
-      managerLogger.error('Failed to auto-enable TUN after admin restart', error)
-    }
-  } else {
-    await validateTunPermissionsOnStartup(restartCore)
-  }
-}
-
-export function checkTunPermissions(): Promise<boolean> {
-  return checkMihomoCorePermissions()
 }

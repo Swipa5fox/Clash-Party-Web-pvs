@@ -1,20 +1,10 @@
 import React from 'react'
 
-interface RuleSparklineProps {
-  values: number[]
-  width?: number
-  height?: number
-  className?: string
-}
-
 // 行内命中趋势 sparkline：纯 SVG 实现，无图表库依赖，
 // 适配虚拟滚动下行的频繁挂载/卸载。
-const RuleSparkline: React.FC<RuleSparklineProps> = ({
-  values,
-  width = 80,
-  height = 20,
-  className
-}) => {
+const RuleSparkline: React.FC<{ values: number[] }> = ({ values }) => {
+  const width = 80
+  const height = 20
   const pad = 2
   const w = width - pad * 2
   const h = height - pad * 2
@@ -37,13 +27,7 @@ const RuleSparkline: React.FC<RuleSparklineProps> = ({
     : ''
 
   return (
-    <svg
-      width={width}
-      height={height}
-      viewBox={`0 0 ${width} ${height}`}
-      className={className}
-      aria-hidden="true"
-    >
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
       {hasData && <polygon points={areaPoints} fill="rgba(34,197,94,0.15)" />}
       <polyline
         points={linePoints}

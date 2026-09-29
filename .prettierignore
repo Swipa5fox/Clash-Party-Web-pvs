@@ -1,6 +1,7 @@
 out
 dist
 .claude
+.qoder
 pnpm-lock.yaml
 LICENSE.md
 tsconfig.json

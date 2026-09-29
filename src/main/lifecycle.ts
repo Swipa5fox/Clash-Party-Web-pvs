@@ -1,21 +1,7 @@
-import { spawn, execFileSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { stopCoreForExit, cleanupCoreWatcher } from './core/manager'
 import { primeAdminPrivilegesCache } from './core/admin'
 import { disableSysProxySync } from './sys/sysproxy'
-import { systemLocale } from './runtime'
-
-export function customRelaunch(): void {
-  const script = `while kill -0 ${process.pid} 2>/dev/null; do
-  sleep 0.1
-done
-${process.argv.join(' ')} & disown
-exit
-`
-  spawn('sh', ['-c', script], {
-    detached: true,
-    stdio: 'ignore'
-  })
-}
 
 function isWindowsElevatedSync(): boolean | null {
   if (process.platform !== 'win32') return false
@@ -86,8 +72,4 @@ export function setupLifecycle(): void {
   }
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
-}
-
-export function getSystemLanguage(): 'zh-CN' | 'en-US' {
-  return systemLocale()
 }

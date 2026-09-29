@@ -7,7 +7,7 @@ import {
   beginCoreInitialization,
   completeCoreInitialization,
   startCoreForStartup,
-  checkAdminRestartForTun,
+  validateTunPermissionsOnStartup,
   checkHighPrivilegeCore,
   initAdminStatus,
   checkAdminPrivileges,
@@ -19,9 +19,9 @@ import { safeShowErrorBox, init, initBasic } from './utils/init'
 import { initProfileUpdater } from './core/profileUpdater'
 import { createLogger } from './utils/logger'
 import { initWebdavBackupScheduler } from './resolve/backup'
-import { setupLifecycle, getSystemLanguage } from './lifecycle'
+import { setupLifecycle } from './lifecycle'
 import { configureAppPaths } from './utils/dirs'
-import { appVersion, rendererRoot } from './runtime'
+import { rendererRoot, systemLocale } from './runtime'
 
 // 纯 Node 服务器入口：无窗口无托盘，唯一 UI 出口是 :3999 WS 桥。
 
@@ -52,9 +52,10 @@ async function getWindowsPowerShellMajorVersion(): Promise<number | null> {
 const windowsPowerShellVersionPromise =
   process.platform === 'win32' ? getWindowsPowerShellMajorVersion() : Promise.resolve(null)
 
-async function ensureSupportedWindowsPowerShell(): Promise<boolean> {
+// PS 5.1 以下仅告警不阻断（老系统提示装 WMF 5.1）。
+async function warnOnOldWindowsPowerShell(): Promise<void> {
   const major = await windowsPowerShellVersionPromise
-  if (major === null || major >= 5) return true
+  if (major === null || major >= 5) return
 
   const isZh = Intl.DateTimeFormat().resolvedOptions().locale?.startsWith('zh')
   mainLogger.warn(
@@ -62,7 +63,6 @@ async function ensureSupportedWindowsPowerShell(): Promise<boolean> {
       ? `检测到 PowerShell 版本为 ${major}.x，部分功能需要 PowerShell 5.1 才能正常运行，请安装 Windows Management Framework 5.1`
       : `Detected PowerShell version ${major}.x. Some features require PowerShell 5.1 (Windows Management Framework 5.1).`
   )
-  return true
 }
 
 configureAppPaths()
@@ -76,7 +76,7 @@ async function main(): Promise<void> {
     await initBasic()
     const cfg = await getAppConfig()
     if (!cfg.language) {
-      const systemLanguage = getSystemLanguage()
+      const systemLanguage = systemLocale()
       await patchAppConfig({ language: systemLanguage })
       cfg.language = systemLanguage
     }
@@ -95,7 +95,7 @@ async function main(): Promise<void> {
   const startupSafetyPromise = (async (): Promise<boolean> => {
     const isAdmin = await adminPromise
     await initAdminStatus()
-    if (!(await ensureSupportedWindowsPowerShell())) return false
+    await warnOnOldWindowsPowerShell()
 
     // high-privilege core 检查：headless 下无宿主弹窗与 admin 重启交互，
     // 仅保留纯检测（checkHighPrivilegeCore）并记录日志，进程不退出。
@@ -117,8 +117,6 @@ async function main(): Promise<void> {
   })
 
   const bridge = await startWebBridge({
-    platform: process.platform,
-    version: appVersion(),
     staticRoot: rendererRoot(),
     // dev 注入 CP_RENDERER_URL 时 web 桥反代 Vite dev server；生产走静态产物。
     devServerUrl: process.env.CP_RENDERER_URL,
@@ -159,8 +157,8 @@ async function main(): Promise<void> {
             initWebdavBackupScheduler().catch((e) =>
               mainLogger.warn('Failed to init webdav backup scheduler', e)
             ),
-            checkAdminRestartForTun().catch((e) =>
-              mainLogger.warn('Failed admin-restart-for-tun follow-up', e)
+            validateTunPermissionsOnStartup().catch((e) =>
+              mainLogger.warn('Failed TUN permission startup check', e)
             )
           ])
         })

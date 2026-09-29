@@ -43,10 +43,7 @@ import {
   getAxios
 } from './mihomoApi'
 import { generateProfile } from './factory'
-import {
-  checkAdminRestartForTun as checkAdminRestartForTunWithRestart,
-  getSessionAdminStatus
-} from './permissions'
+import { getSessionAdminStatus } from './permissions'
 import {
   cleanupSocketFile,
   cleanupWindowsNamedPipes,
@@ -61,7 +58,7 @@ export {
   checkAdminPrivileges,
   checkMihomoCorePermissions,
   checkHighPrivilegeCore,
-  checkTunPermissions
+  validateTunPermissionsOnStartup
 } from './permissions'
 
 const execFilePromise = promisify(execFile)
@@ -884,9 +881,4 @@ export async function checkProfileConfig(
       throw new Error(`${i18next.t('mihomo.error.profileCheckFailed')}: ${error}`)
     }
   }
-}
-
-// 权限检查入口（从 permissions.ts 调用）
-export async function checkAdminRestartForTun(): Promise<void> {
-  await checkAdminRestartForTunWithRestart(restartCore)
 }

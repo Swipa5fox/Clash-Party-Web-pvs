@@ -80,18 +80,8 @@ class Logger {
     await this.writeToFile('error', message, error)
     this.logToConsole('error', message, error)
   }
-
-  // 兼容原有的 logFloatingWindow 函数签名
-  async log(message: string, error?: unknown): Promise<void> {
-    if (error) {
-      await this.error(message, error)
-    } else {
-      await this.info(message)
-    }
-  }
 }
 
-// 创建不同模块的日志实例
 export const createLogger = (moduleName: string): Logger => {
   return new Logger(moduleName)
 }
@@ -103,8 +93,6 @@ export const systemLogger = createLogger('system')
 export const initLogger = createLogger('init')
 export const proxyLogger = createLogger('sysproxy')
 export const managerLogger = createLogger('manager')
-export const factoryLogger = createLogger('factory')
-export const overrideLogger = createLogger('override')
 
 // 默认日志实例
 export const logger = appLogger

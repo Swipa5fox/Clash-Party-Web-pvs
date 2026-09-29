@@ -344,16 +344,10 @@ async function fetchAndValidateSubscription(options: FetchOptions): Promise<Fetc
   )
 
   const requestUrl = url
-  let proxy:
-    | {
-        protocol: 'http'
-        host: string
-        port: number
-      }
-    | false = false
+  let proxy: { host: string; port: number } | false = false
 
   if (useProxy && mixedPort !== 0) {
-    proxy = { protocol: 'http', host: '127.0.0.1', port: mixedPort }
+    proxy = { host: '127.0.0.1', port: mixedPort }
   }
 
   let res: AxiosResponse<string>

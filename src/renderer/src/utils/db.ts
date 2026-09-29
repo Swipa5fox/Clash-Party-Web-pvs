@@ -26,11 +26,8 @@ export class DataUsageDB {
         const db = (event.target as IDBOpenDBRequest).result
         if (!db.objectStoreNames.contains(STORE_NAME)) {
           const store = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true })
+          // 查询全走 timestamp 游标 + 回调内过滤（iterate），其余维度不需要索引
           store.createIndex('timestamp', 'timestamp', { unique: false })
-          store.createIndex('sourceIP', 'sourceIP', { unique: false })
-          store.createIndex('host', 'host', { unique: false })
-          store.createIndex('outbound', 'outbound', { unique: false })
-          store.createIndex('process', 'process', { unique: false })
         }
       }
 
@@ -52,28 +49,6 @@ export class DataUsageDB {
       logs.forEach((log) => store.add(log))
       tx.oncomplete = () => resolve()
       tx.onerror = () => reject(tx.error)
-    })
-  }
-
-  async query(startTime: number, endTime: number): Promise<DataUsageLog[]> {
-    const db = await this.open()
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction([STORE_NAME], 'readonly')
-      const index = tx.objectStore(STORE_NAME).index('timestamp')
-      const request = index.openCursor(IDBKeyRange.bound(startTime, endTime))
-      const results: DataUsageLog[] = []
-
-      request.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result
-        if (cursor) {
-          results.push(cursor.value)
-          cursor.continue()
-        } else {
-          resolve(results)
-        }
-      }
-
-      request.onerror = () => reject(request.error)
     })
   }
 

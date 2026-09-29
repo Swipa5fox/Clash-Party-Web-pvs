@@ -7,7 +7,6 @@ export async function getImageDataURL(url: string): Promise<string> {
   const res = await chromeRequest.get(url, {
     responseType: 'arraybuffer',
     proxy: {
-      protocol: 'http',
       host: '127.0.0.1',
       port
     }

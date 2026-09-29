@@ -26,7 +26,7 @@ const WebdavRestoreModal: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent>
-        <ModalHeader className="flex app-drag">{t('webdav.restore.title')}</ModalHeader>
+        <ModalHeader className="flex">{t('webdav.restore.title')}</ModalHeader>
         <ModalBody>
           {filenames.length === 0 ? (
             <div className="flex justify-center">{t('webdav.restore.noBackups')}</div>

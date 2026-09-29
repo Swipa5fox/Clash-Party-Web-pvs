@@ -14,7 +14,6 @@ const mocks = vi.hoisted(() => ({
   restartCore: vi.fn()
 }))
 
-vi.mock('electron', () => ({ app: { getVersion: () => '2.0.0' } }))
 vi.mock('i18next', () => ({ default: { t: (key: string) => key } }))
 vi.mock('axios', () => ({ default: { get: mocks.axiosGet } }))
 vi.mock('../utils/age', () => ({

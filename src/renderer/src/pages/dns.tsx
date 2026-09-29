@@ -149,7 +149,6 @@ const DNS: React.FC = () => {
         changed && (
           <Button
             size="sm"
-            className="app-nodrag"
             color="primary"
             onPress={() => {
               const dnsConfig = {

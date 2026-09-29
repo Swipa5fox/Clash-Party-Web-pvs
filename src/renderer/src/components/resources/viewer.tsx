@@ -95,7 +95,7 @@ const Viewer: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent className="h-full w-[calc(100%-100px)]">
-        <ModalHeader className="flex pb-0 app-drag">{title}</ModalHeader>
+        <ModalHeader className="flex pb-0">{title}</ModalHeader>
         <ModalBody className="h-full">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">

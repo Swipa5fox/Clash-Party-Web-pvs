@@ -24,7 +24,6 @@ const Settings: React.FC = () => {
             size="sm"
             variant="light"
             title={t('settings.links.docs')}
-            className="app-nodrag"
             onPress={() => {
               window.open('https://mihomo.party')
             }}
@@ -35,7 +34,6 @@ const Settings: React.FC = () => {
             isIconOnly
             size="sm"
             variant="light"
-            className="app-nodrag"
             title={t('settings.links.github')}
             onPress={() => {
               window.open('https://github.com/Swipa5fox/Clash-Party-Web-pvs')
@@ -47,7 +45,6 @@ const Settings: React.FC = () => {
             isIconOnly
             size="sm"
             variant="light"
-            className="app-nodrag"
             title={t('settings.links.telegram')}
             onPress={() => {
               window.open('https://t.me/mihomo_party_group')

@@ -29,14 +29,6 @@ export function dataDir(): string {
   return dataDirPath
 }
 
-export function exePath(): string {
-  return process.argv[1] ? path.resolve(process.argv[1]) : process.execPath
-}
-
-export function exeDir(): string {
-  return path.dirname(exePath())
-}
-
 export function resourcesDir(): string {
   // tarball: 根/resources；repo（dev 与 dist bundle）: extra/。
   if (existsSync(path.join(installRoot(), 'resources')))

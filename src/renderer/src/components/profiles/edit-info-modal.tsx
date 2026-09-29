@@ -104,7 +104,7 @@ const EditInfoModal: React.FC<Props> = (props) => {
       scrollBehavior="inside"
     >
       <ModalContent>
-        <ModalHeader className="flex app-drag">
+        <ModalHeader className="flex">
           {isImportMode ? t('profiles.import') : t('profiles.editInfo.title')}
         </ModalHeader>
         <ModalBody>

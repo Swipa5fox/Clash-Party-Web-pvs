@@ -1,8 +1,6 @@
 // Web 模式入口：浏览器端 IPC shim
 // 通过 WebSocket 桥接主进程 IPC，invoke 白名单与 src/main/utils/ipc.ts 的 handler 注册表逐一对齐
-import type { IpcRendererEvent } from 'electron'
-
-type IpcListener = (event: IpcRendererEvent, ...args: unknown[]) => void
+type IpcListener = (event: unknown, ...args: unknown[]) => void
 
 // 允许的 invoke channels 白名单（与主进程 handler 注册表保持一致）
 const validInvokeChannels: readonly string[] = [
@@ -22,7 +20,6 @@ const validInvokeChannels: readonly string[] = [
   'mihomoUpgradeGeo',
   'mihomoUpgrade',
   'mihomoProxyDelay',
-  'patchMihomoConfig',
   // Config
   'getAppConfig',
   'patchAppConfig',
@@ -132,7 +129,7 @@ const validListenChannels: readonly string[] = [
 const RECONNECT_BASE_DELAY = 1000
 const RECONNECT_MAX_DELAY = 10000
 
-type HelloMessage = { type: 'hello'; ok: boolean; platform?: NodeJS.Platform; version?: string }
+type HelloMessage = { type: 'hello'; ok: boolean }
 type ResultMessage =
   | { type: 'result'; id: number; ok: true; data?: unknown }
   | { type: 'result'; id: number; ok: false; error: string }
@@ -150,9 +147,6 @@ interface PendingInvoke {
 const listenerMap = new Map<string, Set<IpcListener>>()
 const pendingInvokes = new Map<number, PendingInvoke>()
 
-// 平台信息：hello 后由桥填充，形状与 window.electron.process 保持一致
-const processInfo = { platform: undefined as unknown as NodeJS.Platform }
-
 let ws: WebSocket | null = null
 let ready = false
 let appStarted = false
@@ -164,7 +158,7 @@ let reconnectDelay = RECONNECT_BASE_DELAY
 // 页面与 WS 均不再需要 URL token；会话失效时 HTTP 302 / WS 401 回登录页。
 
 // 响应 reviver：还原桥侧序列化的特殊值
-// {__buf: base64} -> Uint8Array；{__img: dataURL} -> dataURL 字符串
+// {__buf: base64} -> Uint8Array
 function revive(_key: string, value: unknown): unknown {
   if (value && typeof value === 'object') {
     if ('__buf' in value) {
@@ -174,9 +168,6 @@ function revive(_key: string, value: unknown): unknown {
         bytes[i] = binary.charCodeAt(i)
       }
       return bytes
-    }
-    if ('__img' in value) {
-      return (value as { __img: string }).__img
     }
   }
   return value
@@ -213,11 +204,10 @@ function dispatchEvent(channel: string, payload?: unknown): void {
   if (!listeners || listeners.size === 0) {
     return
   }
-  // 合成事件仅作占位，保证 listener 收到 (event, payload) 与 ipcRenderer.on 签名一致
-  const event = {} as IpcRendererEvent
+  // 首参为占位 event，保持与 ipcRenderer.on 的 (event, payload) 签名一致
   listeners.forEach((listener) => {
     try {
-      listener(event, payload)
+      listener(undefined, payload)
     } catch (error) {
       console.error(error)
     }
@@ -261,11 +251,6 @@ function handleServerMessage(raw: string): void {
     if (message.ok) {
       ready = true
       reconnectDelay = RECONNECT_BASE_DELAY
-      if (message.platform) {
-        processInfo.platform = message.platform
-      }
-      // window.process 不在 DOM 类型中，且与 @types/node 的全局 process 交集，需受控断言赋值
-      browserWindow.process = processInfo
       flushPendingInvokes()
       startApp()
     } else {
@@ -379,20 +364,9 @@ const electronAPI = {
       if (validListenChannels.includes(channel)) {
         listenerMap.get(channel)?.delete(listener)
       }
-    },
-    removeAllListeners: (channel: string): void => {
-      if (validListenChannels.includes(channel)) {
-        listenerMap.get(channel)?.clear()
-      }
     }
-  },
-  // web 端标记：渲染层据此隐藏无意义的窗口控制（如置顶按钮）
-  isWeb: true as const,
-  process: processInfo
+  }
 }
-
-// window.process 不在 DOM 类型中，且与 @types/node 的全局 process 交集，需受控断言访问
-const browserWindow = window as unknown as { process: { platform: NodeJS.Platform } }
 
 window.electron = electronAPI
 
