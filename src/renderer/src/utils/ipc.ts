@@ -3,6 +3,32 @@ async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   return (await window.electron.ipcRenderer.invoke(channel, ...args)) as T
 }
 
+export type DataUsageType = 'sourceIP' | 'host' | 'outbound' | 'process'
+
+export interface AggregatedData {
+  label: string
+  upload: number
+  download: number
+  total: number
+  count: number
+}
+
+export interface TrafficTrendPoint {
+  timestamp: number
+  upload: number
+  download: number
+}
+
+export interface TrafficLogRowInput {
+  timestamp: number
+  sourceIP: string
+  host: string
+  outbound: string
+  process: string
+  upload: number
+  download: number
+}
+
 // IPC API 类型定义
 interface IpcApi {
   // Mihomo API
@@ -110,6 +136,32 @@ interface IpcApi {
   getFileShareUrls: (file: string) => Promise<string[]>
   setFileShareFileMeta: (file: string, patch: IFileShareFileMetaPatch) => Promise<void>
   renameFileShareGroup: (from: string, to: string) => Promise<void>
+  // Data usage
+  getTrafficOverview: (
+    type: DataUsageType,
+    startTime: number,
+    endTime: number,
+    bucketSizeMs: number
+  ) => Promise<{ rankings: AggregatedData[]; trend: TrafficTrendPoint[] }>
+  getSubStatsByHost: (
+    dimension: Exclude<DataUsageType, 'host'>,
+    label: string,
+    startTime: number,
+    endTime: number
+  ) => Promise<AggregatedData[]>
+  getDevicesByHost: (host: string, startTime: number, endTime: number) => Promise<AggregatedData[]>
+  getProxyStatsByHost: (
+    dimension: DataUsageType,
+    parentLabel: string,
+    host: string,
+    startTime: number,
+    endTime: number
+  ) => Promise<AggregatedData[]>
+  getDataUsageRowCount: () => Promise<number>
+  clearDataUsageLogs: () => Promise<void>
+  importDataUsageLogs: (logs: TrafficLogRowInput[]) => Promise<number>
+  setTrafficIngestEnabled: (enabled: boolean) => Promise<void>
+  getDataUsageBackend: () => Promise<{ pgConfigured: boolean; ingestActive: boolean }>
 }
 
 // 使用 Proxy 自动生成 IPC 调用
@@ -223,7 +275,17 @@ export const {
   revokeFileShareFile,
   getFileShareUrls,
   setFileShareFileMeta,
-  renameFileShareGroup
+  renameFileShareGroup,
+  // Data usage
+  getTrafficOverview,
+  getSubStatsByHost,
+  getDevicesByHost,
+  getProxyStatsByHost,
+  getDataUsageRowCount,
+  clearDataUsageLogs,
+  importDataUsageLogs,
+  setTrafficIngestEnabled,
+  getDataUsageBackend
 } = ipc
 
 // platform 需要重命名导出

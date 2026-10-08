@@ -43,6 +43,7 @@ import {
   getAxios
 } from './mihomoApi'
 import { generateProfile } from './factory'
+import { startTrafficIngest, stopTrafficIngest } from '../db/trafficIngest'
 import { getSessionAdminStatus } from './permissions'
 import {
   cleanupSocketFile,
@@ -539,6 +540,7 @@ function setupCoreListeners(
   const startMihomoApiStreams = async (): Promise<void> => {
     await waitForCoreReady()
     await getAxios(true)
+    startTrafficIngest()
     await Promise.all([
       startMihomoTraffic(),
       startMihomoConnections(),
@@ -752,6 +754,7 @@ function stopCoreProcessAndStreams(cancelStartup = true): void {
   stopMihomoConnections()
   stopMihomoLogs()
   stopMihomoMemory()
+  stopTrafficIngest()
 }
 
 async function cleanupStoppedCoreResources(): Promise<void> {

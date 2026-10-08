@@ -10,7 +10,8 @@ import {
   type AggregatedData,
   type DataUsageType
 } from '@renderer/utils/dataUsage'
-import { db } from '@renderer/utils/db'
+import { clearDataUsageLogs, importDataUsageLogs } from '@renderer/utils/ipc'
+import { migrateLegacyIndexedDB } from '@renderer/utils/legacy-db-migrate'
 import { Button, Tab, Tabs } from '@heroui/react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -175,9 +176,13 @@ const TrafficPage: React.FC = () => {
   )
 
   const handleClearAll = useCallback(async () => {
-    await db.clearAll()
+    await clearDataUsageLogs()
     await load()
   }, [load])
+
+  useEffect(() => {
+    void migrateLegacyIndexedDB(async (logs) => await importDataUsageLogs(logs))
+  }, [])
 
   const timeRangeLabel: Record<TimeRange, string> = {
     '1h': t('traffic.timeRange.1h'),

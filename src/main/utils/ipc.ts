@@ -95,6 +95,21 @@ import { dataDir, rulePath } from './dirs'
 import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
 import { atomicWriteFile } from './safeFile'
 import { checkPortOccupied } from './portCheck'
+import {
+  queryTrafficOverview,
+  querySubStatsByHost,
+  queryDevicesByHost,
+  queryProxyStatsByHost,
+  getDataUsageRowCount,
+  type DataUsageType
+} from '../db/dataUsageQuery'
+import {
+  clearTrafficLogs,
+  importTrafficLogs,
+  isTrafficIngestActive,
+  setTrafficIngestEnabled
+} from '../db/trafficIngest'
+import { isDbEnabled } from '../db/index'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AsyncFn = (...args: any[]) => Promise<any>
@@ -285,7 +300,25 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   revokeFileShareFile,
   getFileShareUrls,
   setFileShareFileMeta,
-  renameFileShareGroup
+  renameFileShareGroup,
+  // Data usage (PostgreSQL; CP_DATABASE_URL 未配置时查询返回空)
+  getTrafficOverview: (
+    type: DataUsageType,
+    startTime: number,
+    endTime: number,
+    bucketSizeMs: number
+  ) => queryTrafficOverview(type, startTime, endTime, bucketSizeMs),
+  getSubStatsByHost: querySubStatsByHost,
+  getDevicesByHost: queryDevicesByHost,
+  getProxyStatsByHost: queryProxyStatsByHost,
+  getDataUsageRowCount,
+  clearDataUsageLogs: clearTrafficLogs,
+  importDataUsageLogs: importTrafficLogs,
+  setTrafficIngestEnabled: async (enabled: boolean) => setTrafficIngestEnabled(enabled),
+  getDataUsageBackend: async () => ({
+    pgConfigured: isDbEnabled(),
+    ingestActive: isTrafficIngestActive()
+  })
 }
 
 export const syncHandlers: Record<string, SyncFn> = {

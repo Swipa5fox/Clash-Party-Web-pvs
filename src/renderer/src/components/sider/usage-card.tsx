@@ -1,6 +1,6 @@
 import { Button, Card, CardBody, CardFooter, Progress, Tooltip } from '@heroui/react'
 import BorderSwitch from '@renderer/components/base/border-switch'
-import { mihomoProxyProviders } from '@renderer/utils/ipc'
+import { mihomoProxyProviders, setTrafficIngestEnabled } from '@renderer/utils/ipc'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { calcTraffic, calcPercent } from '@renderer/utils/calc'
 import { useSortable } from '@dnd-kit/sortable'
@@ -60,7 +60,10 @@ const UsageCard: React.FC<Props> = (props) => {
           isShowBorder={match && enableTrafficLogger}
           aria-label={t('settings.enableTrafficLogger')}
           isSelected={enableTrafficLogger}
-          onValueChange={(v) => patchAppConfig({ enableTrafficLogger: v })}
+          onValueChange={(v) => {
+            patchAppConfig({ enableTrafficLogger: v })
+            void setTrafficIngestEnabled(v)
+          }}
         />
       </Tooltip>
     </div>

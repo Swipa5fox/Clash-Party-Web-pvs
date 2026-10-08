@@ -30,11 +30,10 @@ import { applyTheme, setNativeTheme } from '@renderer/utils/ipc'
 import NetworkCard from '@renderer/components/sider/network-card'
 import UsageCard from '@renderer/components/sider/usage-card'
 import FileShareCard from '@renderer/components/sider/file-share-card'
-import { useTrafficLogger } from '@renderer/hooks/use-traffic-logger'
 import { createTourDriver } from '@renderer/utils/tour'
 import 'driver.js/dist/driver.css'
 import { useTranslation } from 'react-i18next'
-import { DEFAULT_ENABLE_TRAFFIC_LOGGER, DEFAULT_SIDER_ORDER } from '../../shared/appConfig'
+import { DEFAULT_SIDER_ORDER } from '../../shared/appConfig'
 import { SIDER_CARD_ROUTES, getSiderCardByPath, mergeSiderOrder } from './utils/sider'
 
 const App: React.FC = () => {
@@ -42,7 +41,6 @@ const App: React.FC = () => {
   const { appConfig, patchAppConfig } = useAppConfig()
   const hasAppConfig = Boolean(appConfig)
   const {
-    enableTrafficLogger = DEFAULT_ENABLE_TRAFFIC_LOGGER,
     appTheme = 'system',
     customTheme,
     siderWidth = 250,
@@ -51,7 +49,6 @@ const App: React.FC = () => {
     rememberSelectedSiderCard = false,
     lockSiderCards = false
   } = appConfig || {}
-  useTrafficLogger(enableTrafficLogger)
   const narrowWidth = 60
   const [order, setOrder] = useState<SiderCardKey[]>(mergeSiderOrder(siderOrder))
   const [siderWidthValue, setSiderWidthValue] = useState(siderWidth)

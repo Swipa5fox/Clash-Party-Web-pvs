@@ -7,6 +7,7 @@ import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { getMihomoIpcPath, hasCoreProcess, restartCore } from './manager'
+import { handleConnectionsInfo as ingestConnectionsInfo } from '../db/trafficIngest'
 
 const mihomoApiLogger = createLogger('MihomoApi')
 
@@ -144,7 +145,8 @@ function createMihomoWebSocket(endpoint: string): {
 function createStreamController<T>(
   name: string,
   event: string,
-  endpoint: string | (() => Promise<string> | string)
+  endpoint: string | (() => Promise<string> | string),
+  onData?: (data: T) => void
 ): { start: () => Promise<void>; stop: () => void } {
   const stream = makeStream()
 
@@ -169,7 +171,9 @@ function createStreamController<T>(
       if (!isCurrentStream(stream, generation)) return
       stream.retry = MAX_RETRY
       try {
-        broadcastEvent(event, JSON.parse(e.data as string) as T)
+        const data = JSON.parse(e.data as string) as T
+        if (onData) onData(data)
+        broadcastEvent(event, data)
       } catch {
         // 内核可能发出非 JSON 帧，忽略
       }
@@ -547,7 +551,8 @@ export const stopMihomoLogs = logsStream.stop
 const connectionsStream = createStreamController<IMihomoConnectionsInfo>(
   'Connections',
   'mihomoConnections',
-  '/connections'
+  '/connections',
+  (data) => ingestConnectionsInfo(data)
 )
 
 export const startMihomoConnections = connectionsStream.start
