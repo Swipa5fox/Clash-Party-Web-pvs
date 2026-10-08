@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { enroll, challenge, fetchConfig, revoke } from './gateway'
 
 const requestOnce = vi.fn()
 vi.mock('./http-client', () => ({ requestOnce: (...a: unknown[]) => requestOnce(...a) }))
-
-import { enroll, challenge, fetchConfig, revoke } from './gateway'
 
 const TARGET = {
   gateway: 'https://gw.front.com',
@@ -19,7 +18,7 @@ function jsonReply(body: unknown, status = 200): void {
 function rawReply(body: string, status = 200): void {
   requestOnce.mockResolvedValueOnce({ status, headers: {}, body })
 }
-function lastBody(): any {
+function lastBody(): unknown {
   const call = requestOnce.mock.calls[requestOnce.mock.calls.length - 1]
   return JSON.parse((call[1] as { body: string }).body)
 }

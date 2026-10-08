@@ -2,7 +2,7 @@ import http from 'http'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { createHash } from 'crypto'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { generatePkce, browserLogin } from './oauth'
 
 function get(url: string): Promise<number> {

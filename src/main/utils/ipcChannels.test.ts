@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { asyncHandlers, syncHandlers } from './ipc'
 import { WEB_INVOKE_CHANNELS } from '../../shared/ipcChannels'
+import { asyncHandlers, syncHandlers } from './ipc'
 
 // 浏览器 IPC shim 的白名单必须与主进程 handler 注册表双向一致：
 // 漏登记表现为 UI 侧 invoke 直接 reject「Invalid invoke channel」而主进程毫无感知

@@ -1,5 +1,5 @@
-import { getPool } from './index'
 import type { TrafficLogRow } from './trafficIngest'
+import { getPool } from './index'
 
 export type DataUsageType = 'sourceIP' | 'host' | 'outbound' | 'process'
 

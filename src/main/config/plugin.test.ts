@@ -2,13 +2,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-
-let TMP = ''
-vi.mock('../utils/dirs', () => ({
-  pluginConfigPath: () => join(TMP, 'plugin.yaml'),
-  appConfigPath: () => join(TMP, 'app.yaml')
-}))
-
 import {
   getPluginConfig,
   addPluginItem,
@@ -17,6 +10,12 @@ import {
   patchPluginItem,
   removePluginItem
 } from './plugin'
+
+let TMP = ''
+vi.mock('../utils/dirs', () => ({
+  pluginConfigPath: () => join(TMP, 'plugin.yaml'),
+  appConfigPath: () => join(TMP, 'app.yaml')
+}))
 
 function item(id: string): IPluginItem {
   return {

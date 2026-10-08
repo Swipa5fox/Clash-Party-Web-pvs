@@ -5,9 +5,9 @@ import { getAppConfig, getControledMihomoConfig } from '../config'
 import { broadcastEvent } from '../resolve/broadcaster'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
+import { handleConnectionsInfo as ingestConnectionsInfo } from '../db/trafficIngest'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { getMihomoIpcPath, hasCoreProcess, restartCore } from './manager'
-import { handleConnectionsInfo as ingestConnectionsInfo } from '../db/trafficIngest'
 
 const mihomoApiLogger = createLogger('MihomoApi')
 

@@ -1,4 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { GatewayError } from './gateway'
+import { readVault as readVaultMock } from './vault'
+import {
+  previewPlugin,
+  installPlugin,
+  loginPlugin,
+  updatePluginProfile,
+  auditPluginVault,
+  removePlugin
+} from './index'
 
 const profiles: Record<string, string> = {}
 const pluginItems: Record<string, IPluginItem> = {}
@@ -65,17 +75,6 @@ vi.mock('./gateway', async (importOriginal) => {
     revoke: (...a: unknown[]) => revoke(...a)
   }
 })
-
-import { GatewayError } from './gateway'
-import { readVault as readVaultMock } from './vault'
-import {
-  previewPlugin,
-  installPlugin,
-  loginPlugin,
-  updatePluginProfile,
-  auditPluginVault,
-  removePlugin
-} from './index'
 
 const CLASH =
   'proxies:\n  - {name: a, type: ss, server: 1.1.1.1, port: 8388, cipher: aes-128-gcm, password: x}\n'
@@ -145,7 +144,7 @@ describe('loginPlugin', () => {
     const rec = pluginItems[item.id]
     expect(rec.status).toBe('active')
     expect(rec.profileId).toBeDefined()
-    expect(profiles[rec.profileId!]).toBe(CLASH)
+    expect(profiles[rec.profileId ?? '']).toBe(CLASH)
     const vault = vaults[item.id]
     expect(vault.deviceId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
@@ -265,13 +264,13 @@ describe('updatePluginProfile', () => {
   it('transient failure keeps old profile + sets backoff', async () => {
     const item = await installPlugin(file())
     await loginPlugin(item.id)
-    const before = profiles[pluginItems[item.id].profileId!]
+    const before = profiles[pluginItems[item.id].profileId ?? '']
     fetchConfig.mockRejectedValueOnce(new GatewayError('transient', 'timeout'))
     await updatePluginProfile(item.id)
     expect(pluginItems[item.id].status).toBe('active')
     expect(pluginItems[item.id].failureCount).toBe(1)
     expect(pluginItems[item.id].nextRetryAt).toBeGreaterThan(Date.now())
-    expect(profiles[pluginItems[item.id].profileId!]).toBe(before)
+    expect(profiles[pluginItems[item.id].profileId ?? '']).toBe(before)
   })
 
   it('backoff success clears failure state', async () => {
@@ -394,7 +393,7 @@ describe('removePlugin', () => {
   it('best-effort revokes then removes profile + record + vault', async () => {
     const item = await installPlugin(file())
     await loginPlugin(item.id)
-    const pid = pluginItems[item.id].profileId!
+    const pid = pluginItems[item.id].profileId ?? ''
     await removePlugin(item.id)
     expect(revoke).toHaveBeenCalled()
     expect(pluginItems[item.id]).toBeUndefined()

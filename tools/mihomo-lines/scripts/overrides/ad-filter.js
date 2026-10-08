@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/explicit-function-return-type, no-console, no-undef -- 本文件由 mihomo-party 覆写沙箱(vm.runInContext 拼接调用 main)消费, 不能含 TS 语法或模块导出; 沙箱只注入 console, 它是覆写唯一的输出通道 */
+/* eslint-disable @typescript-eslint/no-unused-vars, no-console, no-undef -- 本文件由 mihomo-party 覆写沙箱(vm.runInContext 拼接调用 main)消费, 不能含 TS 语法或模块导出; 沙箱只注入 console, 它是覆写唯一的输出通道 */
 // 机场广告/信息节点过滤 —— 全局覆写, 覆写 id: ad-filter
 //
 // 过滤对象(订阅里与"走代理"无关的条目):

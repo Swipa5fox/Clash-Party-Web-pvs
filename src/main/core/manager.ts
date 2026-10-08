@@ -30,6 +30,7 @@ import { parseAgeSecretKeys } from '../utils/age'
 import i18next from '../../shared/i18n'
 import { managerLogger } from '../utils/logger'
 import { createCoreLogWritableStream } from '../utils/logFile'
+import { startTrafficIngest, stopTrafficIngest } from '../db/trafficIngest'
 import {
   startMihomoTraffic,
   startMihomoConnections,
@@ -43,7 +44,6 @@ import {
   getAxios
 } from './mihomoApi'
 import { generateProfile } from './factory'
-import { startTrafficIngest, stopTrafficIngest } from '../db/trafficIngest'
 import { getSessionAdminStatus } from './permissions'
 import {
   cleanupSocketFile,

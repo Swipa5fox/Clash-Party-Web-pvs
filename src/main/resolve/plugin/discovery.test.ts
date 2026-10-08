@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { discoverGateway } from './discovery'
 
 const requestOnce = vi.fn()
 vi.mock('./http-client', () => ({ requestOnce: (...a: unknown[]) => requestOnce(...a) }))
-
-import { discoverGateway } from './discovery'
 
 const OK = {
   spec: 'cpx-plugin/2',

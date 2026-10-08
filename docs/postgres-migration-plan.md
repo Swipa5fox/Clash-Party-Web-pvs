@@ -27,17 +27,28 @@
 
 ### 验证（53 生产实测）
 
-- [x] 真实流量入库（5MB+8MB 下载，IP/host/节点/字节正确）
-- [x] 无浏览器会话持续记录（2→4 行增长确认）
-- [x] 桥 invoke 查询聚合正确
-- [x] 容器日志 0 error
+- [x] 真实流量入库（IP/host/节点/字节正确），无浏览器会话持续记录
+- [x] 桥 invoke 查询聚合正确；容器日志 0 error
+- [x] **浏览器 UI 实测（2026-10-08）**：用量页渲染真实数据（90 会话 / 15.85 MB / 域名排行）；
+      维度切换（设备/域名/代理/进程）走 SQL GROUP BY；点行展开明细表；时间范围切换；
+      采集开关真实切换服务端 `ingestActive`；存量 IndexedDB 迁移（造旧数据→重载→入库→删库）；
+      console 无报错
+- [x] 修复「渲染层 IPC 白名单漏登记」缺陷（UI 静默显示 0；见下）
+
+### 期间修复的缺陷
+
+- flush 占位符偏移（`i*8`→`i*7`）→ 生产首验暴露，已修
+- **渲染层 IPC 白名单漏登记**：新增 9 个流量通道只加主进程 handler，浏览器 shim 白名单未同步 →
+  UI invoke 被客户端直接 reject、页面静默显示 0（桥直连绕过 shim 才没暴露）。修复：
+  白名单抽到 `src/shared/ipcChannels.ts` + `ipcChannels.test.ts` 双向锁死注册表
 
 ## 收尾（⏸ 待办）
 
-- [ ] commit + push（区分本期改动；53 的 compose 改动在服务器上，不入库）
-- [ ] 本机 `_cpx-deploy` 同步新构建（可选：不带 CP_DATABASE_URL 行为同旧版）
-- [ ] 浏览器实测 traffic 页（真点 UI 看排行/趋势图/清空按钮——目前只验到桥 IPC 层）
+- [x] commit 第一期改动（`e9fa19b`，已 push）
+- [x] commit 白名单修复（`13fff19`，**未 push**）
 - [ ] README/changelog 补 PG 配置说明（CP_DATABASE_URL 用法）
+- [ ] 本机 `_cpx-deploy` 同步新构建（可选：不带 CP_DATABASE_URL 行为同旧版）
+- [ ] 清理第一期 ipc.ts 引入的 3 条 import/order warning（合并进上面这步）
 
 ## 第二期（⏸ 可选，未排期）：日志查询
 

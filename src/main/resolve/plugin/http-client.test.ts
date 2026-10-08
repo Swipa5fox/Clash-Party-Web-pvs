@@ -7,9 +7,10 @@ afterEach(() => server?.close())
 
 function start(handler: http.RequestListener): Promise<string> {
   return new Promise((resolve) => {
-    server = http.createServer(handler)
-    server.listen(0, '127.0.0.1', () => {
-      const addr = server!.address()
+    const srv = http.createServer(handler)
+    server = srv
+    srv.listen(0, '127.0.0.1', () => {
+      const addr = srv.address()
       const port = typeof addr === 'object' && addr ? addr.port : 0
       resolve(`http://127.0.0.1:${port}`)
     })

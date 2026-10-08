@@ -1,6 +1,6 @@
 import { broadcastEvent } from '../resolve/broadcaster'
-import { getPool, isDbEnabled } from './index'
 import { createLogger } from '../utils/logger'
+import { getPool, isDbEnabled } from './index'
 
 const ingestLogger = createLogger('TrafficIngest')
 

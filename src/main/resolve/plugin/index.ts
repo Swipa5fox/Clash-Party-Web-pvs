@@ -239,7 +239,8 @@ export async function updatePluginProfile(id: string, force = false): Promise<vo
   if (record.status === 'needs-login' || record.status === 'needs-reauth') return
   // active/needs-reauth 态必须有 profileId（spec §10）。损坏/迁移异常导致 active 无 profileId 时，
   // 标 needs-reauth 而非用 undefined 拼出 profiles/undefined.yaml。
-  if (!record.profileId) {
+  const profileId = record.profileId
+  if (!profileId) {
     await updatePluginItem({
       ...record,
       status: 'needs-reauth',
@@ -267,7 +268,7 @@ export async function updatePluginProfile(id: string, force = false): Promise<vo
     const content = await fetchWithRediscovery(id, record, vault, net)
     await upsertPluginProfile(
       {
-        profileId: record.profileId!,
+        profileId,
         pluginId: id,
         name: record.name,
         interval: record.interval ?? DEFAULT_PLUGIN_INTERVAL_MIN,

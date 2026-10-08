@@ -1,5 +1,6 @@
 import path from 'path'
 import { readFile } from 'fs/promises'
+import os from 'os'
 import i18next from 'i18next'
 import { appVersion } from '../runtime'
 import {
@@ -58,7 +59,6 @@ import {
   importBackupFromBase64,
   initWebdavBackupScheduler
 } from '../resolve/backup'
-import os from 'os'
 import {
   fetchThemes,
   importThemesFromContents,
@@ -88,13 +88,6 @@ import {
   setFileShareFileMeta,
   renameFileShareGroup
 } from '../resolve/fileShare'
-import { getImageDataURL } from './image'
-import { get as httpGet } from './chromeRequest'
-import { getIconDataURL } from './icon'
-import { dataDir, rulePath } from './dirs'
-import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
-import { atomicWriteFile } from './safeFile'
-import { checkPortOccupied } from './portCheck'
 import {
   queryTrafficOverview,
   querySubStatsByHost,
@@ -110,6 +103,13 @@ import {
   setTrafficIngestEnabled
 } from '../db/trafficIngest'
 import { isDbEnabled } from '../db/index'
+import { getImageDataURL } from './image'
+import { get as httpGet } from './chromeRequest'
+import { getIconDataURL } from './icon'
+import { dataDir, rulePath } from './dirs'
+import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
+import { atomicWriteFile } from './safeFile'
+import { checkPortOccupied } from './portCheck'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AsyncFn = (...args: any[]) => Promise<any>
