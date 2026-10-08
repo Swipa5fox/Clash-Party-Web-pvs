@@ -1,129 +1,8 @@
 // Web 模式入口：浏览器端 IPC shim
 // 通过 WebSocket 桥接主进程 IPC，invoke 白名单与 src/main/utils/ipc.ts 的 handler 注册表逐一对齐
+import { WEB_INVOKE_CHANNELS, WEB_LISTEN_CHANNELS } from '../../../shared/ipcChannels'
+
 type IpcListener = (event: unknown, ...args: unknown[]) => void
-
-// 允许的 invoke channels 白名单（与主进程 handler 注册表保持一致）
-const validInvokeChannels: readonly string[] = [
-  // Mihomo API
-  'mihomoVersion',
-  'mihomoCloseConnection',
-  'mihomoCloseAllConnections',
-  'mihomoRules',
-  'mihomoRulesDisable',
-  'mihomoProxies',
-  'mihomoGroups',
-  'mihomoProxyProviders',
-  'mihomoUpdateProxyProviders',
-  'mihomoRuleProviders',
-  'mihomoUpdateRuleProviders',
-  'mihomoChangeProxy',
-  'mihomoUpgradeGeo',
-  'mihomoUpgrade',
-  'mihomoProxyDelay',
-  // Config
-  'getAppConfig',
-  'patchAppConfig',
-  'getControledMihomoConfig',
-  'patchControledMihomoConfig',
-  // Profile
-  'getProfileConfig',
-  'setProfileConfig',
-  'getProfileStr',
-  'setProfileStr',
-  'addProfileItem',
-  'removeProfileItem',
-  'updateProfileItem',
-  'changeCurrentProfile',
-  'addProfileUpdater',
-  // Override
-  'getOverrideConfig',
-  'setOverrideConfig',
-  'addOverrideItem',
-  'removeOverrideItem',
-  'updateOverrideItem',
-  'getOverride',
-  'setOverride',
-  // Custom Line Groups
-  'getCustomLineGroupsConfig',
-  'setCustomLineGroupsConfig',
-  'checkPortOccupied',
-  // File
-  'getFileStr',
-  'setFileStr',
-  'convertMrsRuleset',
-  'getRuntimeConfig',
-  'getRuntimeConfigStr',
-  'getRuleStr',
-  'setRuleStr',
-  // Core
-  'restartCore',
-  'mihomoHotReloadConfig',
-  // System
-  'triggerSysProxy',
-  'getInterfaces',
-  'setNativeTheme',
-  'copyEnvText',
-  // Update
-  'getVersion',
-  'platform',
-  'fetchMihomoTags',
-  'installSpecificMihomoCore',
-  'clearMihomoVersionCache',
-  // Backup
-  'webdavBackup',
-  'webdavRestore',
-  'listWebdavBackups',
-  'webdavDelete',
-  'reinitWebdavBackupScheduler',
-  'exportLocalBackupBase64',
-  'importLocalBackupFromContent',
-  // Theme
-  'resolveThemes',
-  'fetchThemes',
-  'importThemesFromContents',
-  'readTheme',
-  'writeTheme',
-  // Plugin
-  'getPluginConfig',
-  'previewPlugin',
-  'installPlugin',
-  'loginPlugin',
-  'removePlugin',
-  'updatePluginProfile',
-  'patchPluginItem',
-  // Misc
-  'getGistUrl',
-  'generateGistAgeKeyPair',
-  'exportGistAgeSecretKeyText',
-  'fetchIPInfo',
-  'measureLatency',
-  'getImageDataURL',
-  'getIconDataURL',
-  'changeLanguage',
-  // File Share
-  'getFileShareServerState',
-  'restartFileShareServer',
-  'listFileShareFiles',
-  'addFileShareFile',
-  'revokeFileShareFile',
-  'getFileShareUrls',
-  'setFileShareFileMeta',
-  'renameFileShareGroup'
-]
-
-// 允许的 on/removeListener channels 白名单（与主进程 broadcastEvent 推送面保持一致）
-const validListenChannels: readonly string[] = [
-  'mihomoLogs',
-  'mihomoConnections',
-  'mihomoTraffic',
-  'mihomoMemory',
-  'appConfigUpdated',
-  'controledMihomoConfigUpdated',
-  'profileConfigUpdated',
-  'groupsUpdated',
-  'rulesUpdated',
-  'pluginConfigUpdated'
-]
 
 // ---- WebSocket 桥 ----
 const RECONNECT_BASE_DELAY = 1000
@@ -339,7 +218,7 @@ function connect(): void {
 const electronAPI = {
   ipcRenderer: {
     invoke: (channel: string, ...args: unknown[]): Promise<unknown> => {
-      if (!validInvokeChannels.includes(channel)) {
+      if (!WEB_INVOKE_CHANNELS.includes(channel)) {
         return Promise.reject(new Error(`Invalid invoke channel: ${channel}`))
       }
       return new Promise<unknown>((resolve, reject) => {
@@ -353,7 +232,7 @@ const electronAPI = {
       })
     },
     on: (channel: string, listener: IpcListener): void => {
-      if (validListenChannels.includes(channel)) {
+      if (WEB_LISTEN_CHANNELS.includes(channel)) {
         if (!listenerMap.has(channel)) {
           listenerMap.set(channel, new Set())
         }
@@ -361,7 +240,7 @@ const electronAPI = {
       }
     },
     removeListener: (channel: string, listener: IpcListener): void => {
-      if (validListenChannels.includes(channel)) {
+      if (WEB_LISTEN_CHANNELS.includes(channel)) {
         listenerMap.get(channel)?.delete(listener)
       }
     }

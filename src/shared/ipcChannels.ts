@@ -1,0 +1,133 @@
+// 浏览器 IPC shim 的通道白名单：主进程 handler 注册表与广播面的唯一对齐点。
+// 新增主进程 channel 时必须同步此处，src/main/utils/ipcChannels.test.ts 会守住这个不变量。
+export const WEB_INVOKE_CHANNELS: readonly string[] = [
+  // Mihomo API
+  'mihomoVersion',
+  'mihomoCloseConnection',
+  'mihomoCloseAllConnections',
+  'mihomoRules',
+  'mihomoRulesDisable',
+  'mihomoProxies',
+  'mihomoGroups',
+  'mihomoProxyProviders',
+  'mihomoUpdateProxyProviders',
+  'mihomoRuleProviders',
+  'mihomoUpdateRuleProviders',
+  'mihomoChangeProxy',
+  'mihomoUpgradeGeo',
+  'mihomoUpgrade',
+  'mihomoProxyDelay',
+  // Config
+  'getAppConfig',
+  'patchAppConfig',
+  'getControledMihomoConfig',
+  'patchControledMihomoConfig',
+  // Profile
+  'getProfileConfig',
+  'setProfileConfig',
+  'getProfileStr',
+  'setProfileStr',
+  'addProfileItem',
+  'removeProfileItem',
+  'updateProfileItem',
+  'changeCurrentProfile',
+  'addProfileUpdater',
+  // Override
+  'getOverrideConfig',
+  'setOverrideConfig',
+  'addOverrideItem',
+  'removeOverrideItem',
+  'updateOverrideItem',
+  'getOverride',
+  'setOverride',
+  // Custom Line Groups
+  'getCustomLineGroupsConfig',
+  'setCustomLineGroupsConfig',
+  'checkPortOccupied',
+  // File
+  'getFileStr',
+  'setFileStr',
+  'convertMrsRuleset',
+  'getRuntimeConfig',
+  'getRuntimeConfigStr',
+  'getRuleStr',
+  'setRuleStr',
+  // Core
+  'restartCore',
+  'mihomoHotReloadConfig',
+  // System
+  'triggerSysProxy',
+  'getInterfaces',
+  'setNativeTheme',
+  'copyEnvText',
+  // Update
+  'getVersion',
+  'platform',
+  'fetchMihomoTags',
+  'installSpecificMihomoCore',
+  'clearMihomoVersionCache',
+  // Backup
+  'webdavBackup',
+  'webdavRestore',
+  'listWebdavBackups',
+  'webdavDelete',
+  'reinitWebdavBackupScheduler',
+  'exportLocalBackupBase64',
+  'importLocalBackupFromContent',
+  // Theme
+  'resolveThemes',
+  'fetchThemes',
+  'importThemesFromContents',
+  'readTheme',
+  'writeTheme',
+  // Plugin
+  'getPluginConfig',
+  'previewPlugin',
+  'installPlugin',
+  'loginPlugin',
+  'removePlugin',
+  'updatePluginProfile',
+  'patchPluginItem',
+  // Misc
+  'getGistUrl',
+  'generateGistAgeKeyPair',
+  'exportGistAgeSecretKeyText',
+  'fetchIPInfo',
+  'measureLatency',
+  'getImageDataURL',
+  'getIconDataURL',
+  'changeLanguage',
+  // File Share
+  'getFileShareServerState',
+  'restartFileShareServer',
+  'listFileShareFiles',
+  'addFileShareFile',
+  'revokeFileShareFile',
+  'getFileShareUrls',
+  'setFileShareFileMeta',
+  'renameFileShareGroup',
+  // Data usage
+  'getTrafficOverview',
+  'getSubStatsByHost',
+  'getDevicesByHost',
+  'getProxyStatsByHost',
+  'getDataUsageRowCount',
+  'clearDataUsageLogs',
+  'importDataUsageLogs',
+  'setTrafficIngestEnabled',
+  'getDataUsageBackend'
+]
+
+// 允许的 on/removeListener channels（与主进程 broadcastEvent 推送面保持一致）
+export const WEB_LISTEN_CHANNELS: readonly string[] = [
+  'mihomoLogs',
+  'mihomoConnections',
+  'mihomoTraffic',
+  'mihomoMemory',
+  'appConfigUpdated',
+  'controledMihomoConfigUpdated',
+  'profileConfigUpdated',
+  'groupsUpdated',
+  'rulesUpdated',
+  'pluginConfigUpdated'
+]
