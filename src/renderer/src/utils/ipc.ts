@@ -29,6 +29,30 @@ export interface TrafficLogRowInput {
   download: number
 }
 
+export type LogSourceInput = 'core' | 'app'
+
+export interface LogsQueryFilterInput {
+  source?: LogSourceInput
+  level?: string
+  keyword?: string
+  startTime?: number
+  endTime?: number
+  limit?: number
+  offset?: number
+}
+
+export interface LogsPageResult {
+  total: number
+  rows: {
+    id: number
+    ts: number
+    source: LogSourceInput
+    level: string
+    module: string | null
+    message: string
+  }[]
+}
+
 // IPC API 类型定义
 interface IpcApi {
   // Mihomo API
@@ -162,6 +186,8 @@ interface IpcApi {
   importDataUsageLogs: (logs: TrafficLogRowInput[]) => Promise<number>
   setTrafficIngestEnabled: (enabled: boolean) => Promise<void>
   getDataUsageBackend: () => Promise<{ pgConfigured: boolean; ingestActive: boolean }>
+  queryLogs: (filter: LogsQueryFilterInput) => Promise<LogsPageResult>
+  clearLogs: () => Promise<void>
 }
 
 // 使用 Proxy 自动生成 IPC 调用
@@ -285,7 +311,9 @@ export const {
   clearDataUsageLogs,
   importDataUsageLogs,
   setTrafficIngestEnabled,
-  getDataUsageBackend
+  getDataUsageBackend,
+  queryLogs,
+  clearLogs
 } = ipc
 
 // platform 需要重命名导出

@@ -102,7 +102,8 @@ import {
   isTrafficIngestActive,
   setTrafficIngestEnabled
 } from '../db/trafficIngest'
-import { isDbEnabled } from '../db/index'
+import { isDbEnabled, getPool } from '../db/index'
+import { queryLogs, clearLogs, type LogQueryFilter } from '../db/logQuery'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
 import { getIconDataURL } from './icon'
@@ -318,7 +319,10 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   getDataUsageBackend: async () => ({
     pgConfigured: isDbEnabled(),
     ingestActive: isTrafficIngestActive()
-  })
+  }),
+  // Logs (PostgreSQL)
+  queryLogs: async (filter: LogQueryFilter = {}) => queryLogs(await getPool(), filter),
+  clearLogs: async () => clearLogs(await getPool())
 }
 
 export const syncHandlers: Record<string, SyncFn> = {

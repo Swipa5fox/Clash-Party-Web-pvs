@@ -115,7 +115,10 @@ export const WEB_INVOKE_CHANNELS: readonly string[] = [
   'clearDataUsageLogs',
   'importDataUsageLogs',
   'setTrafficIngestEnabled',
-  'getDataUsageBackend'
+  'getDataUsageBackend',
+  // Logs
+  'queryLogs',
+  'clearLogs'
 ]
 
 // 允许的 on/removeListener channels（与主进程 broadcastEvent 推送面保持一致）

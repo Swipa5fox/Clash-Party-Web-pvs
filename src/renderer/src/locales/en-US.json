@@ -553,7 +553,7 @@
   "resources.geoData.autoUpdate": "Auto Update",
   "resources.geoData.updateInterval": "Update Interval (hours)",
   "resources.geoData.updateSuccess": "GeoData Update Successful",
-  "logs.title": "Real-time Logs",
+  "logs.title": "Logs",
   "logs.filter": "Filter logs",
   "logs.clear": "Clear logs",
   "logs.autoScroll": "Auto scroll",
@@ -681,5 +681,20 @@
       "needs-login": "Sign-in Required",
       "needs-reauth": "Reauth Required"
     }
-  }
+  },
+  "logs.live": "Live",
+  "logs.history": "History",
+  "logs.history.noPg": "PostgreSQL not configured (CP_DATABASE_URL); history unavailable",
+  "logs.source.all": "All sources",
+  "logs.source.core": "Core",
+  "logs.source.app": "App",
+  "logs.level.all": "All levels",
+  "logs.range.1h": "1h",
+  "logs.range.24h": "24h",
+  "logs.range.7d": "7d",
+  "logs.prev": "Prev",
+  "logs.next": "Next",
+  "logs.total": "{{n}} entries",
+  "logs.empty": "No matching logs",
+  "logs.pgHint": "7-day retention on server-side PostgreSQL"
 }

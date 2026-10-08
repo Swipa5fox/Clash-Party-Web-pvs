@@ -50,11 +50,18 @@
 - [ ] changelog：按该文件“只在发布时追加”的约定，等下次发版再写本期条目
 - [ ] 本机 `_cpx-deploy` 同步新构建（可选：不带 CP_DATABASE_URL 行为同旧版）
 
-## 第二期（⏸ 可选，未排期）：日志查询
+## 第二期：日志查询（✅ 已完成并部署 53，2026-10-08）
 
-- 表：core_log / app_log（PG 只做留存副本，文件落盘不动）
-- 查询 IPC + logs 页历史查询入口
-- 前置：第一期在生产跑稳一段时间后再定要不要做
+- [x] `logs` 表（ts BRIN / source core|app / level / module / message），启动建表，保留 7 天每日清理
+- [x] 双路写入：内核 `mihomoLogs` 流挂 onData；`logger.ts` 落盘时同步推 PG（warn→warning 归一）
+  - logIngest 不 import logger/db-index（避免环），pool 由 manager 注入，错误走 console.warn
+- [x] IPC：`queryLogs`（来源/级别/关键字/时间窗 + 分页 total）、`clearLogs`；白名单已同步（护栏测试通过）
+- [x] logs 页「实时/历史」双 tab：历史 = 来源+级别+范围筛选、关键字、分页、清空；PG 未配置时提示
+- [x] 期间修复：`epoch_ms()` 在该 PG 构建不存在 → `(extract(epoch FROM ts)*1000)::bigint`；
+      i18n 插值 `{n}` → `{{n}}`
+- [x] 53 实测：表自动建立、内核/应用日志入库、queryLogs 四种过滤全对、UI 历史 tab 渲染（计数/分页/筛选）；
+      列表体渲染受内嵌浏览器 0×0 视口限制未目视（数据链路已验，LogItem 组件为实时页同款）
+- [x] typecheck + lint 0 warning + 205 测试全绿
 
 ## 边界决策（已定，勿重开）
 

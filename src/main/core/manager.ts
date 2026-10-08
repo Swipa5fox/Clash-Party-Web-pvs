@@ -31,6 +31,8 @@ import i18next from '../../shared/i18n'
 import { managerLogger } from '../utils/logger'
 import { createCoreLogWritableStream } from '../utils/logFile'
 import { startTrafficIngest, stopTrafficIngest } from '../db/trafficIngest'
+import { startLogIngest, stopLogIngest, setLogIngestPool } from '../db/logIngest'
+import { getPool, isDbEnabled } from '../db/index'
 import {
   startMihomoTraffic,
   startMihomoConnections,
@@ -541,6 +543,9 @@ function setupCoreListeners(
     await waitForCoreReady()
     await getAxios(true)
     startTrafficIngest()
+    startLogIngest(isDbEnabled())
+    // PG 连接失败时 getPool 返回 null，日志入库随之静默关闭（文件落盘不受影响）
+    void getPool().then((p) => setLogIngestPool(p))
     await Promise.all([
       startMihomoTraffic(),
       startMihomoConnections(),
@@ -755,6 +760,7 @@ function stopCoreProcessAndStreams(cancelStartup = true): void {
   stopMihomoLogs()
   stopMihomoMemory()
   stopTrafficIngest()
+  stopLogIngest()
 }
 
 async function cleanupStoppedCoreResources(): Promise<void> {

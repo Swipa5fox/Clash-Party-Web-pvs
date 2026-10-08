@@ -6,6 +6,7 @@ import { broadcastEvent } from '../resolve/broadcaster'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
 import { handleConnectionsInfo as ingestConnectionsInfo } from '../db/trafficIngest'
+import { pushLog as pushCoreLog } from '../db/logIngest'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { getMihomoIpcPath, hasCoreProcess, restartCore } from './manager'
 
@@ -540,10 +541,22 @@ const memoryStream = createStreamController<IMihomoMemoryInfo>('Memory', 'mihomo
 export const startMihomoMemory = memoryStream.start
 export const stopMihomoMemory = memoryStream.stop
 
-const logsStream = createStreamController<IMihomoLogInfo>('Logs', 'mihomoLogs', async () => {
-  const { 'log-level': logLevel = 'info' } = await getControledMihomoConfig()
-  return `/logs?level=${logLevel}`
-})
+const logsStream = createStreamController<IMihomoLogInfo>(
+  'Logs',
+  'mihomoLogs',
+  async () => {
+    const { 'log-level': logLevel = 'info' } = await getControledMihomoConfig()
+    return `/logs?level=${logLevel}`
+  },
+  (data) =>
+    pushCoreLog({
+      ts: Date.now(),
+      source: 'core',
+      level: data.type ?? 'info',
+      module: null,
+      message: data.payload ?? ''
+    })
+)
 
 export const startMihomoLogs = logsStream.start
 export const stopMihomoLogs = logsStream.stop

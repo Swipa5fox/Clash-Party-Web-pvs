@@ -1,0 +1,101 @@
+// 日志入库：内核 mihomoLogs 流 + 应用 logger 双路 → PG logs 表（文件落盘不动）。
+// 本模块禁止静态 import logger（db/index.ts 已静态引 logger，会成环），
+// 错误直接走 console，避免「记日志失败又触发记日志」。
+import type { Pool } from 'pg'
+
+const FLUSH_INTERVAL_MS = 5000
+const MAX_BUFFER = 20_000
+const RETENTION_DAYS = 7
+
+export type LogSource = 'core' | 'app'
+
+export interface LogRow {
+  ts: number
+  source: LogSource
+  level: string
+  module: string | null
+  message: string
+}
+
+let buffer: LogRow[] = []
+let started = false
+let flushTimer: NodeJS.Timeout | null = null
+let pool: Pool | null = null
+let lastCleanupDay = 0
+
+export function startLogIngest(dbEnabled: boolean): void {
+  if (started) return
+  started = true
+  if (!dbEnabled) return
+  flushTimer = setInterval(() => void flush(), FLUSH_INTERVAL_MS)
+  flushTimer.unref()
+}
+
+export function stopLogIngest(): void {
+  if (flushTimer) {
+    clearInterval(flushTimer)
+    flushTimer = null
+  }
+  started = false
+  buffer = []
+}
+
+// 解耦 db/index：由 manager 在启动时注入（同样为避免环）
+export function setLogIngestPool(p: Pool | null): void {
+  pool = p
+}
+
+export function pushLog(row: LogRow): void {
+  if (!started || !pool) return
+  // 内核用 warning、应用 logger 用 warn，统一成 warning 方便筛选
+  const level = row.level === 'warn' ? 'warning' : row.level
+  buffer.push(level === row.level ? row : { ...row, level })
+  if (buffer.length > MAX_BUFFER) {
+    buffer = buffer.slice(buffer.length - MAX_BUFFER)
+    console.warn(`[LogIngest] buffer capped at ${MAX_BUFFER}; oldest dropped`)
+  }
+}
+
+export function __testLogBufferLength(): number {
+  return buffer.length
+}
+
+export function __testLogRows(): LogRow[] {
+  return buffer
+}
+
+async function flush(): Promise<void> {
+  if (buffer.length === 0) return
+  if (!pool) return
+  const rows = buffer
+  buffer = []
+  const values: unknown[] = []
+  const placeholders = rows.map((row, i) => {
+    const base = i * 5
+    values.push(new Date(row.ts), row.source, row.level, row.module, row.message)
+    return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`
+  })
+  try {
+    await pool.query(
+      `INSERT INTO logs (ts, source, level, module, message) VALUES ${placeholders.join(',')}`,
+      values
+    )
+  } catch (e) {
+    console.warn('[LogIngest] flush failed', e)
+    buffer = [...rows.slice(-MAX_BUFFER), ...buffer].slice(0, MAX_BUFFER)
+  }
+  await cleanupOncePerDay()
+}
+
+async function cleanupOncePerDay(): Promise<void> {
+  const today = Math.floor(Date.now() / 86_400_000)
+  if (today === lastCleanupDay || !pool) return
+  lastCleanupDay = today
+  try {
+    await pool.query('DELETE FROM logs WHERE ts < now() - make_interval(days => $1)', [
+      RETENTION_DAYS
+    ])
+  } catch (e) {
+    console.warn('[LogIngest] retention cleanup failed', e)
+  }
+}
