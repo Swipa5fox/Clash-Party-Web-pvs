@@ -45,10 +45,10 @@
 ## 收尾（⏸ 待办）
 
 - [x] commit 第一期改动（`e9fa19b`，已 push）
-- [x] commit 白名单修复（`13fff19`，**未 push**）
-- [ ] README/changelog 补 PG 配置说明（CP_DATABASE_URL 用法）
+- [x] commit 白名单修复（`13fff19`）+ lint 清理（`6941492`），均已 push
+- [x] README 补 PG 说明（技术栈行 + 「流量用量与 PostgreSQL（可选）」小节 + Docker/tarball 接入示例 + 安全边界）
+- [ ] changelog：按该文件“只在发布时追加”的约定，等下次发版再写本期条目
 - [ ] 本机 `_cpx-deploy` 同步新构建（可选：不带 CP_DATABASE_URL 行为同旧版）
-- [ ] 清理第一期 ipc.ts 引入的 3 条 import/order warning（合并进上面这步）
 
 ## 第二期（⏸ 可选，未排期）：日志查询
 

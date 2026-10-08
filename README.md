@@ -63,6 +63,7 @@
 | 状态与国际化 | SWR、i18next / react-i18next                                                |
 | 构建         | Vite 7（渲染层单入口 `web`）+ esbuild（主进程单文件 server.cjs）            |
 | 主进程与桥接 | express（静态服务）、ws（RPC 桥）、axios + http(s)-proxy-agent（出站请求）  |
+| 数据存储     | YAML 文件（订阅/覆写/主题/凭据）；可选 PostgreSQL 存流量用量                |
 | 部署         | Linux tarball + systemd（TUN 走 AmbientCapabilities=CAP_NET_ADMIN）         |
 | 质量保障     | vitest（单元 / 集成）、eslint + prettier、tsc 类型检查                      |
 
@@ -109,6 +110,18 @@ LAN 设备 ─────:7890───► 服务器内核（HTTP + SOCKS5 共�
 
 自定义线路组的注入（`applyCustomLineGroups`）：每个线路组生成一个入口组，其成员为启用的子组（`url-test` 自动 / `fallback` 故障 / `select` 手动 / `select` 全局，可单独开关），每个子组挂载所选节点集合；同时创建名为 `<组名>·入口` 的 `mixed` 监听端口。组名冲突时跳过，同名监听端口则覆盖更新。
 
+### 流量用量与 PostgreSQL（可选）
+
+「用量」页的数据存在服务端 PostgreSQL 中，**未配置 `CP_DATABASE_URL` 时该功能整体关闭**（不采集、页面无数据），其余功能不受影响。
+
+- **采集在主进程**：主进程订阅内核 `/connections` 流，按连接 ID 计算上传/下载增量，缓冲后每 5 秒批量写入 `data_usage_logs` 表。因此采集与浏览器无关，关闭页面或没有客户端在线时同样持续记录
+- **建表与保留**：首次连接自动 `CREATE TABLE IF NOT EXISTS data_usage_logs`（`ts` 上建 BRIN 索引，适配追加型数据），按 `ts` 每日清理 30 天前的记录；不引入迁移框架
+- **查询走 SQL**：用量页的排行/趋势/下钻（按域名、代理、进程、来源 IP）由 `GROUP BY` 聚合，不再在浏览器本地存储
+- **接入**：设置环境变量 `CP_DATABASE_URL` 即可，格式为标准连接串，例如 `postgres://user:pass@127.0.0.1:5433/clash_party`。驱动为纯 JS 的 `pg`，已被 esbuild 内联进 `server.cjs`，部署物仍是单文件
+- **零风险回退**：连接失败只记 warning，不阻塞启动；缓冲封顶后丢弃最旧数据
+
+从旧版本升级：浏览器端的 IndexedDB 存量数据在首次打开「用量」页时自动导入 PG 并删除本地库（一次性）。
+
 ### 构建与资源
 
 - 主进程（纯 Node，无 Electron）由 esbuild 打成单文件 `dist/server.cjs`；渲染层由 vite 直出 `dist/renderer/`
@@ -145,6 +158,29 @@ cd deploy/party && docker compose up -d   # host 网络，数据落 /var/lib/cla
 
 一键构筑（含外网预检、内核资源离线化、健康检查）：`bash deploy/opt/bootstrap.sh <服务器IP>`
 
+**启用「用量」统计（可选）**：加一个 PostgreSQL 服务并把连接串传给 party 容器即可（PG 只绑回环，不对 LAN 暴露）：
+
+```yaml
+services:
+  clash-party:
+    environment:
+      CP_DATABASE_URL: postgres://clash_party:改掉这个密码@127.0.0.1:5433/clash_party
+  postgres:
+    image: postgres:18
+    container_name: clash-party-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: clash_party
+      POSTGRES_USER: clash_party
+      POSTGRES_PASSWORD: 改掉这个密码
+    volumes:
+      - /var/lib/clash-party-pg:/var/lib/postgresql
+    ports:
+      - 127.0.0.1:5433:5432
+```
+
+表结构与 30 天保留策略由 party 首次连接时自动建立，无需手工执行 SQL。详见 [实现方式 → 流量用量与 PostgreSQL](#流量用量与-postgresql可选)。
+
 ### Linux 服务器部署（tarball + systemd）
 
 ```bash
@@ -161,6 +197,7 @@ sudo systemctl enable --now clash-party
 
 - TUN 模式需要 `CAP_NET_ADMIN`（unit 已配置 `AmbientCapabilities`）与 `/dev/net/tun`
 - 数据目录默认 `CP_DATA_DIR`（unit 中为 `/var/lib/clash-party`）；本机开发默认 `~/.local/share/clash-party`
+- 需要用量统计时，在 unit 里加 `Environment=CP_DATABASE_URL=postgres://user:pass@127.0.0.1:5433/clash_party`
 
 ### 本机开发
 
@@ -188,6 +225,7 @@ pnpm run dev          # vite dev server + tsx 主进程，浏览器访问 :3999
 - 移除 Ed25519 设备签名，防重放改由一次性 nonce 承担
 - vault 明文 JSON 落盘，不再使用系统 Keychain / safeStorage 加密
 - Web UI 账号密码登录 + Cookie 会话；凭据哈希落盘但无 HTTPS 时口令经内网明文传输，请勿暴露公网；mihomo 控制器仅绑 `127.0.0.1`，不对 LAN 暴露（zashboard 面板如需应急访问，走 `ssh -L 9090:127.0.0.1:9090` 隧道）
+- PostgreSQL（可选）同样只绑 `127.0.0.1`，不对 LAN 暴露；连接串经环境变量注入，请替换示例密码，勿沿用文档里的占位值
 
 ## 许可证与致谢
 
