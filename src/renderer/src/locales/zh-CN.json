@@ -144,6 +144,8 @@
   "mihomo.tcpConcurrent": "TCP 并发",
   "mihomo.storeSelectedNode": "存储选择节点",
   "mihomo.storeFakeIp": "存储 FakeIP",
+  "mihomo.pgLogRetentionDays": "PG 日志保留天数",
+  "mihomo.pgLogMaxRows": "PG 日志行数上限",
   "mihomo.logRetentionDays": "日志保留天数",
   "mihomo.logFileSizeLimit": "日志上限（MB）",
   "mihomo.disableCoreLog": "禁止内核日志写入文件",

@@ -144,6 +144,8 @@
   "mihomo.tcpConcurrent": "TCP Concurrent",
   "mihomo.storeSelectedNode": "Store Selected Node",
   "mihomo.storeFakeIp": "Store Fake IP",
+  "mihomo.pgLogRetentionDays": "PG log retention (days)",
+  "mihomo.pgLogMaxRows": "PG log max rows",
   "mihomo.logRetentionDays": "Log Retention Days",
   "mihomo.logFileSizeLimit": "Single Log File Limit (MB)",
   "mihomo.disableCoreLog": "Disable Core Log File",

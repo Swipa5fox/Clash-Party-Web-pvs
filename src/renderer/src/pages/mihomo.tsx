@@ -67,6 +67,8 @@ const Mihomo: React.FC = () => {
     specificVersion,
     maxLogDays = 14,
     maxLogFileSize = 100,
+    pgLogRetentionDays = 7,
+    pgLogMaxRows = 500000,
     disableCoreLog = false,
     sysProxy,
     showMixedPort,
@@ -895,6 +897,46 @@ const Mihomo: React.FC = () => {
               isSelected={disableCoreLog}
               onValueChange={(v) => {
                 patchAppConfig({ disableCoreLog: v })
+              }}
+            />
+          </SettingItem>
+          <SettingItem title={t('mihomo.pgLogRetentionDays')} divider>
+            <Input
+              size="sm"
+              type="number"
+              className="w-25"
+              value={pgLogRetentionDays.toString()}
+              onValueChange={(v) => {
+                const num = parseInt(v)
+                if (!isNaN(num)) {
+                  patchAppConfig({ pgLogRetentionDays: num })
+                }
+              }}
+              onBlur={(e) => {
+                const num = parseInt(e.target.value)
+                if (isNaN(num) || num < 1) {
+                  patchAppConfig({ pgLogRetentionDays: 7 })
+                }
+              }}
+            />
+          </SettingItem>
+          <SettingItem title={t('mihomo.pgLogMaxRows')} divider>
+            <Input
+              size="sm"
+              type="number"
+              className="w-25"
+              value={pgLogMaxRows.toString()}
+              onValueChange={(v) => {
+                const num = parseInt(v)
+                if (!isNaN(num)) {
+                  patchAppConfig({ pgLogMaxRows: num })
+                }
+              }}
+              onBlur={(e) => {
+                const num = parseInt(e.target.value)
+                if (isNaN(num) || num < 1000) {
+                  patchAppConfig({ pgLogMaxRows: 500000 })
+                }
               }}
             />
           </SettingItem>

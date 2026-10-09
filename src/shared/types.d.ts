@@ -354,6 +354,8 @@ interface IAppConfig {
   sysProxy: ISysProxyConfig
   maxLogDays: number
   maxLogFileSize: number
+  pgLogRetentionDays: number
+  pgLogMaxRows: number
   disableAppLog?: boolean
   disableCoreLog?: boolean
   userAgent?: string

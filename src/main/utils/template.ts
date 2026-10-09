@@ -21,6 +21,8 @@ export const defaultConfig: IAppConfig = {
   enableTrafficLogger: DEFAULT_ENABLE_TRAFFIC_LOGGER,
   maxLogDays: 14,
   maxLogFileSize: 100,
+  pgLogRetentionDays: 7,
+  pgLogMaxRows: 500000,
   disableAppLog: false,
   disableCoreLog: false,
   proxyCols: 'auto',

@@ -9,9 +9,23 @@ import {
   setCoreLogDisabled,
   setGlobalMaxLogFileSizeMB
 } from '../utils/logFile'
+import { setLogIngestLimits } from '../db/logIngest'
 import { setAppLogDisabled } from '../utils/logger'
 
 let appConfig: IAppConfig // config.yaml
+
+// PG 日志设置归一：保留天数 [1,365]，行数上限 [1000, 10_000_000]
+export function normalizeRetentionDays(value: unknown): number {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return 7
+  return Math.min(365, Math.max(1, Math.floor(num)))
+}
+
+export function normalizeMaxRows(value: unknown): number {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return 500_000
+  return Math.min(10_000_000, Math.max(1_000, Math.floor(num)))
+}
 const appConfigWriteQueue = new WriteQueue()
 
 function cloneDefaultConfig(): IAppConfig {
@@ -31,6 +45,10 @@ export async function getAppConfig(force = false): Promise<IAppConfig> {
       setGlobalMaxLogFileSizeMB(mergedConfig.maxLogFileSize)
       setCoreLogDisabled(mergedConfig.disableCoreLog === true)
       setAppLogDisabled(mergedConfig.disableAppLog === true)
+      setLogIngestLimits(
+        normalizeRetentionDays(mergedConfig.pgLogRetentionDays),
+        normalizeMaxRows(mergedConfig.pgLogMaxRows)
+      )
       appConfig = mergedConfig
     })
   }
@@ -51,5 +69,9 @@ export async function patchAppConfig(patch: Partial<IAppConfig>): Promise<void> 
     setGlobalMaxLogFileSizeMB(nextConfig.maxLogFileSize)
     setCoreLogDisabled(nextConfig.disableCoreLog === true)
     setAppLogDisabled(nextConfig.disableAppLog === true)
+    setLogIngestLimits(
+      normalizeRetentionDays(nextConfig.pgLogRetentionDays),
+      normalizeMaxRows(nextConfig.pgLogMaxRows)
+    )
   })
 }

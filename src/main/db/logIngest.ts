@@ -5,7 +5,8 @@ import type { Pool } from 'pg'
 
 const FLUSH_INTERVAL_MS = 5000
 const MAX_BUFFER = 20_000
-const RETENTION_DAYS = 7
+const DEFAULT_RETENTION_DAYS = 7
+const DEFAULT_MAX_ROWS = 500_000
 
 export interface LogRow {
   ts: number
@@ -18,7 +19,18 @@ let buffer: LogRow[] = []
 let started = false
 let flushTimer: NodeJS.Timeout | null = null
 let pool: Pool | null = null
+let retentionDays = DEFAULT_RETENTION_DAYS
+let maxRows = DEFAULT_MAX_ROWS
 let lastCleanupDay = 0
+
+// 设置下发（app.ts 读取 config 后调用，避免本模块 import config 成环）；
+// 保留天数或行数上限任一变化都重置当天清理标记，使新值尽快生效
+export function setLogIngestLimits(nextRetentionDays: number, nextMaxRows: number): void {
+  if (nextRetentionDays === retentionDays && nextMaxRows === maxRows) return
+  retentionDays = nextRetentionDays
+  maxRows = nextMaxRows
+  lastCleanupDay = 0
+}
 
 export function startLogIngest(dbEnabled: boolean): void {
   if (started) return
@@ -80,8 +92,13 @@ async function cleanupOncePerDay(): Promise<void> {
   lastCleanupDay = today
   try {
     await pool.query('DELETE FROM logs WHERE ts < now() - make_interval(days => $1)', [
-      RETENTION_DAYS
+      retentionDays
     ])
+    // 行数上限：超限时按 id 保留最新的 maxRows 条
+    await pool.query(
+      'DELETE FROM logs WHERE id IN (SELECT id FROM logs ORDER BY id DESC OFFSET $1)',
+      [maxRows]
+    )
   } catch (e) {
     console.warn('[LogIngest] retention cleanup failed', e)
   }
