@@ -77,6 +77,6 @@
 docker exec -it clash-party-pg psql -U clash_party -d clash_party
 # 看最近入库
 select ts, source_ip, host, outbound, download from data_usage_logs order by ts desc limit 10;
-# 连接串（已注入 /opt/clash-party/docker-compose.yml）
+# 连接串（已注入 deploy/party 的 docker-compose.override.yml，由 release.sh 自动维护）
 postgres://clash_party:clash_party_53@127.0.0.1:5433/clash_party
 ```

@@ -1,5 +1,5 @@
 # clash-party v1.3+ — 纯 Node Web UI + mihomo sidecar 单容器。
-# 这是对 192.168.110.53 实跑形态（/opt/clash-party + bind /var/lib/clash-party）
+# 这是对 192.168.110.53 实跑形态（/opt/Clash-Party-Web-pvs-1.0 + bind /var/lib/clash-party）
 # 的仓库化：同端口、同数据目录语义，单容器独立部署。
 #
 #   Web UI  : http://<host>:3999/ （账号密码登录，初始凭据见 deploy.sh 部署汇总）

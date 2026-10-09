@@ -168,7 +168,7 @@ bash deploy/release.sh 192.168.110.53
 
 - 镜像在旧容器仍在服务时**预构建**，停机窗口只有容器交接的几秒
 - 自动从现役旧部署捕获 `CP_DATABASE_URL` 写成 override（PG 用量/日志入库不断链），并 seed Linux 内核进构建上下文（构建不碰 GitHub）
-- 旧部署目录 `/opt/clash-party` 原样保留，`KEEP_TARBALL=true` 可留源码包，回滚见脚本尾注
+- 旧部署目录 `/opt/clash-party` 原样保留；回滚：`ssh <host> 'docker rm -f clash-party && cd /opt/clash-party && docker compose up -d --build'`
 
 **启用「用量」统计与「日志」历史查询（可选）**：加一个 PostgreSQL 服务并把连接串传给 party 容器即可（PG 只绑回环，不对 LAN 暴露）：
 
@@ -202,6 +202,7 @@ pnpm run build:tarball
 
 # 服务器上：
 tar -xzf dist/clash-party-linux-*-x64.tar.gz -C /opt/
+# tarball 顶层目录是 clash-party/（即 /opt/clash-party），与 unit 内路径一致
 sudo cp /opt/clash-party/deploy/clash-party.service /etc/systemd/system/
 sudo systemctl enable --now clash-party
 # 浏览器访问 http://<服务器IP>:3999（初始账号 admin/admin123，首登后请改密）

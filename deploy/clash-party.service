@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# 安装位置（tarball 解压到 /opt/clash-party）与数据目录按需调整
+# 安装位置（tarball 解压后目录名是 clash-party/，mv 到 /opt/clash-party）与数据目录按需调整
 WorkingDirectory=/opt/clash-party
 ExecStart=/usr/bin/node /opt/clash-party/server.cjs
 Environment=CP_DATA_DIR=/var/lib/clash-party

@@ -2,7 +2,7 @@
 # bootstrap.sh — 在 /opt 下从零构筑 Clash Party Web（单容器：纯 Node 服务器 + 自带 mihomo 内核）。
 #
 # 服务器端用法(解压后执行):
-#   bash /opt/Clash-Party-Web-pvs/deploy/opt/bootstrap.sh 192.168.1.100
+#   bash /opt/Clash-Party-Web-pvs-1.0/deploy/opt/bootstrap.sh 192.168.1.100
 #
 # 也可只传压缩包,脚本自己解压:
 #   bash bootstrap.sh 192.168.1.100             # TARBALL 默认 /opt/cpx-src.tar.gz
@@ -28,7 +28,7 @@ fi
 HOST_IP="${1:-${HOST_IP:-}}"
 TARBALL="${TARBALL:-/opt/cpx-src.tar.gz}"
 OPT_ROOT="${OPT_ROOT:-/opt}"
-REPO_NAME="${REPO_NAME:-Clash-Party-Web-pvs}"
+REPO_NAME="${REPO_NAME:-Clash-Party-Web-pvs-1.0}"
 FORCE="${FORCE:-false}"
 # 需与容器内实际监听一致：compose 未导出 CP_WEB_PORT 时即应用默认 3999。
 WEB_PORT="${PARTY_WEB_PORT:-3999}"

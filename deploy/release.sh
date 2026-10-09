@@ -16,7 +16,8 @@
 #   5. 健康检查 + 部署汇总
 #
 # 停机窗口: 只在「摘旧容器 → 新容器 up」之间（秒级）；镜像构建在旧容器仍在跑时完成。
-# 回滚:     旧部署目录 /opt/clash-party 原样保留，cd /opt/clash-party && docker compose up -d --build
+# 回滚:     ssh <host> 'docker rm -f clash-party && cd /opt/clash-party && docker compose up -d --build'
+#           （旧部署目录原样保留；compose 项目名不同，须先移走同名容器才会被接管）
 #
 # 环境变量:
 #   HOST=192.168.110.53   目标服务器（或第 1 个位置参数）
@@ -126,8 +127,9 @@ tar -xzf /opt/cpx-src.tar.gz -C /opt
 [ -f "$ROOT/deploy/party/Dockerfile" ] || fail "包结构不符: 缺 $ROOT/deploy/party/Dockerfile"
 
 # Linux 内核 seed（本机 extra 只有 Windows 二进制）：
-# 优先老预置目录 /opt/cpx-core-assets/extra，其次现役旧部署 /opt/clash-party/resources
-# （tarball 布局与 extra/ 同构）。Dockerfile 检测到 Linux ELF 即跳过联网下载。
+# 优先老预置目录 /opt/cpx-core-assets/extra，其次上一代 tarball 部署
+# /opt/clash-party/resources（tarball 布局与 extra/ 同构）。Dockerfile 检测到
+# Linux ELF 即跳过联网下载。首次部署后 extra/ 已在源码目录里，重跑幂等。
 SEED_FROM=""
 [ -d /opt/cpx-core-assets/extra ] && SEED_FROM=/opt/cpx-core-assets/extra
 [ -z "$SEED_FROM" ] && [ -f /opt/clash-party/resources/sidecar/mihomo ] \
@@ -164,8 +166,9 @@ fail() { printf '\033[1;31m[rel-r][FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 ROOT="/opt/${REPO_NAME}"
 
 # 捕获现役容器的 PG 连接串（流量/日志入库靠它；丢 = 用量与日志历史静默失效）。
-# 依次: 在跑容器 env → 旧 compose 文件 → 旧 .env。
+# 依次: 在跑容器 env → 旧部署 compose 文件 → 旧部署 .env → 本项目 override（已生成时）。
 PG_URL="$(docker exec clash-party printenv CP_DATABASE_URL 2>/dev/null || true)"
+[ -z "$PG_URL" ] && PG_URL="$(sed -n 's/^\s*CP_DATABASE_URL:\s*//p' "$ROOT/deploy/party/docker-compose.override.yml" 2>/dev/null | head -1 | cut -d"'" -f1 | cut -d'"' -f1 || true)"
 [ -z "$PG_URL" ] && PG_URL="$(sed -n 's/^\s*CP_DATABASE_URL:\s*//p' /opt/clash-party/docker-compose.yml 2>/dev/null | head -1 || true)"
 [ -z "$PG_URL" ] && PG_URL="$(grep -h '^CP_DATABASE_URL=' /opt/clash-party/.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
 
@@ -197,7 +200,7 @@ SSH "REPO_NAME='${REPO_NAME}' \
      GITHUB_MIRROR='${GITHUB_MIRROR:-}' \
      FORCE=true \
      bash '${REMOTE_ROOT}/deploy/opt/bootstrap.sh' '${HOST}'" \
-  || fail "bootstrap.sh 失败（日志见上；回滚: ssh ${SSH_USER}@${HOST} 'cd /opt/clash-party && docker compose up -d --build'）"
+  || fail "bootstrap.sh 失败（日志见上；回滚: ssh ${SSH_USER}@${HOST} 'docker rm -f clash-party && cd /opt/clash-party && docker compose up -d --build'）"
 
 # ------------------------------------------------ 5. 验证 + 汇总 ---
 log "Stage 5/5: 部署验证"
@@ -214,7 +217,7 @@ PG 入库     : ${PG_OK}（CP_DATABASE_URL）
 Web UI      : http://${HOST}:3999/
 代理口      : http://${HOST}:7890 (HTTP+SOCKS5)
 数据目录    : /var/lib/clash-party（bind，重建不丢）
-回滚        : ssh ${SSH_USER}@${HOST} 'cd /opt/clash-party && docker compose up -d --build'
+回滚        : ssh ${SSH_USER}@${HOST} 'docker rm -f clash-party && cd /opt/clash-party && docker compose up -d --build'
 
 最近日志:
 ${LOGS}
