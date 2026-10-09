@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases">
-    <img src="https://img.shields.io/badge/release-v1.4.0-blue">
+    <img src="https://img.shields.io/badge/release-v1.4.1-blue">
   </a>
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs">
     <img src="https://img.shields.io/badge/upstream-Clash%20Party%20v2.0.2-green">
@@ -24,15 +24,15 @@
 
 > ⚠️ 本项目面向**可信内网**自用：为支持内网直连，移除了传输加密、SSRF 防护与设备签名，凭据改为明文落盘。**不要暴露到公网，也不要对外分发。**
 
-## 当前版本 v1.4.0（2026-09-29）
+## 当前版本 v1.4.1（2026-10-09）
 
-自 v1.3.1 以来的核心更新（详见 [changelog.md](./changelog.md)）：
+自 v1.4.0 以来的核心更新（详见 [changelog.md](./changelog.md)）：
 
-- **移除 gateway 网关栈，收敛单容器**：`deploy/gateway/`（机场插件 v2 服务端 + `:8080` 面板反代）与插件对接文档整目录删除；运行时只保留 `:3999` Web UI + `:7890` 共享代理 + 自定义线路口，mihomo 控制器维持 `127.0.0.1:9090` 回环
-- **线路工具去 gateway 依赖**：`tools/mihomo-lines` 的 list / add / switch / verify / trace 全部改走 `:3999` WS 桥（账号登录 + invoke），配置去掉 `panelToken`
-- **三轮死码清理**：Windows 安装器资产 / updater / checksum / Telegram 通知链路 / 上游 issue 模板删除；`@electron-toolkit` 移除，`defaultIcon` 2.37MB→671B
-- **Web UI 刷新首帧闪色修复**：`theme-init.js` 于样式表生效前按存储主题上 `dark` 类并画底色，深色不再闪白、浅色不再闪黑
-- 自 v1.3 以历（继承）：主进程纯 Node 服务器 + Linux tarball 产物（镜像 ~560MB）；自定义线路组平铺选线 + 订阅交集注入；`CP_DATA_DIR` 数据目录环境变量化
+- **流量用量接入 PostgreSQL（第一期）**：采集从浏览器 IndexedDB 搬到主进程——订阅内核连接流算增量、5 秒批量入库、30 天保留；查询走 SQL 聚合。未配置 `CP_DATABASE_URL` 时整体关闭，行为同旧版；存量 IndexedDB 数据首次打开「用量」页自动迁移
+- **日志接入 PostgreSQL（第二期）**：内核与应用日志双路入库（保留 7 天），logs 页新增「历史」tab，按来源/级别/关键字/时间窗筛选 + 分页查询
+- **修复渲染层 IPC 白名单漏登记**：第一期 9 个流量通道只加了主进程 handler 未同步浏览器 shim 白名单，用量页静默显示 0；白名单已抽到 `src/shared/ipcChannels.ts` 并用双向测试锁死，漏登记/残留项都会报红
+- **lint warning 全仓清零**（22 → 0，均为等价改写）
+- 自 v1.4.0 以历（继承）：gateway 网关栈移除、单容器收敛；线路工具走 WS 桥；`theme-init.js` 刷新首帧闪色修复
 
 ## 重要功能
 
@@ -63,7 +63,7 @@
 | 状态与国际化 | SWR、i18next / react-i18next                                                |
 | 构建         | Vite 7（渲染层单入口 `web`）+ esbuild（主进程单文件 server.cjs）            |
 | 主进程与桥接 | express（静态服务）、ws（RPC 桥）、axios + http(s)-proxy-agent（出站请求）  |
-| 数据存储     | YAML 文件（订阅/覆写/主题/凭据）；可选 PostgreSQL 存流量用量                |
+| 数据存储     | YAML 文件（订阅/覆写/主题/凭据）；可选 PostgreSQL 存流量用量与日志历史      |
 | 部署         | Linux tarball + systemd（TUN 走 AmbientCapabilities=CAP_NET_ADMIN）         |
 | 质量保障     | vitest（单元 / 集成）、eslint + prettier、tsc 类型检查                      |
 
@@ -110,12 +110,13 @@ LAN 设备 ─────:7890───► 服务器内核（HTTP + SOCKS5 共�
 
 自定义线路组的注入（`applyCustomLineGroups`）：每个线路组生成一个入口组，其成员为启用的子组（`url-test` 自动 / `fallback` 故障 / `select` 手动 / `select` 全局，可单独开关），每个子组挂载所选节点集合；同时创建名为 `<组名>·入口` 的 `mixed` 监听端口。组名冲突时跳过，同名监听端口则覆盖更新。
 
-### 流量用量与 PostgreSQL（可选）
+### 流量用量与日志历史（PostgreSQL，可选）
 
-「用量」页的数据存在服务端 PostgreSQL 中，**未配置 `CP_DATABASE_URL` 时该功能整体关闭**（不采集、页面无数据），其余功能不受影响。
+「用量」页与「日志」页的历史数据存在服务端 PostgreSQL 中，**未配置 `CP_DATABASE_URL` 时两块功能整体关闭**（不采集、页面无数据，实时日志不受影响），其余功能不受影响。
 
-- **采集在主进程**：主进程订阅内核 `/connections` 流，按连接 ID 计算上传/下载增量，缓冲后每 5 秒批量写入 `data_usage_logs` 表。因此采集与浏览器无关，关闭页面或没有客户端在线时同样持续记录
-- **建表与保留**：首次连接自动 `CREATE TABLE IF NOT EXISTS data_usage_logs`（`ts` 上建 BRIN 索引，适配追加型数据），按 `ts` 每日清理 30 天前的记录；不引入迁移框架
+- **流量采集在主进程**：主进程订阅内核 `/connections` 流，按连接 ID 计算上传/下载增量，缓冲后每 5 秒批量写入 `data_usage_logs` 表。因此采集与浏览器无关，关闭页面或没有客户端在线时同样持续记录；保留 30 天
+- **日志双路入库**：内核日志流与应用自身日志（`logger.ts` 落盘时同步推送）写入 `logs` 表（来源/级别/模块/内容），保留 7 天；logs 页「历史」tab 按来源/级别/关键字/时间窗筛选并分页查询
+- **建表与保留**：首次连接自动 `CREATE TABLE IF NOT EXISTS`（`ts` 上建 BRIN 索引，适配追加型数据），按 `ts` 每日清理过期记录；不引入迁移框架
 - **查询走 SQL**：用量页的排行/趋势/下钻（按域名、代理、进程、来源 IP）由 `GROUP BY` 聚合，不再在浏览器本地存储
 - **接入**：设置环境变量 `CP_DATABASE_URL` 即可，格式为标准连接串，例如 `postgres://user:pass@127.0.0.1:5433/clash_party`。驱动为纯 JS 的 `pg`，已被 esbuild 内联进 `server.cjs`，部署物仍是单文件
 - **零风险回退**：连接失败只记 warning，不阻塞启动；缓冲封顶后丢弃最旧数据
@@ -158,7 +159,7 @@ cd deploy/party && docker compose up -d   # host 网络，数据落 /var/lib/cla
 
 一键构筑（含外网预检、内核资源离线化、健康检查）：`bash deploy/opt/bootstrap.sh <服务器IP>`
 
-**启用「用量」统计（可选）**：加一个 PostgreSQL 服务并把连接串传给 party 容器即可（PG 只绑回环，不对 LAN 暴露）：
+**启用「用量」统计与「日志」历史查询（可选）**：加一个 PostgreSQL 服务并把连接串传给 party 容器即可（PG 只绑回环，不对 LAN 暴露）：
 
 ```yaml
 services:
@@ -179,7 +180,7 @@ services:
       - 127.0.0.1:5433:5432
 ```
 
-表结构与 30 天保留策略由 party 首次连接时自动建立，无需手工执行 SQL。详见 [实现方式 → 流量用量与 PostgreSQL](#流量用量与-postgresql可选)。
+表结构、保留策略（流量 30 天 / 日志 7 天）由 party 首次连接时自动建立，无需手工执行 SQL。详见 [实现方式 → 流量用量与日志历史](#流量用量与日志历史postgresql可选)。
 
 ### Linux 服务器部署（tarball + systemd）
 

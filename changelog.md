@@ -2,6 +2,34 @@
 
 本文件集中记录版本变更。README 只描述当前的能力与实现方式，不写版本历史。最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
+## v1.4.1（2026-10-09）
+
+数据面迁 PostgreSQL：流量用量与日志从浏览器/本地落到服务端库，集中留存、跨设备不丢；另修渲染层 IPC 白名单漏登记导致的用量页静默失效，lint warning 全仓清零。
+
+### 流量用量接入 PostgreSQL（第一期）
+
+- **采集从渲染层搬到主进程**（`src/main/db/`）：主进程订阅内核 `/connections` 流，按连接 ID 计算上传/下载增量，缓冲后每 5 秒批量 `INSERT` 进 `data_usage_logs` 表（`ts` 上 BRIN 索引，适配追加型数据）；采集与浏览器无关，关页或无客户端在线同样持续记录
+- **查询走 SQL 聚合**（`dataUsageQuery.ts`）：用量页的排行/趋势/下钻（按域名、代理、进程、来源 IP）由 `GROUP BY` 聚合得出，不再在浏览器本地存储
+- **保留与回退**：每日清理 30 天前记录；`CP_DATABASE_URL` 未设时整体 no-op（行为同旧版），连接失败只记 warning、不阻塞启动，缓冲封顶 1 万条后丢弃最旧数据
+- **渲染层清理**：删 `utils/db.ts`（IndexedDB）与 `use-traffic-logger.ts`；用量卡采集开关改控服务端；存量 IndexedDB 数据首次进「用量」页自动迁移进 PG 后删除本地库（`legacy-db-migrate.ts`，一次性）
+- 9 个新 IPC 通道（查询/导入/清空/开关/后端状态）；`pg` 驱动纯 JS 被 esbuild 内联，tarball 仍无 node_modules
+- 192.168.110.53 实测：真实流量入库（来源 IP/域名/出站/字节数正确）、无浏览器会话持续记录、桥 invoke 聚合查询正确
+
+### 日志接入 PostgreSQL（第二期）
+
+- **`logs` 表**：`source`（core 内核 / app 应用）/ `level` / `module` / `message`，`ts` 上 BRIN 索引，保留 7 天
+- **双路入库**：内核 `mihomoLogs` 流旁挂 onData；`logger.ts` 落盘时同步推 PG（`warn`→`warning` 归一）。`logIngest.ts` 零静态 import（pool 由 manager 注入），避免与 `db/index`→`logger` 成环
+- **IPC `queryLogs` / `clearLogs`**：来源/级别/关键字/时间窗筛选 + 分页；白名单同步登记
+- **logs 页改「实时 / 历史」双 tab**：历史 tab 提供筛选组合、分页计数；PG 未配置时给出提示
+- 修复：`epoch_ms()` 在所用 PG 18 构建不存在，改 `(extract(epoch FROM ts)*1000)::bigint`；i18n 插值 `{n}`→`{{n}}`
+- 192.168.110.53 实测：内核+应用日志入库、四种过滤查询全对、历史 tab 渲染正常
+
+### 修复与清理
+
+- **渲染层 IPC 白名单漏登记**（`13fff19`）：浏览器 shim 的 invoke 白名单是硬编码的，第一期新增 9 个流量通道只加了主进程 handler 未同步白名单，UI 调用被客户端直接 reject、用量页静默显示 0（桥直连测试绕过 shim 故未暴露）。白名单抽到 `src/shared/ipcChannels.ts` 渲染层与主进程共用，新增 `ipcChannels.test.ts` 双向锁死白名单 ↔ handler 注册表（漏登记/残留项都报红，已验证能捕获本次缺陷）
+- **lint warning 清零**（22 → 0，`6941492`）：import/order 归位、`no-non-null-assertion` 局部变量承接、测试断言兜底等，均为等价改写、无行为变化
+- `docs/postgres-migration-plan.md`：迁移计划书随两期实施更新状态
+
 ## v1.4.0（2026-09-29）
 
 内网部署简化：移除 clash-party-gateway 网关栈（机场插件 v2 服务端 + `:8080` 面板反代），运行时收敛为单容器；插件对接文档一并移除；线路工具从 gateway REST 迁到 WS 桥；死码三轮清理；Web UI 刷新首帧闪色修复。
