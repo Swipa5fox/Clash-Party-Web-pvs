@@ -2,6 +2,15 @@
 
 本文件集中记录版本变更。README 只描述当前的能力与实现方式，不写版本历史。最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
+## v1.4.2（2026-10-09）
+
+发版链路仓库化：新增 `deploy/release.sh` 一键打包部署——本机一条命令完成「打包源码 → scp → 服务器构建镜像 → 接管旧容器」，取代手工 vite build + scp + compose build 流程。
+
+- 打包剔除 node_modules / Windows 二进制（~32MB），服务器从旧部署 seed Linux 内核，构建零 GitHub 依赖
+- 镜像在旧容器仍在服务时预构建，停机窗口仅容器交接秒级；自动捕获现役 `CP_DATABASE_URL` 写 override（PG 用量/日志入库不断链）
+- compose 固定 `container_name: clash-party` + `stop_grace_period: 20s`；Git Bash 路径兼容（MSYS cygpath 归一）
+- 192.168.110.53 实跑验证：~7 分钟完成部署，DB 自动迁移、订阅/凭据不丢、LAN 侧 Web UI 与代理全通
+
 ## v1.4.1（2026-10-09）
 
 数据面迁 PostgreSQL：流量用量与日志从浏览器/本地落到服务端库，集中留存、跨设备不丢；另修渲染层 IPC 白名单漏登记导致的用量页静默失效，lint warning 全仓清零。

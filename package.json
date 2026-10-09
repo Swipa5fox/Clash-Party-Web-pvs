@@ -1,6 +1,6 @@
 {
   "name": "mihomo-party",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Clash Party Web PVS — LAN Direct-Access Rebuild",
   "type": "module",
   "main": "./out/main/index.js",
