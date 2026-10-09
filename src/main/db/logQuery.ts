@@ -1,10 +1,8 @@
 import type { Pool } from 'pg'
-import type { LogSource } from './logIngest'
 
 export interface LogQueryResult {
   id: number
   ts: number
-  source: LogSource
   level: string
   module: string | null
   message: string
@@ -16,7 +14,6 @@ export interface LogsPage {
 }
 
 export interface LogQueryFilter {
-  source?: LogSource
   level?: string
   keyword?: string
   startTime?: number
@@ -34,7 +31,6 @@ export async function queryLogs(pool: Pool | null, filter: LogQueryFilter): Prom
     params.push(value)
     return `$${params.length}`
   }
-  if (filter.source) where.push(`source = ${add(filter.source)}`)
   if (filter.level) where.push(`level = ${add(filter.level)}`)
   if (filter.keyword) where.push(`message ILIKE ${add(`%${filter.keyword}%`)}`)
   if (filter.startTime !== undefined)
@@ -49,7 +45,7 @@ export async function queryLogs(pool: Pool | null, filter: LogQueryFilter): Prom
   const limit = Math.min(Math.max(filter.limit ?? 200, 1), 1000)
   const offset = Math.max(filter.offset ?? 0, 0)
   const rows = await pool.query(
-    `SELECT id, (extract(epoch FROM ts) * 1000)::bigint AS ts, source, level, module, message FROM logs${whereSql} ORDER BY id DESC LIMIT ${add(limit)} OFFSET ${add(offset)}`,
+    `SELECT id, (extract(epoch FROM ts) * 1000)::bigint AS ts, level, module, message FROM logs${whereSql} ORDER BY id DESC LIMIT ${add(limit)} OFFSET ${add(offset)}`,
     params
   )
 
@@ -58,7 +54,6 @@ export async function queryLogs(pool: Pool | null, filter: LogQueryFilter): Prom
     rows: rows.rows.map((r) => ({
       id: Number(r.id),
       ts: Number(r.ts),
-      source: r.source,
       level: r.level,
       module: r.module,
       message: r.message

@@ -1,4 +1,3 @@
-import { pushLog } from '../db/logIngest'
 import { logPath } from './dirs'
 import { appendToFileWithLimit } from './logFile'
 
@@ -28,14 +27,6 @@ class Logger {
   }
 
   private async writeToFile(level: LogLevel, message: string, error?: unknown): Promise<void> {
-    // PG 留存副本（未启用时 no-op）；不因入库失败影响文件落盘
-    pushLog({
-      ts: Date.now(),
-      source: 'app',
-      level,
-      module: this.moduleName,
-      message: error ? `${message}: ${String(error)}` : message
-    })
     if (appLogDisabled) return
     try {
       const appLogPath = logPath()

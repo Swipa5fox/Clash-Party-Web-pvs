@@ -1,6 +1,4 @@
-import { Button } from '@heroui/react'
 import { version } from '@renderer/utils/init'
-import { getDriver } from '@renderer/utils/tour'
 import { useTranslation } from 'react-i18next'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
@@ -10,11 +8,6 @@ const Actions: React.FC = () => {
 
   return (
     <SettingCard>
-      <SettingItem title={t('actions.guide.title')} divider>
-        <Button size="sm" onPress={() => getDriver()?.drive()}>
-          {t('actions.guide.button')}
-        </Button>
-      </SettingItem>
       <SettingItem title={t('actions.version.title')}>
         <div>v{version}</div>
       </SettingItem>

@@ -1,9 +1,6 @@
 import { getAppConfig, getControledMihomoConfig } from '../config'
 import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
 
-// 主题由 renderer 自行管理（next-themes），服务器无原生主题可同步。
-export function setNativeTheme(_theme: 'system' | 'light' | 'dark'): void {}
-
 // 环境变量代理命令文本（原实现位于 resolve/tray.ts，桌面壳删除后迁至通用系统工具）；
 // Web 端设置页经 copyEnvText 通道取回文本后由前端写入浏览器剪贴板
 export type EnvType = 'bash' | 'cmd' | 'powershell' | 'fish' | 'nushell'

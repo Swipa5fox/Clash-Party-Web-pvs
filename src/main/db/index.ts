@@ -21,12 +21,12 @@ CREATE INDEX IF NOT EXISTS data_usage_logs_ts_idx ON data_usage_logs USING brin 
 CREATE TABLE IF NOT EXISTS logs (
   id bigserial PRIMARY KEY,
   ts timestamptz NOT NULL,
-  source text NOT NULL,
   level text NOT NULL,
   module text,
   message text NOT NULL
 );
 CREATE INDEX IF NOT EXISTS logs_ts_idx ON logs USING brin (ts);
+ALTER TABLE logs DROP COLUMN IF EXISTS source;
 `
 
 export function isDbEnabled(): boolean {

@@ -48,7 +48,7 @@ import {
 import { getCustomLineGroupsConfig, setCustomLineGroupsConfig } from '../config/customLineGroups'
 import { restartCore } from '../core/manager'
 import { triggerSysProxy } from '../sys/sysproxy'
-import { setNativeTheme, buildEnvText, type EnvType } from '../sys/misc'
+import { buildEnvText, type EnvType } from '../sys/misc'
 import { getRuntimeConfig, getRuntimeConfigStr } from '../core/factory'
 import {
   listWebdavBackups,
@@ -93,12 +93,10 @@ import {
   querySubStatsByHost,
   queryDevicesByHost,
   queryProxyStatsByHost,
-  getDataUsageRowCount,
   type DataUsageType
 } from '../db/dataUsageQuery'
 import {
   clearTrafficLogs,
-  importTrafficLogs,
   isTrafficIngestActive,
   setTrafficIngestEnabled
 } from '../db/trafficIngest'
@@ -106,7 +104,6 @@ import { isDbEnabled, getPool } from '../db/index'
 import { queryLogs, clearLogs, type LogQueryFilter } from '../db/logQuery'
 import { getImageDataURL } from './image'
 import { get as httpGet } from './chromeRequest'
-import { getIconDataURL } from './icon'
 import { dataDir, rulePath } from './dirs'
 import { installMihomoCore, getGitHubTags, clearVersionCache } from './github'
 import { atomicWriteFile } from './safeFile'
@@ -291,7 +288,6 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   fetchIPInfo,
   measureLatency,
   getImageDataURL,
-  getIconDataURL,
   changeLanguage,
   // File Share
   getFileShareServerState,
@@ -312,9 +308,7 @@ export const asyncHandlers: Record<string, AsyncFn> = {
   getSubStatsByHost: querySubStatsByHost,
   getDevicesByHost: queryDevicesByHost,
   getProxyStatsByHost: queryProxyStatsByHost,
-  getDataUsageRowCount,
   clearDataUsageLogs: clearTrafficLogs,
-  importDataUsageLogs: importTrafficLogs,
   setTrafficIngestEnabled: async (enabled: boolean) => setTrafficIngestEnabled(enabled),
   getDataUsageBackend: async () => ({
     pgConfigured: isDbEnabled(),
@@ -327,7 +321,6 @@ export const asyncHandlers: Record<string, AsyncFn> = {
 
 export const syncHandlers: Record<string, SyncFn> = {
   getInterfaces: os.networkInterfaces,
-  setNativeTheme,
   getVersion: () => appVersion(),
   platform: () => process.platform
 }

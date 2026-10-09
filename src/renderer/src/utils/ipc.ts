@@ -19,20 +19,7 @@ export interface TrafficTrendPoint {
   download: number
 }
 
-export interface TrafficLogRowInput {
-  timestamp: number
-  sourceIP: string
-  host: string
-  outbound: string
-  process: string
-  upload: number
-  download: number
-}
-
-export type LogSourceInput = 'core' | 'app'
-
 export interface LogsQueryFilterInput {
-  source?: LogSourceInput
   level?: string
   keyword?: string
   startTime?: number
@@ -46,7 +33,6 @@ export interface LogsPageResult {
   rows: {
     id: number
     ts: number
-    source: LogSourceInput
     level: string
     module: string | null
     message: string
@@ -112,7 +98,6 @@ interface IpcApi {
   // System
   triggerSysProxy: (enable: boolean) => Promise<void>
   getInterfaces: () => Promise<Record<string, NetworkInterfaceInfo[]>>
-  setNativeTheme: (theme: 'system' | 'light' | 'dark') => Promise<void>
   copyEnvText: (type?: 'bash' | 'cmd' | 'powershell' | 'fish' | 'nushell') => Promise<string>
   // Update
   getVersion: () => Promise<string>
@@ -181,9 +166,7 @@ interface IpcApi {
     startTime: number,
     endTime: number
   ) => Promise<AggregatedData[]>
-  getDataUsageRowCount: () => Promise<number>
   clearDataUsageLogs: () => Promise<void>
-  importDataUsageLogs: (logs: TrafficLogRowInput[]) => Promise<number>
   setTrafficIngestEnabled: (enabled: boolean) => Promise<void>
   getDataUsageBackend: () => Promise<{ pgConfigured: boolean; ingestActive: boolean }>
   queryLogs: (filter: LogsQueryFilterInput) => Promise<LogsPageResult>
@@ -257,7 +240,6 @@ export const {
   // System
   triggerSysProxy,
   getInterfaces,
-  setNativeTheme,
   copyEnvText,
   // Update
   getVersion,
@@ -307,9 +289,7 @@ export const {
   getSubStatsByHost,
   getDevicesByHost,
   getProxyStatsByHost,
-  getDataUsageRowCount,
   clearDataUsageLogs,
-  importDataUsageLogs,
   setTrafficIngestEnabled,
   getDataUsageBackend,
   queryLogs,
@@ -364,9 +344,4 @@ export async function applyTheme(theme: string): Promise<void> {
       await applyTheme(nextTheme)
     }
   }
-}
-
-// getIconDataURL: 获取应用图标的 Base64 数据
-export async function getIconDataURL(appPath: string): Promise<string> {
-  return invoke<string>('getIconDataURL', appPath)
 }

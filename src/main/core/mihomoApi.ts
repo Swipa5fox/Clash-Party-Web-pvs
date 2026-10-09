@@ -551,7 +551,6 @@ const logsStream = createStreamController<IMihomoLogInfo>(
   (data) =>
     pushCoreLog({
       ts: Date.now(),
-      source: 'core',
       level: data.type ?? 'info',
       module: null,
       message: data.payload ?? ''

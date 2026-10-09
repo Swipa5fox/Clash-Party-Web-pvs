@@ -1,5 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
+// logger 的 console 输出会在 vitest worker 拆卸时产生 onUserConsoleLog 竞态（偶发
+// EnvironmentTeardownError），测试不依赖这些日志，直接静音。
+vi.mock('../utils/logger', () => ({
+  createLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {} })
+}))
+
 // 隔离模块级状态：每个用例重新 import 拿干净闭包
 async function freshModule() {
   vi.resetModules()

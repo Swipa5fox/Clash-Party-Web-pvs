@@ -1,4 +1,4 @@
-// 日志入库：内核 mihomoLogs 流 + 应用 logger 双路 → PG logs 表（文件落盘不动）。
+// 日志入库：内核 mihomoLogs 流 → PG logs 表（文件落盘不动）。
 // 本模块禁止静态 import logger（db/index.ts 已静态引 logger，会成环），
 // 错误直接走 console，避免「记日志失败又触发记日志」。
 import type { Pool } from 'pg'
@@ -7,11 +7,8 @@ const FLUSH_INTERVAL_MS = 5000
 const MAX_BUFFER = 20_000
 const RETENTION_DAYS = 7
 
-export type LogSource = 'core' | 'app'
-
 export interface LogRow {
   ts: number
-  source: LogSource
   level: string
   module: string | null
   message: string
@@ -47,21 +44,11 @@ export function setLogIngestPool(p: Pool | null): void {
 
 export function pushLog(row: LogRow): void {
   if (!started || !pool) return
-  // 内核用 warning、应用 logger 用 warn，统一成 warning 方便筛选
-  const level = row.level === 'warn' ? 'warning' : row.level
-  buffer.push(level === row.level ? row : { ...row, level })
+  buffer.push(row)
   if (buffer.length > MAX_BUFFER) {
     buffer = buffer.slice(buffer.length - MAX_BUFFER)
     console.warn(`[LogIngest] buffer capped at ${MAX_BUFFER}; oldest dropped`)
   }
-}
-
-export function __testLogBufferLength(): number {
-  return buffer.length
-}
-
-export function __testLogRows(): LogRow[] {
-  return buffer
 }
 
 async function flush(): Promise<void> {
@@ -71,13 +58,13 @@ async function flush(): Promise<void> {
   buffer = []
   const values: unknown[] = []
   const placeholders = rows.map((row, i) => {
-    const base = i * 5
-    values.push(new Date(row.ts), row.source, row.level, row.module, row.message)
-    return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`
+    const base = i * 4
+    values.push(new Date(row.ts), row.level, row.module, row.message)
+    return `($${base + 1},$${base + 2},$${base + 3},$${base + 4})`
   })
   try {
     await pool.query(
-      `INSERT INTO logs (ts, source, level, module, message) VALUES ${placeholders.join(',')}`,
+      `INSERT INTO logs (ts, level, module, message) VALUES ${placeholders.join(',')}`,
       values
     )
   } catch (e) {

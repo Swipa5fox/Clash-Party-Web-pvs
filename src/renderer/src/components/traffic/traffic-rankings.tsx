@@ -1,5 +1,5 @@
 import { calcTraffic } from '@renderer/utils/calc'
-import type { AggregatedData } from '@renderer/utils/dataUsage'
+import type { AggregatedData } from '@renderer/utils/ipc'
 import React from 'react'
 
 interface Props {

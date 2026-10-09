@@ -26,18 +26,14 @@ import LogCard from '@renderer/components/sider/log-card'
 import MihomoCoreCard from '@renderer/components/sider/mihomo-core-card'
 import ResourceCard from '@renderer/components/sider/resource-card'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
-import { applyTheme, setNativeTheme } from '@renderer/utils/ipc'
+import { applyTheme } from '@renderer/utils/ipc'
 import NetworkCard from '@renderer/components/sider/network-card'
 import UsageCard from '@renderer/components/sider/usage-card'
 import FileShareCard from '@renderer/components/sider/file-share-card'
-import { createTourDriver } from '@renderer/utils/tour'
-import 'driver.js/dist/driver.css'
-import { useTranslation } from 'react-i18next'
 import { DEFAULT_SIDER_ORDER } from '../../shared/appConfig'
 import { SIDER_CARD_ROUTES, getSiderCardByPath, mergeSiderOrder } from './utils/sider'
 
 const App: React.FC = () => {
-  const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
   const hasAppConfig = Boolean(appConfig)
   const {
@@ -55,7 +51,6 @@ const App: React.FC = () => {
   const siderWidthValueRef = useRef(siderWidthValue)
   const [resizing, setResizing] = useState(false)
   const resizingRef = useRef(resizing)
-  const tourInitialized = useRef(false)
   const sensors = useSensors(useSensor(PointerSensor))
   const { setTheme, systemTheme } = useTheme()
   const navigate: NavigateFunction = useNavigate()
@@ -94,14 +89,6 @@ const App: React.FC = () => {
   }, [patchAppConfig])
 
   useEffect(() => {
-    if (!tourInitialized.current) {
-      tourInitialized.current = true
-      createTourDriver(t, navigate)
-    }
-  }, [t, navigate])
-
-  useEffect(() => {
-    setNativeTheme(appTheme)
     setTheme(appTheme)
     // 首帧占位底色(theme-init.js)交还给样式表:next-themes 已接管 .dark 类后清除
     document.documentElement.style.backgroundColor = ''

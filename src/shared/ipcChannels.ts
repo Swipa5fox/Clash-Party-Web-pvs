@@ -58,7 +58,6 @@ export const WEB_INVOKE_CHANNELS: readonly string[] = [
   // System
   'triggerSysProxy',
   'getInterfaces',
-  'setNativeTheme',
   'copyEnvText',
   // Update
   'getVersion',
@@ -95,7 +94,6 @@ export const WEB_INVOKE_CHANNELS: readonly string[] = [
   'fetchIPInfo',
   'measureLatency',
   'getImageDataURL',
-  'getIconDataURL',
   'changeLanguage',
   // File Share
   'getFileShareServerState',
@@ -111,9 +109,7 @@ export const WEB_INVOKE_CHANNELS: readonly string[] = [
   'getSubStatsByHost',
   'getDevicesByHost',
   'getProxyStatsByHost',
-  'getDataUsageRowCount',
   'clearDataUsageLogs',
-  'importDataUsageLogs',
   'setTrafficIngestEnabled',
   'getDataUsageBackend',
   // Logs

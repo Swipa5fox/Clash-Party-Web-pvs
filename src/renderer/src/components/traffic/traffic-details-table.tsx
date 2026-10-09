@@ -1,5 +1,5 @@
 import { calcTraffic } from '@renderer/utils/calc'
-import type { AggregatedData, DataUsageType } from '@renderer/utils/dataUsage'
+import type { AggregatedData, DataUsageType } from '@renderer/utils/ipc'
 import { Button, Input, Spinner } from '@heroui/react'
 import { IoChevronDown, IoChevronForward, IoSearch } from 'react-icons/io5'
 import React, { useState, useMemo } from 'react'

@@ -166,14 +166,13 @@ export async function startWebBridge(opts: WebBridgeOptions): Promise<WebBridgeH
   const port = opts.port ?? (Number(process.env.CP_WEB_PORT) || 3999)
   const host = opts.host ?? process.env.CP_WEB_HOST ?? '127.0.0.1'
   const blockedInWeb = new Set(opts.blockedChannels ?? [])
+  // 缺省 rpc（未传 handlers 时）：仅保留 blocked/unknown 语义，测试覆盖此分支
   const rpc: RpcFn =
     opts.rpc ??
-    (async (channel: string): Promise<RpcResult> => {
-      if (blockedInWeb.has(channel)) {
-        return { ok: false, error: `channel blocked in web mode: ${channel}` }
-      }
-      return { ok: false, error: `unknown channel: ${channel}` }
-    })
+    (async (channel: string): Promise<RpcResult> =>
+      blockedInWeb.has(channel)
+        ? { ok: false, error: `channel blocked in web mode: ${channel}` }
+        : { ok: false, error: `unknown channel: ${channel}` })
   // 确保登录凭据已初始化（首次启动生成默认 admin/admin123 并落盘）
   await ensureWebAuthConfig()
   const webHtmlPath = path.join(opts.staticRoot, 'web.html')

@@ -1,4 +1,3 @@
-import type { TrafficLogRow } from './trafficIngest'
 import { getPool } from './index'
 
 export type DataUsageType = 'sourceIP' | 'host' | 'outbound' | 'process'
@@ -137,12 +136,3 @@ export async function queryProxyStatsByHost(
   )
   return toAggregatedData(r.rows)
 }
-
-export async function getDataUsageRowCount(): Promise<number> {
-  const pool = await getPool()
-  if (!pool) return 0
-  const r = await pool.query<{ count: string }>('SELECT count(*) AS count FROM data_usage_logs')
-  return Number(r.rows[0]?.count ?? 0)
-}
-
-export type { TrafficLogRow }

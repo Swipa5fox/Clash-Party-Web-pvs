@@ -215,33 +215,3 @@ export async function clearTrafficLogs(): Promise<void> {
   await pool.query('DELETE FROM data_usage_logs')
   broadcastEvent('dataUsageCleared')
 }
-
-export async function importTrafficLogs(logs: TrafficLogRow[]): Promise<number> {
-  const pool = await getPool()
-  if (!pool) throw new Error('database not configured')
-  let imported = 0
-  const CHUNK = 500
-  for (let i = 0; i < logs.length; i += CHUNK) {
-    const chunk = logs.slice(i, i + CHUNK)
-    const values: unknown[] = []
-    const placeholders = chunk.map((row, j) => {
-      const base = j * 7
-      values.push(
-        new Date(row.timestamp),
-        row.sourceIP,
-        row.host,
-        row.outbound,
-        row.process,
-        row.upload,
-        row.download
-      )
-      return `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7})`
-    })
-    await pool.query(
-      `INSERT INTO data_usage_logs (ts, source_ip, host, outbound, process, upload, download) VALUES ${placeholders.join(',')}`,
-      values
-    )
-    imported += chunk.length
-  }
-  return imported
-}

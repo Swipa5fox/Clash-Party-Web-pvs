@@ -9,9 +9,8 @@ import {
   getProxyStatsByHost,
   type AggregatedData,
   type DataUsageType
-} from '@renderer/utils/dataUsage'
-import { clearDataUsageLogs, importDataUsageLogs } from '@renderer/utils/ipc'
-import { migrateLegacyIndexedDB } from '@renderer/utils/legacy-db-migrate'
+} from '@renderer/utils/ipc'
+import { clearDataUsageLogs } from '@renderer/utils/ipc'
 import { Button, Tab, Tabs } from '@heroui/react'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -179,10 +178,6 @@ const TrafficPage: React.FC = () => {
     await clearDataUsageLogs()
     await load()
   }, [load])
-
-  useEffect(() => {
-    void migrateLegacyIndexedDB(async (logs) => await importDataUsageLogs(logs))
-  }, [])
 
   const timeRangeLabel: Record<TimeRange, string> = {
     '1h': t('traffic.timeRange.1h'),

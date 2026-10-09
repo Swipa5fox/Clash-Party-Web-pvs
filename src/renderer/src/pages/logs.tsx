@@ -14,7 +14,6 @@ const MAX_CACHED_LOGS = 500
 const LOG_RENDER_INTERVAL_MS = 100
 const HISTORY_PAGE_SIZE = 200
 
-type HistorySource = '' | 'core' | 'app'
 type HistoryLevel = '' | 'debug' | 'info' | 'warning' | 'error'
 type HistoryRange = '1h' | '24h' | '7d'
 
@@ -186,7 +185,6 @@ const HistoryView: React.FC<{ filter: string; onFilterChange: (v: string) => voi
   const { filter, onFilterChange } = props
   const { t } = useTranslation()
   const [pgOk, setPgOk] = useState<boolean | null>(null)
-  const [source, setSource] = useState<HistorySource>('')
   const [level, setLevel] = useState<HistoryLevel>('')
   const [range, setRange] = useState<HistoryRange>('24h')
   const [page, setPage] = useState<LogsPageResult>({ total: 0, rows: [] })
@@ -202,7 +200,6 @@ const HistoryView: React.FC<{ filter: string; onFilterChange: (v: string) => voi
       setLoading(true)
       try {
         const result = await queryLogs({
-          source: source || undefined,
           level: level || undefined,
           keyword: filter || undefined,
           startTime: Date.now() - RANGE_MS[range],
@@ -215,13 +212,13 @@ const HistoryView: React.FC<{ filter: string; onFilterChange: (v: string) => voi
         setLoading(false)
       }
     },
-    [source, level, filter, range]
+    [level, filter, range]
   )
 
   useEffect(() => {
     if (pgOk) void load(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pgOk, source, level, range, filter])
+  }, [pgOk, level, range, filter])
 
   const totalPages = Math.max(1, Math.ceil(page.total / HISTORY_PAGE_SIZE))
 
@@ -240,20 +237,6 @@ const HistoryView: React.FC<{ filter: string; onFilterChange: (v: string) => voi
           isClearable
           onValueChange={onFilterChange}
         />
-        <Select
-          size="sm"
-          aria-label={t('logs.source.all')}
-          selectedKeys={new Set([source])}
-          className="max-w-[130px]"
-          onSelectionChange={(keys) => {
-            const v = [...keys][0] as HistorySource
-            setSource(v ?? '')
-          }}
-        >
-          <SelectItem key="">{t('logs.source.all')}</SelectItem>
-          <SelectItem key="core">{t('logs.source.core')}</SelectItem>
-          <SelectItem key="app">{t('logs.source.app')}</SelectItem>
-        </Select>
         <Select
           size="sm"
           aria-label={t('logs.level.all')}
@@ -328,7 +311,7 @@ const HistoryView: React.FC<{ filter: string; onFilterChange: (v: string) => voi
                 index={i}
                 time={new Date(row.ts).toLocaleString()}
                 type={row.level as IMihomoLogInfo['type']}
-                payload={`[${row.source}${row.module ? `/${row.module}` : ''}] ${row.message}`}
+                payload={`${row.module ? `[${row.module}] ` : ''}${row.message}`}
               />
             )}
           />
