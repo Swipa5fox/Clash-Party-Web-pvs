@@ -140,6 +140,7 @@ src/
 deploy/
   party/        Clash Party Web 容器镜像（Dockerfile + 独立 compose）
   opt/          新机一键构筑脚本（bootstrap.sh）
+  release.sh    本机一键打包部署：源码 tar → scp → 服务器构建镜像 + 接管旧容器
   clash-party.service  systemd unit（TUN 用 AmbientCapabilities）
 tools/          mihomo-lines：国家双口线路管理（YAML 覆写 + WS 桥下发）
 scripts/        构建期资源准备、esbuild 打包、tarball 组装
@@ -158,6 +159,16 @@ cd deploy/party && docker compose up -d   # host 网络，数据落 /var/lib/cla
 ```
 
 一键构筑（含外网预检、内核资源离线化、健康检查）：`bash deploy/opt/bootstrap.sh <服务器IP>`
+
+**从开发机发版（推荐）**：本机一条命令完成「打包源码 → scp → 服务器构建镜像 → 接管旧容器」：
+
+```bash
+bash deploy/release.sh 192.168.110.53
+```
+
+- 镜像在旧容器仍在服务时**预构建**，停机窗口只有容器交接的几秒
+- 自动从现役旧部署捕获 `CP_DATABASE_URL` 写成 override（PG 用量/日志入库不断链），并 seed Linux 内核进构建上下文（构建不碰 GitHub）
+- 旧部署目录 `/opt/clash-party` 原样保留，`KEEP_TARBALL=true` 可留源码包，回滚见脚本尾注
 
 **启用「用量」统计与「日志」历史查询（可选）**：加一个 PostgreSQL 服务并把连接串传给 party 容器即可（PG 只绑回环，不对 LAN 暴露）：
 
