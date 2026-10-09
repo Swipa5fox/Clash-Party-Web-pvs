@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # release.sh — 一键打包部署：本机源码 → 服务器 Docker 构建起容器。
 #
-# 用法（本机 Git Bash / Linux，SSH 免密）:
+# 用法（开发机 Git Bash / Linux，SSH 免密；或直接在目标服务器上跑）:
 #   bash deploy/release.sh 192.168.110.53
 #   HOST=192.168.110.53 bash deploy/release.sh          # 同上
 #   bash deploy/release.sh 192.168.110.53 --skip-build  # 只打包推送，不在服务器构建
+#
+# 在目标服务器本机上跑时自动进入本机模式：SSH/scp 全程短路，不产生
+# 「本机 ssh 回本机」的密码提示（此前实测一次部署要输 ~8 次密码）。
 #
 # 做五件事:
 #   1. 本机打包源码 tar.gz（构建所需源码 + extra/files geo 资源；node_modules/.git/
@@ -61,7 +64,41 @@ REMOTE_ROOT="${OPT_ROOT}/${REPO_NAME}"
 
 log()  { printf '\033[1;35m[rel]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[rel][FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
-SSH()  { ssh -p "$SSH_PORT" "${SSH_USER}@${HOST}" "$@"; }
+
+# 目标就是本机时全程本地执行（在服务器上跑 release.sh 的场景），ssh/scp 全部
+# 短路——否则每个 SSH() 都是「本机 ssh 回本机」，root 密钥通常没授权给自己，
+# 每次都提示密码（实测一次部署要输 ~8 次）。
+LOCAL_MODE=false
+if [ -d /proc/self ] && ! grep -qs WSL /proc/version 2>/dev/null; then
+  # Linux/原生环境：本机任一 IPv4 命中目标即认为在本机跑
+  for ip in $(hostname -I 2>/dev/null || ip -4 -o addr 2>/dev/null | awk '{print $4}' | cut -d/ -f1); do
+    [ "$ip" = "$HOST" ] && LOCAL_MODE=true && break
+  done
+fi
+if [ "$LOCAL_MODE" = true ]; then
+  log "本机模式: 目标 ${HOST} 是本机，SSH 全程短路"
+  SSH()  { bash -c "$1"; }
+  SCP_TO() { cp -f "$1" "$2"; }   # SCP_TO <local> <remote-path>
+else
+  SSH()  { ssh -p "$SSH_PORT" "${SSH_USER}@${HOST}" "$@"; }
+  SCP_TO() { scp -P "$SSH_PORT" -q "$1" "${SSH_USER}@${HOST}:$2"; }
+fi
+
+# 远程脚本执行：脚本体从 stdin 落临时文件（heredoc 全程单引号语义，本地不展开），
+# 本机模式直接 bash；远程模式 scp 过去执行。env 注入走调用方命令行（远程模式）或
+# 继承（本机模式，调用方自行 export）。
+REL_REMOTE_TMP="$(mktemp /tmp/cpx-rel-remote.XXXXXX.sh)"
+REL_ENV_ARGS=()
+trap 'rm -f "$REL_REMOTE_TMP"' EXIT
+run_remote() { # 剩余参数=env 注入(KEY=VAL)；脚本体从 stdin 读
+  cat > "$REL_REMOTE_TMP"
+  if [ "$LOCAL_MODE" = true ]; then
+    env "${REL_ENV_ARGS[@]}" bash "$REL_REMOTE_TMP"
+  else
+    SCP_TO "$REL_REMOTE_TMP" /tmp/cpx-rel-remote.sh
+    SSH "env ${REL_ENV_ARGS[*]} bash /tmp/cpx-rel-remote.sh"
+  fi
+}
 
 VERSION="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$ROOT/package.json" | head -1)"
 [ -n "$VERSION" ] || VERSION=dev
@@ -69,35 +106,48 @@ log "目标: ${SSH_USER}@${HOST}:${SSH_PORT}  版本: ${VERSION}  源码根: $RO
 
 # ------------------------------------------------------ 1. 本机打包 ---
 log "Stage 1/5: 打包源码"
-LOCAL_TGZ="$(dirname "$ROOT")/clash-party-src-${VERSION}.tar.gz"
-# 排除规则与 .dockerignore 对齐，再追加本地敏感/不入库文件（见 .gitignore）。
-# extra/sidecar 的 Windows 二进制(~60MB)剔除——Linux 内核由 Stage 3 从旧部署 seed。
-if ! tar -czf "$LOCAL_TGZ" \
-  --exclude='node_modules' \
-  --exclude='.git' \
-  --exclude='dist' \
-  --exclude='out' \
-  --exclude='release' \
-  --exclude='extra/sidecar/*.exe' \
-  --exclude='extra/sidecar/*win32*.node' \
-  --exclude='extra/sidecar/*darwin*.node' \
-  --exclude='*.cpx' \
-  --exclude='tools/mihomo-lines/scripts/lines.config.json' \
-  --exclude='.vscode' --exclude='.idea' --exclude='.codegraph' \
-  --exclude='.codebuddy' --exclude='.codebelly' --exclude='.trae' \
-  --exclude='*.tsbuildinfo' --exclude='*.log*' \
-  --exclude='party.md' --exclude='CLAUDE.md' --exclude='AGENTS.md' --exclude='agent.md' \
-  -C "$(dirname "$ROOT")" "$REPO_NAME"; then
-  fail "tar 打包失败"
+if [ "$LOCAL_MODE" = true ]; then
+  # 本机模式：源码就在目标位置（/opt/<REPO_NAME>），跳过 tar 打包 + 上传 +
+  # 解压三连——那会把已 seed 的 Linux 内核也打进去再原地 rm -rf 重解，纯属
+  # 自我搬运。REMOTE_TARBALL 不存在，Stage 2/3 的对应动作全部跳过。
+  log "本机模式: 源码已在 ${REMOTE_ROOT}，跳过打包/上传"
+  SKIP_PACKAGE=true
+else
+  SKIP_PACKAGE=false
+  LOCAL_TGZ="$(dirname "$ROOT")/clash-party-src-${VERSION}.tar.gz"
+  # 排除规则与 .dockerignore 对齐，再追加本地敏感/不入库文件（见 .gitignore）。
+  # extra/sidecar 的 Windows 二进制(~60MB)剔除——Linux 内核由 Stage 3 从旧部署 seed。
+  if ! tar -czf "$LOCAL_TGZ" \
+    --exclude='node_modules' \
+    --exclude='.git' \
+    --exclude='dist' \
+    --exclude='out' \
+    --exclude='release' \
+    --exclude='extra/sidecar/*.exe' \
+    --exclude='extra/sidecar/*win32*.node' \
+    --exclude='extra/sidecar/*darwin*.node' \
+    --exclude='*.cpx' \
+    --exclude='tools/mihomo-lines/scripts/lines.config.json' \
+    --exclude='.vscode' --exclude='.idea' --exclude='.codegraph' \
+    --exclude='.codebuddy' --exclude='.codebelly' --exclude='.trae' \
+    --exclude='*.tsbuildinfo' --exclude='*.log*' \
+    --exclude='party.md' --exclude='CLAUDE.md' --exclude='AGENTS.md' --exclude='agent.md' \
+    -C "$(dirname "$ROOT")" "$REPO_NAME"; then
+    fail "tar 打包失败"
+  fi
+  log "打包完成: $LOCAL_TGZ ($(du -h "$LOCAL_TGZ" | cut -f1))"
 fi
-log "打包完成: $LOCAL_TGZ ($(du -h "$LOCAL_TGZ" | cut -f1))"
 
 # ------------------------------------------------------ 2. 上传解压 ---
-log "Stage 2/5: 上传到 ${HOST}:${REMOTE_TARBALL}"
-SSH "mkdir -p '${OPT_ROOT}'"
-scp -P "$SSH_PORT" -q "$LOCAL_TGZ" "${SSH_USER}@${HOST}:${REMOTE_TARBALL}" \
-  || fail "上传失败（检查 SSH 免密/端口 ${SSH_PORT}）"
-log "上传完成"
+if [ "$SKIP_PACKAGE" = false ]; then
+  log "Stage 2/5: 上传到 ${HOST}:${REMOTE_TARBALL}"
+  SSH "mkdir -p '${OPT_ROOT}'"
+  SCP_TO "$LOCAL_TGZ" "${REMOTE_TARBALL}" \
+    || fail "上传失败（检查 SSH 免密/端口 ${SSH_PORT}）"
+  log "上传完成"
+else
+  REMOTE_TARBALL=""
+fi
 
 if [ "$SKIP_BUILD" = "true" ]; then
   log "SKIP_BUILD=true：tar 已推送。手工构建: ssh ${SSH_USER}@${HOST} 'bash ${REMOTE_ROOT}/deploy/opt/bootstrap.sh ${HOST}'"
@@ -106,10 +156,10 @@ fi
 
 # --------------------- 3. 预检 + seed 内核 + 预构建（旧容器仍在跑） ---
 log "Stage 3/5: 服务器预检 + seed 内核 + 预构建镜像（旧服务不中断）"
-# REPO_NAME/VERSION 经 env 传入远程脚本（heredoc 单引号不展开本地变量）。
-SSH "REPO_NAME='${REPO_NAME}' VERSION='${VERSION}' \
-     NPM_REGISTRY='${NPM_REGISTRY:-https://registry.npmmirror.com}' \
-     GITHUB_MIRROR='${GITHUB_MIRROR:-}' bash -s" <<'REMOTE'
+# 远程解压开关：本机模式源码已在位（SKIP_PACKAGE=true 传入），绝不能 rm -rf 自己。
+REL_ENV_ARGS=(REPO_NAME="${REPO_NAME}" VERSION="${VERSION}" SKIP_PACKAGE="${SKIP_PACKAGE}" \
+  NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}" GITHUB_MIRROR="${GITHUB_MIRROR:-}")
+run_remote <<'REMOTE'
 set -euo pipefail
 log()  { printf '\033[1;34m[rel-r]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[rel-r][warn]\033[0m %s\n' "$*"; }
@@ -122,14 +172,16 @@ docker info >/dev/null 2>&1 || fail "Docker 守护进程不可达"
 AVAIL_KB=$(df -Pk /opt | awk 'NR==2 {print $4}')
 [ "$AVAIL_KB" -ge 2097152 ] || fail "/opt 可用空间不足 2G（当前 $((AVAIL_KB/1024))M）"
 
-rm -rf "$ROOT"
-tar -xzf /opt/cpx-src.tar.gz -C /opt
+if [ "$SKIP_PACKAGE" != "true" ]; then
+  rm -rf "$ROOT"
+  tar -xzf /opt/cpx-src.tar.gz -C /opt
+fi
 [ -f "$ROOT/deploy/party/Dockerfile" ] || fail "包结构不符: 缺 $ROOT/deploy/party/Dockerfile"
 
-# Linux 内核 seed（本机 extra 只有 Windows 二进制）：
+# Linux 内核 seed（远程打包场景：本机 extra 只有 Windows 二进制）：
 # 优先老预置目录 /opt/cpx-core-assets/extra，其次上一代 tarball 部署
 # /opt/clash-party/resources（tarball 布局与 extra/ 同构）。Dockerfile 检测到
-# Linux ELF 即跳过联网下载。首次部署后 extra/ 已在源码目录里，重跑幂等。
+# Linux ELF 即跳过联网下载。本机模式 extra/ 已在源码目录里，天然跳过。
 SEED_FROM=""
 [ -d /opt/cpx-core-assets/extra ] && SEED_FROM=/opt/cpx-core-assets/extra
 [ -z "$SEED_FROM" ] && [ -f /opt/clash-party/resources/sidecar/mihomo ] \
@@ -159,7 +211,8 @@ REMOTE
 
 # ---------------- 4. 接管旧容器（捕获 PG env）→ bootstrap 起 --
 log "Stage 4/5: 接管旧容器 + compose 启动（停机窗口从此刻开始）"
-SSH "REPO_NAME='${REPO_NAME}' bash -s" <<'REMOTE'
+REL_ENV_ARGS=(REPO_NAME="${REPO_NAME}")
+run_remote <<'REMOTE'
 set -euo pipefail
 log()  { printf '\033[1;34m[rel-r]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[rel-r][FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -200,13 +253,14 @@ SSH "REPO_NAME='${REPO_NAME}' \
      GITHUB_MIRROR='${GITHUB_MIRROR:-}' \
      FORCE=true \
      bash '${REMOTE_ROOT}/deploy/opt/bootstrap.sh' '${HOST}'" \
-  || fail "bootstrap.sh 失败（日志见上；回滚: ssh ${SSH_USER}@${HOST} 'docker rm -f clash-party && cd /opt/clash-party && docker compose up -d --build'）"
+  || fail "bootstrap.sh 失败（日志见上；回滚: ${RUN_CMD:-} 'docker rm -f clash-party && cd /opt/clash-party && docker compose up -d --build'）"
 
 # ------------------------------------------------ 5. 验证 + 汇总 ---
 log "Stage 5/5: 部署验证"
 DEPLOYED_VER="$(SSH "docker exec clash-party sed -n 's/.*\"version\": *\"\([^\"]*\)\".*/\1/p' /app/package.json 2>/dev/null | head -1" || true)"
 PG_OK="$(SSH "docker exec clash-party printenv CP_DATABASE_URL >/dev/null 2>&1 && echo yes || echo no" || true)"
 LOGS="$(SSH "docker logs --tail 6 clash-party 2>&1" || true)"
+RUN_CMD="ssh ${SSH_USER}@${HOST}"
 cat <<EOF
 
 ==================== 一键部署完成 ====================
@@ -217,13 +271,13 @@ PG 入库     : ${PG_OK}（CP_DATABASE_URL）
 Web UI      : http://${HOST}:3999/
 代理口      : http://${HOST}:7890 (HTTP+SOCKS5)
 数据目录    : /var/lib/clash-party（bind，重建不丢）
-回滚        : ssh ${SSH_USER}@${HOST} 'docker rm -f clash-party && cd /opt/clash-party && docker compose up -d --build'
+回滚        : ${RUN_CMD} 'docker rm -f clash-party && cd /opt/clash-party && docker compose up -d --build'
 
 最近日志:
 ${LOGS}
 ==================================================
 EOF
-if [ "$KEEP_TARBALL" != "true" ]; then
+if [ "$KEEP_TARBALL" != "true" ] && [ -n "$REMOTE_TARBALL" ]; then
   SSH "rm -f '${REMOTE_TARBALL}'"
   log "已清理服务器 tar 包（KEEP_TARBALL=true 可保留）"
 fi
