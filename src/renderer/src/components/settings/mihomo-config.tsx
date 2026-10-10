@@ -18,6 +18,8 @@ import { useTranslation } from 'react-i18next'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 
+type NumberDraftKey = 'subscriptionTimeout' | 'delayTestConcurrency' | 'delayTestTimeout'
+
 const MihomoConfig: React.FC = () => {
   const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
@@ -51,6 +53,39 @@ const MihomoConfig: React.FC = () => {
   const setUaDebounce = debounce((v: string) => {
     patchAppConfig({ userAgent: v })
   }, 500)
+  // 数字输入的编辑草稿（键 → 正在输入的字符串）：失焦/回车才提交，
+  // 避免每敲一键都写一遍 config.yaml，也避免清空时把 NaN 写进配置
+  const [numberDrafts, setNumberDrafts] = useState<Partial<Record<NumberDraftKey, string>>>({})
+  const setNumberDraft = (key: NumberDraftKey, value: string): void => {
+    setNumberDrafts((prev) => ({ ...prev, [key]: value }))
+  }
+  const clearNumberDraft = (key: NumberDraftKey): void => {
+    setNumberDrafts((prev) => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+  const commitSubscriptionTimeout = (raw: string): void => {
+    const num = Number(raw.trim())
+    const seconds = Number.isInteger(num) && num >= 30 ? num : 30
+    if (seconds * 1000 !== subscriptionTimeout) {
+      void patchAppConfig({ subscriptionTimeout: seconds * 1000 })
+    }
+    clearNumberDraft('subscriptionTimeout')
+  }
+  const commitDelayNumber = (
+    key: 'delayTestConcurrency' | 'delayTestTimeout',
+    current: number | undefined,
+    raw: string
+  ): void => {
+    const text = raw.trim()
+    const num = Number(text)
+    if (text !== '' && Number.isInteger(num) && num !== current) {
+      void patchAppConfig({ [key]: num })
+    }
+    clearNumberDraft(key)
+  }
   const [isGeneratingGistAgeKey, setIsGeneratingGistAgeKey] = useState(false)
   const [isExportingGistAgeKey, setIsExportingGistAgeKey] = useState(false)
   const handleGenerateGistAgeKeyPair = async (): Promise<void> => {
@@ -120,16 +155,11 @@ const MihomoConfig: React.FC = () => {
             size="sm"
             className="w-25"
             type="number"
-            value={(subscriptionTimeout / 1000)?.toString()}
-            onValueChange={async (v: string) => {
-              const num = parseInt(v)
-              await patchAppConfig({ subscriptionTimeout: num * 1000 })
-            }}
-            onBlur={async (e) => {
-              let num = parseInt(e.target.value)
-              if (isNaN(num)) num = 30
-              if (num < 30) num = 30
-              await patchAppConfig({ subscriptionTimeout: num * 1000 })
+            value={numberDrafts.subscriptionTimeout ?? String(subscriptionTimeout / 1000)}
+            onValueChange={(v) => setNumberDraft('subscriptionTimeout', v)}
+            onBlur={(e) => commitSubscriptionTimeout(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitSubscriptionTimeout(e.currentTarget.value)
             }}
           />
           <span className="text-default-500">{t('common.seconds')}</span>
@@ -152,10 +182,15 @@ const MihomoConfig: React.FC = () => {
           type="number"
           size="sm"
           className="w-[60%]"
-          value={delayTestConcurrency?.toString()}
+          value={numberDrafts.delayTestConcurrency ?? delayTestConcurrency?.toString() ?? ''}
           placeholder={t('mihomo.delayTest.concurrencyPlaceholder')}
-          onValueChange={(v) => {
-            patchAppConfig({ delayTestConcurrency: parseInt(v) })
+          onValueChange={(v) => setNumberDraft('delayTestConcurrency', v)}
+          onBlur={(e) =>
+            commitDelayNumber('delayTestConcurrency', delayTestConcurrency, e.target.value)
+          }
+          onKeyDown={(e) => {
+            if (e.key === 'Enter')
+              commitDelayNumber('delayTestConcurrency', delayTestConcurrency, e.currentTarget.value)
           }}
         />
       </SettingItem>
@@ -164,10 +199,13 @@ const MihomoConfig: React.FC = () => {
           type="number"
           size="sm"
           className="w-[60%]"
-          value={delayTestTimeout?.toString()}
+          value={numberDrafts.delayTestTimeout ?? delayTestTimeout?.toString() ?? ''}
           placeholder={t('mihomo.delayTest.timeoutPlaceholder')}
-          onValueChange={(v) => {
-            patchAppConfig({ delayTestTimeout: parseInt(v) })
+          onValueChange={(v) => setNumberDraft('delayTestTimeout', v)}
+          onBlur={(e) => commitDelayNumber('delayTestTimeout', delayTestTimeout, e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter')
+              commitDelayNumber('delayTestTimeout', delayTestTimeout, e.currentTarget.value)
           }}
         />
       </SettingItem>

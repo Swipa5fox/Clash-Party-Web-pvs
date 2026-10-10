@@ -237,11 +237,10 @@ pnpm run dev          # vite dev server + tsx 主进程，浏览器访问 :3999
 - 机场插件客户端允许纯 HTTP 与内网 host 的网关地址，不强制 HTTPS，也不拦截私网地址（便于订阅源放内网）
 - 移除 Ed25519 设备签名，防重放改由一次性 nonce 承担
 - vault 明文 JSON 落盘，不再使用系统 Keychain / safeStorage 加密
-- Web UI 账号密码登录 + Cookie 会话；凭据哈希落盘但无 HTTPS 时口令经内网明文传输，请勿暴露公网；mihomo 控制器仅绑 `127.0.0.1`，不对 LAN 暴露（zashboard 面板如需应急访问，走 `ssh -L 9090:127.0.0.1:9090` 隧道）
+- Web UI 账号密码登录 + Cookie 会话；凭据哈希落盘但无 HTTPS 时口令经内网明文传输，请勿暴露公网；mihomo 控制器仅绑 `127.0.0.1`，不对 LAN 暴露（仅宿主机本机可 `curl 127.0.0.1:9090` 打裸 REST 应急）
 - PostgreSQL（可选）同样只绑 `127.0.0.1`，不对 LAN 暴露；连接串经环境变量注入，请替换示例密码，勿沿用文档里的占位值
 
 ## 许可证与致谢
 
 - 本项目基于 [Clash Party](https://github.com/mihomo-party-org/mihomo-party) v2.0.2 重建，遵循 [GPL-3.0](LICENSE)
 - 内核：[mihomo](https://github.com/MetaCubeX/mihomo)（Clash Meta）
-- 面板：[zashboard](https://github.com/Zephyruso/zashboard)

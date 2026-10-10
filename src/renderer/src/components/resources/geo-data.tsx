@@ -27,6 +27,16 @@ const GeoData: React.FC = () => {
   const [mmdbInput, setMmdbInput] = useState(geoxUrl.mmdb)
   const [asnInput, setAsnInput] = useState(geoxUrl.asn)
   const [updating, setUpdating] = useState(false)
+  // 更新间隔的编辑草稿：失焦/回车才提交，否则清空输入框会把 parseInt('') 的 NaN 写进内核配置
+  const [intervalInput, setIntervalInput] = useState<string | null>(null)
+  const commitInterval = (raw: string): void => {
+    const text = raw.trim()
+    const num = Number(text)
+    if (text !== '' && Number.isInteger(num) && num > 0 && num !== geoUpdateInterval) {
+      void patchControledMihomoConfig({ 'geo-update-interval': num })
+    }
+    setIntervalInput(null)
+  }
 
   return (
     <SettingCard>
@@ -149,9 +159,11 @@ const GeoData: React.FC = () => {
             size="sm"
             type="number"
             className="w-[100px]"
-            value={geoUpdateInterval.toString()}
-            onValueChange={(v) => {
-              patchControledMihomoConfig({ 'geo-update-interval': parseInt(v) })
+            value={intervalInput ?? String(geoUpdateInterval)}
+            onValueChange={setIntervalInput}
+            onBlur={(e) => commitInterval(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitInterval(e.currentTarget.value)
             }}
           />
         </SettingItem>

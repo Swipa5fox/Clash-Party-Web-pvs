@@ -59,6 +59,8 @@ const CoreMap = {
   'mihomo-specific': 'mihomo.specificVersion'
 }
 
+type LogNumberKey = 'maxLogDays' | 'maxLogFileSize' | 'pgLogRetentionDays' | 'pgLogMaxRows'
+
 const Mihomo: React.FC = () => {
   const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
@@ -119,9 +121,49 @@ const Mihomo: React.FC = () => {
   const [installing, setInstalling] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  // 日志组数字输入的编辑草稿（键 → 正在输入的字符串）：只在失焦/回车时提交，
+  // 否则每敲一个键都要写一遍 config.yaml 并等主进程回显，输入被卡住且会被
+  // 归一化（如行数下限 1000）把正在输入的中间值顶掉
+  const [logInputDrafts, setLogInputDrafts] = useState<Partial<Record<LogNumberKey, string>>>({})
 
   // 生成随机端口 (范围 1024-65535)
   const generateRandomPort = () => Math.floor(Math.random() * (65535 - 1024 + 1)) + 1024
+
+  const commitLogNumber = (key: LogNumberKey, current: number, raw: string): void => {
+    const text = raw.trim()
+    const num = Number(text)
+    if (text !== '' && Number.isInteger(num) && num !== current) {
+      void patchAppConfig({ [key]: num })
+    }
+    setLogInputDrafts((prev) => {
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
+  }
+
+  const logNumberInputProps = (
+    key: LogNumberKey,
+    current: number
+  ): {
+    size: 'sm'
+    type: 'number'
+    className: string
+    value: string
+    onValueChange: (value: string) => void
+    onBlur: (e: React.FocusEvent<HTMLInputElement>) => void
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void
+  } => ({
+    size: 'sm',
+    type: 'number',
+    className: 'w-25',
+    value: logInputDrafts[key] ?? String(current),
+    onValueChange: (value: string) => setLogInputDrafts((prev) => ({ ...prev, [key]: value })),
+    onBlur: (e) => commitLogNumber(key, current, e.target.value),
+    onKeyDown: (e) => {
+      if (e.key === 'Enter') commitLogNumber(key, current, e.currentTarget.value)
+    }
+  })
 
   const onChangeNeedRestart = async (patch: Partial<IMihomoConfig>): Promise<void> => {
     await patchControledMihomoConfig(patch)
@@ -858,38 +900,10 @@ const Mihomo: React.FC = () => {
           </SettingItem>
 
           <SettingItem title={t('mihomo.logRetentionDays')} divider>
-            <Input
-              size="sm"
-              type="number"
-              className="w-25"
-              value={maxLogDays.toString()}
-              onValueChange={(v) => {
-                const num = parseInt(v)
-                if (!isNaN(num)) {
-                  patchAppConfig({ maxLogDays: num })
-                }
-              }}
-            />
+            <Input {...logNumberInputProps('maxLogDays', maxLogDays)} />
           </SettingItem>
           <SettingItem title={t('mihomo.logFileSizeLimit')} divider>
-            <Input
-              size="sm"
-              type="number"
-              className="w-25"
-              value={maxLogFileSize.toString()}
-              onValueChange={(v) => {
-                const num = parseInt(v)
-                if (!isNaN(num)) {
-                  patchAppConfig({ maxLogFileSize: num })
-                }
-              }}
-              onBlur={(e) => {
-                const num = parseInt(e.target.value)
-                if (isNaN(num) || num < 1) {
-                  patchAppConfig({ maxLogFileSize: 1 })
-                }
-              }}
-            />
+            <Input {...logNumberInputProps('maxLogFileSize', maxLogFileSize)} />
           </SettingItem>
           <SettingItem title={t('mihomo.disableCoreLog')} divider>
             <Switch
@@ -901,44 +915,10 @@ const Mihomo: React.FC = () => {
             />
           </SettingItem>
           <SettingItem title={t('mihomo.pgLogRetentionDays')} divider>
-            <Input
-              size="sm"
-              type="number"
-              className="w-25"
-              value={pgLogRetentionDays.toString()}
-              onValueChange={(v) => {
-                const num = parseInt(v)
-                if (!isNaN(num)) {
-                  patchAppConfig({ pgLogRetentionDays: num })
-                }
-              }}
-              onBlur={(e) => {
-                const num = parseInt(e.target.value)
-                if (isNaN(num) || num < 1) {
-                  patchAppConfig({ pgLogRetentionDays: 7 })
-                }
-              }}
-            />
+            <Input {...logNumberInputProps('pgLogRetentionDays', pgLogRetentionDays)} />
           </SettingItem>
           <SettingItem title={t('mihomo.pgLogMaxRows')} divider>
-            <Input
-              size="sm"
-              type="number"
-              className="w-25"
-              value={pgLogMaxRows.toString()}
-              onValueChange={(v) => {
-                const num = parseInt(v)
-                if (!isNaN(num)) {
-                  patchAppConfig({ pgLogMaxRows: num })
-                }
-              }}
-              onBlur={(e) => {
-                const num = parseInt(e.target.value)
-                if (isNaN(num) || num < 1000) {
-                  patchAppConfig({ pgLogMaxRows: 500000 })
-                }
-              }}
-            />
+            <Input {...logNumberInputProps('pgLogMaxRows', pgLogMaxRows)} />
           </SettingItem>
           <SettingItem title={t('mihomo.logLevel')} divider>
             <Select

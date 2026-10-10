@@ -19,9 +19,15 @@ interface PendingInvoke {
   id: number
   channel: string
   args: unknown[]
+  sent: boolean
   resolve: (value: unknown) => void
   reject: (reason?: unknown) => void
 }
+
+// 断开时按"已下发"兑现的通道：这些调用自身会让内核重启，而面板的 WS 连接可能正由内核
+// 转发（浏览器把本机/内网流量也指向 :7890 时就是这样），内核一停这条连接立刻断，
+// 应答注定回不来。它们不报错——重连后的刷新会反映真实状态；其余在途调用照旧失败。
+const RESTART_CHANNELS = new Set(['restartCore', 'mihomoUpgrade'])
 
 const listenerMap = new Map<string, Set<IpcListener>>()
 const pendingInvokes = new Map<number, PendingInvoke>()
@@ -58,24 +64,37 @@ function wsUrl(): string {
   return `${protocol}//${location.host}/ws`
 }
 
-function sendRaw(message: unknown): void {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message))
+function sendInvoke(entry: PendingInvoke): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    return
   }
+  entry.sent = true
+  ws.send(
+    JSON.stringify({ type: 'invoke', id: entry.id, channel: entry.channel, args: entry.args })
+  )
 }
 
 // 冲刷队列：断开后新进来的 invoke 停留在 pendingInvokes 中，hello ok 后统一发出
 function flushPendingInvokes(): void {
   pendingInvokes.forEach((entry) => {
-    sendRaw({ type: 'invoke', id: entry.id, channel: entry.channel, args: entry.args })
+    sendInvoke(entry)
   })
 }
 
-function rejectPendingInvokes(reason: string): void {
-  pendingInvokes.forEach((entry) => {
-    entry.reject(reason)
+// 断开期的在途调用：重启类按"已下发"兑现（断线是它自己重启内核的预期结果），
+// 其余报 "web bridge disconnected"；还没发出去的留在队列里，重连 hello 后统一冲刷。
+function settlePendingOnDisconnect(): void {
+  pendingInvokes.forEach((entry, id) => {
+    if (!entry.sent) {
+      return
+    }
+    pendingInvokes.delete(id)
+    if (RESTART_CHANNELS.has(entry.channel)) {
+      entry.resolve(undefined)
+    } else {
+      entry.reject('web bridge disconnected')
+    }
   })
-  pendingInvokes.clear()
 }
 
 function dispatchEvent(channel: string, payload?: unknown): void {
@@ -208,8 +227,7 @@ function connect(): void {
     if (event.code !== 1000) {
       void checkSessionAndMaybeReload()
     }
-    // 断开期间所有未完成的 invoke 立即失败
-    rejectPendingInvokes('web bridge disconnected')
+    settlePendingOnDisconnect()
     scheduleReconnect()
   }
 }
@@ -223,11 +241,18 @@ const electronAPI = {
       }
       return new Promise<unknown>((resolve, reject) => {
         nextInvokeId += 1
-        const entry: PendingInvoke = { id: nextInvokeId, channel, args, resolve, reject }
+        const entry: PendingInvoke = {
+          id: nextInvokeId,
+          channel,
+          args,
+          sent: false,
+          resolve,
+          reject
+        }
         pendingInvokes.set(entry.id, entry)
         // hello 前进队列，hello ok 后冲刷
         if (ready) {
-          sendRaw({ type: 'invoke', id: entry.id, channel, args })
+          sendInvoke(entry)
         }
       })
     },

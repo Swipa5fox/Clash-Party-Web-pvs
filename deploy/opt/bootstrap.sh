@@ -99,9 +99,6 @@ fi
 CORE_ASSETS_DIR="${CORE_ASSETS_DIR:-/opt/cpx-core-assets}"
 if [ -f "$CORE_ASSETS_DIR/extra/sidecar/mihomo" ]; then
   log "  ✓ 预置内核资源就绪 (${CORE_ASSETS_DIR}),构建不依赖 GitHub"
-  if [ -d "$CORE_ASSETS_DIR/extra/panel-ui" ] && [ -n "$(ls -A "$CORE_ASSETS_DIR/extra/panel-ui" 2>/dev/null)" ]; then
-    log "  ✓ 离线面板(zashboard)就绪(仅 ssh 隧道应急访问,不对 LAN 开放)"
-  fi
 elif [ -n "${GITHUB_MIRROR:-}" ] && http_alive "${GITHUB_MIRROR%/}/https://github.com/MetaCubeX/mihomo/releases/download/Prerelease-Alpha/version.txt"; then
   log "  ✓ 无预置内核资源,GITHUB_MIRROR 可达(${GITHUB_MIRROR})→ 构建走镜像下载"
 elif http_alive https://github.com/ \
@@ -219,7 +216,7 @@ Web UI   : http://${HOST_IP}:${WEB_PORT}/  (账号密码登录, 初始 admin/adm
 代理口   : http://${HOST_IP}:${PROXY_PORT} (HTTP+SOCKS5 混合口)
 线路口   : host 模式即写即生效(Web UI「代理组」页自定义线路组,或全局覆写 listeners)
 数据目录 : ${DATA_DIR}  (订阅/覆写/凭据/日志,容器重建不丢)
-管理口   : mihomo 控制器仅绑 127.0.0.1:9090,不对 LAN 暴露;应急面板走 ssh -L 9090:127.0.0.1:9090 隧道
+管理口   : mihomo 控制器仅绑 127.0.0.1:9090,不对 LAN 暴露(宿主机本机 curl 127.0.0.1:9090 打裸 REST 应急)
 源码位置 : $ROOT
 
 下一步:

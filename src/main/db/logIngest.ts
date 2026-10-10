@@ -94,11 +94,10 @@ async function cleanupOncePerDay(): Promise<void> {
     await pool.query('DELETE FROM logs WHERE ts < now() - make_interval(days => $1)', [
       retentionDays
     ])
-    // 行数上限：超限时按 id 保留最新的 maxRows 条
-    await pool.query(
-      'DELETE FROM logs WHERE id IN (SELECT id FROM logs ORDER BY id DESC OFFSET $1)',
-      [maxRows]
-    )
+    // 行数上限：按主键区间保留最新一批（空表时 max(id) 为 NULL，条件不成立删 0 行）。
+    // 不用 ORDER BY id DESC OFFSET + IN(子查询)：那要把整表 id 排序物化，
+    // 改一次上限就要卡住连接很久，这里只走主键索引区间扫描。
+    await pool.query('DELETE FROM logs WHERE id <= (SELECT max(id) FROM logs) - $1', [maxRows])
   } catch (e) {
     console.warn('[LogIngest] retention cleanup failed', e)
   }

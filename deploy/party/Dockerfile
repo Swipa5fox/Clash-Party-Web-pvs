@@ -12,8 +12,9 @@
 # Host 侧固定端口（compose 用 network_mode: host）：
 #   3999 Web UI（CP_WEB_PORT）  7890 mihomo mixed 代理（HTTP+SOCKS5）
 #   + Web UI 运行时新增的自定义线路组监听口。
-# 控制器（127.0.0.1:9090）仅回环——只有宿主机本机可达，LAN 直连不到；应急
-# 面板/裸 REST 走 ssh -L 9090:127.0.0.1:9090 隧道，日常管理面就是 :3999 Web UI。
+# 控制器（127.0.0.1:9090）仅回环——只有宿主机本机可达，LAN 直连不到；Node 服务
+# 挂掉时的带外逃生口就是宿主本机 curl 127.0.0.1:9090 打裸 REST，日常管理面是
+# :3999 Web UI。
 #
 # 鉴权：账号密码登录（初始凭据见 deploy.sh 部署汇总）。旧 CP_WEB_TOKEN 已随 v1.3 移除。
 

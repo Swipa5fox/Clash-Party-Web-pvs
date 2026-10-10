@@ -32,16 +32,12 @@ import { HiOutlineAdjustmentsHorizontal } from 'react-icons/hi2'
 import { includesIgnoreCase } from '@renderer/utils/includes'
 import { useTranslation } from 'react-i18next'
 import { IoMdPause, IoMdPlay } from 'react-icons/io'
-import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
-import { linuxDefaultIcon, otherDevicesIcon } from '../../../../src/main/utils/defaultIcon'
 
 let cachedConnections: IMihomoConnectionDetail[] = []
 const CONNECTIONS_FILTER_KEY = 'connections-filter'
 
 const Connections: React.FC = () => {
   const { t } = useTranslation()
-  const { controledMihomoConfig } = useControledMihomoConfig()
-  const { 'find-process-mode': findProcessMode = 'always' } = controledMihomoConfig || {}
   const [filter, setFilter] = useState(() => localStorage.getItem(CONNECTIONS_FILTER_KEY) || '')
   const { appConfig, patchAppConfig } = useAppConfig()
   const appConfigValues: Partial<IAppConfig> = appConfig ?? {}
@@ -52,8 +48,7 @@ const Connections: React.FC = () => {
     connectionTableColumns = DEFAULT_CONNECTION_TABLE_COLUMN_KEYS,
     connectionTableColumnWidths,
     connectionTableSortColumn,
-    connectionTableSortDirection,
-    displayIcon = true
+    connectionTableSortDirection
   } = appConfigValues
   const [connectionsInfo, setConnectionsInfo] = useState<IMihomoConnectionsInfo>()
   const [allConnections, setAllConnections] = useState<IMihomoConnectionDetail[]>(cachedConnections)
@@ -250,17 +245,11 @@ const Connections: React.FC = () => {
 
   const renderConnectionItem = useCallback(
     (i: number, connection: IMihomoConnectionDetail) => {
-      const path = connection.metadata.processPath || ''
-      const showIcon = displayIcon && findProcessMode !== 'off'
-      const iconUrl = (showIcon && (path ? linuxDefaultIcon : otherDevicesIcon)) || ''
-
       return (
         <ConnectionItem
           setSelected={setSelected}
           setIsDetailModalOpen={setIsDetailModalOpen}
           selected={selected}
-          iconUrl={iconUrl}
-          displayIcon={showIcon}
           close={closeConnection}
           index={i}
           key={connection.id}
@@ -268,7 +257,7 @@ const Connections: React.FC = () => {
         />
       )
     },
-    [displayIcon, selected, closeConnection, findProcessMode]
+    [selected, closeConnection]
   )
 
   return (
