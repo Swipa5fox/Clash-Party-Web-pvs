@@ -47,6 +47,7 @@ import { useCustomLineGroups } from '@renderer/hooks/use-custom-line-groups'
 import CustomLineGroupsModal from '@renderer/components/proxies/custom-line-groups-modal'
 
 const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
+const SUB_EXPAND_STATE_KEY = 'proxy_sub_expand_state'
 const EMPTY_GROUPS: IMihomoMixedGroup[] = []
 
 // 展开区单行: sub 有值 = 子组头行(名称/类型/当前选中); rowNodes 有值 = 节点网格行;
@@ -55,6 +56,26 @@ interface RenderRow {
   sub?: IMihomoMixedGroup
   rowNodes?: IMihomoProxy[]
   owner?: IMihomoMixedGroup
+}
+
+// 自动类子组(url-test/fallback 等)不可手选, 默认折叠只显示头行
+const isAutoSubGroup = (sub: IMihomoMixedGroup): boolean => sub.type !== 'Selector'
+
+const loadBoolRecord = (key: string): Record<string, boolean> => {
+  try {
+    const saved = localStorage.getItem(key)
+    const parsed: unknown = saved ? JSON.parse(saved) : null
+    if (typeof parsed === 'object' && parsed !== null) {
+      const record: Record<string, boolean> = {}
+      Object.entries(parsed).forEach(([name, isOpen]) => {
+        if (typeof isOpen === 'boolean') record[name] = isOpen
+      })
+      return record
+    }
+  } catch (error) {
+    console.error(`Failed to load ${key}:`, error)
+  }
+  return {}
 }
 
 interface GroupExpandState {
@@ -189,6 +210,20 @@ const Proxies: React.FC = () => {
     return map
   }, [customGroups])
   const { virtuosoRef, isOpen, setIsOpen } = useProxyState(groupData)
+  // 自动类子组(自动选择/故障转移等)默认折叠, 展开状态按子组名记忆
+  const [subExpanded, setSubExpanded] = useState<Record<string, boolean>>(() =>
+    loadBoolRecord(SUB_EXPAND_STATE_KEY)
+  )
+  useEffect(() => {
+    try {
+      localStorage.setItem(SUB_EXPAND_STATE_KEY, JSON.stringify(subExpanded))
+    } catch (error) {
+      console.error('Failed to save sub expand state:', error)
+    }
+  }, [subExpanded])
+  const toggleSub = useCallback((name: string): void => {
+    setSubExpanded((prev) => ({ ...prev, [name]: !prev[name] }))
+  }, [])
   const [delaying, setDelaying] = useState<Set<string>[]>(() =>
     Array.from({ length: groups.length }, () => new Set<string>())
   )
@@ -280,7 +315,10 @@ const Proxies: React.FC = () => {
           const subNodes = (member.all || []).filter((p) => nodeVisible(p, search))
           if (search && subNodes.length === 0) return
           rows.push({ sub: member })
-          pushNodeRows(subNodes, member)
+          // 自动类子组默认折叠(手选类 Selector 默认展开), 搜索时强制展开命中节点
+          if (search || !isAutoSubGroup(member) || subExpanded[member.name]) {
+            pushNodeRows(subNodes, member)
+          }
         })
         groupCounts.push(rows.length)
         allRows.push(rows)
@@ -299,7 +337,8 @@ const Proxies: React.FC = () => {
     cols,
     searchValue,
     sortProxies,
-    appConfig?.hideUnavailableProxies
+    appConfig?.hideUnavailableProxies,
+    subExpanded
   ])
 
   const onChangeProxy = useCallback(
@@ -420,9 +459,20 @@ const Proxies: React.FC = () => {
 
   const onGroupDelay = useCallback(
     async (index: number): Promise<void> => {
-      // 测试目标 = 展开区全部节点(直接成员 + 子组成员)
-      const testTargets = allRows[index]?.flatMap((r) => r.rowNodes ?? []) ?? []
-      if (testTargets.length === 0) {
+      // 测试目标 = 组全部节点(直接成员 + 子组成员), 不受子组折叠/搜索过滤影响
+      const testTargets: IMihomoProxy[] = []
+      const seen = new Set<string>()
+      const collect = (member: IMihomoProxy | IMihomoMixedGroup): void => {
+        if (!member || typeof member !== 'object' || seen.has(member.name)) return
+        if ('all' in member) {
+          member.all.forEach(collect)
+          return
+        }
+        seen.add(member.name)
+        testTargets.push(member)
+      }
+      groups[index]?.all.forEach(collect)
+      if (!isOpen[index]) {
         setIsOpen((prev) => {
           const newOpen = [...prev]
           newOpen[index] = true
@@ -479,7 +529,7 @@ const Proxies: React.FC = () => {
       await Promise.all(result)
       flushDelayResults()
     },
-    [allRows, groups, delayTestConcurrency, scheduleFlushDelayResults, flushDelayResults, setIsOpen]
+    [groups, isOpen, delayTestConcurrency, scheduleFlushDelayResults, flushDelayResults, setIsOpen]
   )
 
   const calcCols = useCallback(
@@ -642,13 +692,30 @@ const Proxies: React.FC = () => {
                         for (let j = 0; j < index; j++) {
                           i += groupCounts[j]
                         }
-                        // 当前选中是节点 → 定位到该节点所在行(含子组区段);
-                        // 选中的是子组(仅头行展示)或未找到 → 停在组头
+                        // 选中是子组 → 展开该子组并定位到其头行; 是节点 → 定位到节点行
+                        // (节点在折叠子组内 → 展开所属子组并定位到该子组头行); 未找到 → 组头
                         const rows = allRows[index] ?? []
                         const nodeIdx = rows.findIndex((row) =>
                           row.rowNodes?.some((p) => p.name === groups[index].now)
                         )
-                        if (nodeIdx >= 0) i += nodeIdx
+                        const subIdx = rows.findIndex((row) => row.sub?.name === groups[index].now)
+                        if (subIdx >= 0) {
+                          setSubExpanded((prev) => ({ ...prev, [groups[index].now]: true }))
+                          i += subIdx
+                        } else if (nodeIdx >= 0) {
+                          i += nodeIdx
+                        } else {
+                          const ownerIdx = rows.findIndex((row) =>
+                            row.sub?.all?.some(
+                              (p) => p && typeof p === 'object' && p.name === groups[index].now
+                            )
+                          )
+                          const ownerSub = ownerIdx >= 0 ? rows[ownerIdx].sub : undefined
+                          if (ownerSub) {
+                            setSubExpanded((prev) => ({ ...prev, [ownerSub.name]: true }))
+                            i += ownerIdx
+                          }
+                        }
                         virtuosoRef.current?.scrollToIndex({
                           index: Math.floor(i),
                           align: 'start'
@@ -748,13 +815,17 @@ const Proxies: React.FC = () => {
       if (!row) {
         return <div>Never See This</div>
       }
-      // 子组区段头行: 展示 子组名/类型/当前选中, 非交互(选节点仍通过网格行)
+      // 子组区段头行: 展示 子组名/类型/当前选中; 自动类子组点头行折叠/展开节点
       if (row.sub) {
         const sub = row.sub
         const isLastRow =
           groupIndex === groupCounts.length - 1 && index === groupCounts[groupIndex] - 1
+        const autoSub = isAutoSubGroup(sub)
         return (
-          <div className={`flex items-center gap-2 px-3 pt-3 ${isLastRow ? 'pb-2' : ''}`}>
+          <div
+            className={`flex items-center gap-2 px-3 pt-3 mx-1 rounded-medium transition-colors duration-150 ${isLastRow ? 'pb-2' : ''} ${autoSub ? 'cursor-pointer select-none hover:bg-default-100' : ''}`}
+            onClick={autoSub ? () => toggleSub(sub.name) : undefined}
+          >
             <Chip size="sm" variant="flat" color="primary" className="max-w-[40%]">
               <span className="flag-emoji truncate inline-block" title={sub.name}>
                 {sub.name}
@@ -806,7 +877,8 @@ const Proxies: React.FC = () => {
       delaying,
       mutate,
       onProxyDelay,
-      onChangeProxy
+      onChangeProxy,
+      toggleSub
     ]
   )
 
