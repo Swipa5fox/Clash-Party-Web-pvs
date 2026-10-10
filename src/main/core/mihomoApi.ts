@@ -359,8 +359,9 @@ export const mihomoGroups = async (includeHidden = false): Promise<IMihomoMixedG
     }
   })
   // 顶层只保留「根组」: 未被其他组引用且非 GLOBAL(rule 模式下 GLOBAL 无操作意义);
-  // includeHidden(显示隐藏分组)时平铺全部,作为逃生舱
-  const roots = candidates.filter(({ group }) => includeHidden || !isNested(group.name))
+  // includeHidden 只恢复 hidden:true 的根组,被引用的收纳组不随 showHidden 平铺
+  // (否则 自动选择/故障转移 等在顶层与父组展开区渲染两份)
+  const roots = candidates.filter(({ group }) => !isNested(group.name))
   // 兜底: 互引成环的异常配置会把所有组都判为"被引用"导致列表全空,此时退回平铺
   const sourceGroups = roots.length > 0 ? roots : candidates
 
