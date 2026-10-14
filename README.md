@@ -9,9 +9,6 @@
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases">
     <img src="https://img.shields.io/badge/release-v1.4.3-blue">
   </a>
-  <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs">
-    <img src="https://img.shields.io/badge/upstream-Clash%20Party%20v2.0.2-green">
-  </a>
   <a href="./LICENSE">
     <img src="https://img.shields.io/badge/license-GPL--3.0-orange">
   </a>
