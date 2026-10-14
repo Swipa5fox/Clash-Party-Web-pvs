@@ -508,6 +508,8 @@ interface IMihomoConfig {
   proxies?: []
   'proxy-groups'?: []
   listeners?: IMihomoListenerConfig[]
+  // 入站专属子规则: listener 的 rule: 字段按名引用这里的一组规则
+  'sub-rules'?: Record<string, string[]>
   rules?: []
   hosts?: { [key: string]: string | string[] }
   'geodata-mode'?: boolean

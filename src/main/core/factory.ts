@@ -28,7 +28,9 @@ import { DEFAULT_CONTROL_DNS, DEFAULT_CONTROL_SNIFF } from '../../shared/appConf
 import {
   BUILTIN_POLICIES,
   CUSTOM_LINE_SUB_GROUP_DEFS,
-  customLineGroupNames
+  LINE_GROUP_DIRECT_EXEMPTIONS,
+  customLineGroupNames,
+  lineGroupSubRuleKey
 } from '../../shared/customLineGroups'
 import { atomicWriteFile } from '../utils/safeFile'
 import { isSourceNewer } from '../utils/init'
@@ -81,6 +83,9 @@ function processRulesWithOffset(ruleStrings: string[], currentRules: string[], i
 /**
  * 注入自定义线路组: 每组生成 入口组(自动/故障/手动/全局子组) 与专属端口 listener。
  * 入口组名即线路组名, 子组名为 `${name}·自动|故障|手动|全局`, listener 名为 `${name}·入口`。
+ * 端口语义 = "本线路为主、内网/国内直连豁免": listener 不能绑 proxy(绑了是无条件直出、
+ * rules 与子规则都不查 → 内网也出线, 见 mihomo 入站文档), 改为挂一份与 listener 同名的
+ * 子规则(sub-rules): 豁免命中→DIRECT, 其余 MATCH 到入口组。
  * 节点名与当前订阅求交集: 订阅节点名变了/换订阅后失效名字剔除、整组空则不注入,
  * 避免注入不存在节点的组让内核拒绝整份配置(导入校验/热重载全被卡死)。
  */
@@ -88,22 +93,45 @@ export function applyCustomLineGroups(profile: IMihomoConfig, groups: ICustomLin
   if (groups.length === 0) return
   const proxyGroups = (profile['proxy-groups'] as Record<string, unknown>[] | undefined) ?? []
   const listeners = (profile.listeners as IMihomoListenerConfig[] | undefined) ?? []
+  const subRules = (profile['sub-rules'] as Record<string, string[]> | undefined) ?? {}
   const availableNames = new Set(
     (profile.proxies as { name?: unknown }[] | undefined)?.map((p) => String(p?.name))
   )
+  const exemptions = [...directTargetRuleSets(profile), ...LINE_GROUP_DIRECT_EXEMPTIONS]
 
-  removeDisabledGroups(proxyGroups, listeners, groups)
-  groups.forEach((g) => injectOneGroup(g, proxyGroups, listeners, availableNames))
+  removeDisabledGroups(proxyGroups, listeners, subRules, groups)
+  groups.forEach((g) =>
+    injectOneGroup(g, proxyGroups, listeners, subRules, exemptions, availableNames)
+  )
 
   profile['proxy-groups'] = proxyGroups as []
   profile.listeners = listeners
+  if (Object.keys(subRules).length === 0) {
+    delete (profile as Partial<IMihomoConfig>)['sub-rules']
+  } else {
+    profile['sub-rules'] = subRules
+  }
 }
 
-// 停用(enabled === false)的组移除其入口组/子组与专属端口 listener,
+// 复用 profile 里已有的国内直连规则集(用户自建的 `RULE-SET,*,DIRECT` 覆写/订阅自带),
+// 抄进线路口子规则当豁免, 免得国内域名清单在代码里再维护一份。
+function directTargetRuleSets(profile: IMihomoConfig): string[] {
+  const rules = Array.isArray(profile.rules) ? (profile.rules as unknown[]) : []
+  const found = new Set<string>()
+  for (const rule of rules) {
+    if (typeof rule !== 'string') continue
+    const ruleStr = rule.trim()
+    if (/^RULE-SET,[^,]+,\s*DIRECT\s*$/i.test(ruleStr)) found.add(ruleStr)
+  }
+  return [...found]
+}
+
+// 停用(enabled === false)的组移除其入口组/子组/专属端口 listener/子规则,
 // 避免热重载后旧配置残留(组配置本身保留在 customLineGroups 文件中)
 function removeDisabledGroups(
   proxyGroups: Record<string, unknown>[],
   listeners: IMihomoListenerConfig[],
+  subRules: Record<string, string[]>,
   groups: ICustomLineGroup[]
 ): void {
   groups
@@ -113,8 +141,9 @@ function removeDisabledGroups(
       for (let i = proxyGroups.length - 1; i >= 0; i--) {
         if (removeNames.includes(String(proxyGroups[i]?.name))) proxyGroups.splice(i, 1)
       }
-      const listenerIdx = listeners.findIndex((l) => l?.name === `${g.name}·入口`)
+      const listenerIdx = listeners.findIndex((l) => l?.name === lineGroupSubRuleKey(g.name))
       if (listenerIdx >= 0) listeners.splice(listenerIdx, 1)
+      delete subRules[lineGroupSubRuleKey(g.name)]
     })
 }
 
@@ -122,6 +151,8 @@ function injectOneGroup(
   g: ICustomLineGroup,
   proxyGroups: Record<string, unknown>[],
   listeners: IMihomoListenerConfig[],
+  subRules: Record<string, string[]>,
+  exemptions: string[],
   availableNames: Set<string>
 ): void {
   if (!g.name || !g.port || !Array.isArray(g.proxies)) return
@@ -154,11 +185,14 @@ function injectOneGroup(
     proxyGroups.push({ name: g.name, type: 'select', proxies: [...subNames] })
   }
 
+  // 豁免在前、MATCH 兜底到入口组: 线路口流量默认全走本线路, 内网/国内直连例外
+  const subRuleKey = lineGroupSubRuleKey(g.name)
+  subRules[subRuleKey] = [...exemptions, `MATCH,${g.name}`]
   const listener = {
-    name: `${g.name}·入口`,
+    name: subRuleKey,
     type: 'mixed',
     port: g.port,
-    proxy: g.name
+    rule: subRuleKey
   }
   const existingIdx = listeners.findIndex((l) => l?.name === listener.name)
   if (existingIdx >= 0) {
