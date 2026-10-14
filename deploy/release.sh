@@ -13,8 +13,11 @@
 #   1. 本机打包源码 tar.gz（构建所需源码 + extra/files geo 资源；node_modules/.git/
 #      本地产物/Windows 二进制全排除——builder 里 pnpm install 重装）
 #   2. scp 上传到服务器 /opt/cpx-src.tar.gz 并解压
-#   3. 服务器预检 + 从现役旧部署 seed Linux 内核（构建不碰 GitHub）+ 预构建镜像
-#   4. 接管旧容器（捕获 CP_DATABASE_URL 写 override、摘旧容器名）→ bootstrap.sh
+#   3. 服务器预检 + seed Linux 内核 + 预构建镜像 + 起配套 PostgreSQL（/opt/pgsql，
+#      端口只听 127.0.0.1；已存在 clash-party-pg 容器则整体跳过沿用，.env 已存在则
+#      沿用旧密码，绝不重置）
+#   4. 接管旧容器（CP_DATABASE_URL 捕获顺序: 在跑容器 env > /opt/pgsql/.env >
+#      旧部署位置，写 override、摘旧容器名）→ bootstrap.sh
 #      构建镜像 + compose up（镜像已预构建，秒级）
 #   5. 健康检查 + 部署汇总
 #
@@ -207,6 +210,43 @@ else
   tail -40 "$BUILD_LOG" >&2
   fail "镜像构建失败（上方为日志尾部，全量: $BUILD_LOG）"
 fi
+
+# ---------------- 3.5 配套 PostgreSQL（旧服务不中断时段拉起） ----------------
+# 流量/连接/日志入库后端（CP_DATABASE_URL 指向它）。全新机器自动生成随机密码写
+# /opt/pgsql/.env；重部署时 .env 已存在 → 沿用（重置密码=数据失联，绝不干）。
+# compose 文件每次从仓库同步（版本化）；数据 bind /var/lib/pgdata，不随仓库走。
+PG_DIR=/opt/pgsql
+PG_COMPOSE_SRC="$ROOT/deploy/pgsql/docker-compose.yml"
+if docker inspect clash-party-pg >/dev/null 2>&1; then
+  # 现役后端优先：无论它是 compose 托管还是手工 docker run 起的一律沿用。
+  # 同名容器再 compose up 会因容器名冲突直接中止发布；且 .env 缺失时会生成新密码，
+  # 绝不能拿新库/新密码去顶正在用的后端（用量与日志历史会静默失效）。
+  log "PG 阶段跳过：已存在容器 clash-party-pg（沿用现役，未动其数据/端口）"
+elif [ -f "$PG_COMPOSE_SRC" ]; then
+  mkdir -p "$PG_DIR"
+  if [ ! -f "$PG_DIR/.env" ]; then
+    PG_PASS="$(openssl rand -hex 16 2>/dev/null || head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    printf 'POSTGRES_USER=clashparty\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=clashparty\n' "$PG_PASS" > "$PG_DIR/.env"
+    chmod 600 "$PG_DIR/.env"
+    log "PG 密码已生成并写入 $PG_DIR/.env (chmod 600)"
+  else
+    log "PG .env 已存在，沿用现役密码"
+  fi
+  install -m 644 "$PG_COMPOSE_SRC" "$PG_DIR/docker-compose.yml"
+  ( cd "$PG_DIR" && docker compose up -d )
+  # 首启 initdb + 健康检查最多等 ~2.5min（拉镜像走 registry-mirrors，通常秒级）
+  pg_ok=
+  for _ in $(seq 1 50); do
+    if [ "$(docker inspect -f '{{.State.Health.Status}}' clash-party-pg 2>/dev/null || echo x)" = healthy ]; then
+      pg_ok=1; break
+    fi
+    sleep 3
+  done
+  [ -n "$pg_ok" ] || fail "PostgreSQL 未就绪: cd $PG_DIR && docker compose logs"
+  log "PostgreSQL 就绪 (127.0.0.1:5432, 数据 /var/lib/pgdata)"
+else
+  warn "仓库缺 deploy/pgsql/docker-compose.yml，跳过 PG（流量/日志入库将不可用）"
+fi
 REMOTE
 
 # ---------------- 4. 接管旧容器（捕获 PG env）→ bootstrap 起 --
@@ -219,8 +259,11 @@ fail() { printf '\033[1;31m[rel-r][FAIL]\033[0m %s\n' "$*" >&2; exit 1; }
 ROOT="/opt/${REPO_NAME}"
 
 # 捕获现役容器的 PG 连接串（流量/日志入库靠它；丢 = 用量与日志历史静默失效）。
-# 依次: 在跑容器 env → 旧部署 compose 文件 → 旧部署 .env → 本项目 override（已生成时）。
+# 依次: 在跑容器 env → 本次 Stage 3 备好的 /opt/pgsql/.env → 旧部署 compose 文件 → 旧部署 .env → 本项目 override（已生成时）。
 PG_URL="$(docker exec clash-party printenv CP_DATABASE_URL 2>/dev/null || true)"
+# Stage 3 新建/复用的 PG（/opt/pgsql/.env）优先于历史位置——它就是现役后端。
+[ -z "$PG_URL" ] && [ -f /opt/pgsql/.env ] \
+  && PG_URL="postgres://clashparty:$(grep '^POSTGRES_PASSWORD=' /opt/pgsql/.env | cut -d= -f2-)@127.0.0.1:5432/$(grep '^POSTGRES_DB=' /opt/pgsql/.env | cut -d= -f2-)"
 [ -z "$PG_URL" ] && PG_URL="$(sed -n 's/^\s*CP_DATABASE_URL:\s*//p' "$ROOT/deploy/party/docker-compose.override.yml" 2>/dev/null | head -1 | cut -d"'" -f1 | cut -d'"' -f1 || true)"
 [ -z "$PG_URL" ] && PG_URL="$(sed -n 's/^\s*CP_DATABASE_URL:\s*//p' /opt/clash-party/docker-compose.yml 2>/dev/null | head -1 || true)"
 [ -z "$PG_URL" ] && PG_URL="$(grep -h '^CP_DATABASE_URL=' /opt/clash-party/.env 2>/dev/null | head -1 | cut -d= -f2- || true)"
@@ -259,6 +302,7 @@ SSH "REPO_NAME='${REPO_NAME}' \
 log "Stage 5/5: 部署验证"
 DEPLOYED_VER="$(SSH "docker exec clash-party sed -n 's/.*\"version\": *\"\([^\"]*\)\".*/\1/p' /app/package.json 2>/dev/null | head -1" || true)"
 PG_OK="$(SSH "docker exec clash-party printenv CP_DATABASE_URL >/dev/null 2>&1 && echo yes || echo no" || true)"
+PG_STATUS="$(SSH "docker inspect -f '{{.State.Status}}/{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' clash-party-pg 2>/dev/null || echo absent" || true)"
 LOGS="$(SSH "docker logs --tail 6 clash-party 2>&1" || true)"
 RUN_CMD="ssh ${SSH_USER}@${HOST}"
 cat <<EOF
@@ -268,6 +312,7 @@ cat <<EOF
 本地版本    : ${VERSION}
 容器版本    : ${DEPLOYED_VER:-未知}
 PG 入库     : ${PG_OK}（CP_DATABASE_URL）
+PG 容器     : clash-party-pg ${PG_STATUS}
 Web UI      : http://${HOST}:3999/
 代理口      : http://${HOST}:7890 (HTTP+SOCKS5)
 数据目录    : /var/lib/clash-party（bind，重建不丢）

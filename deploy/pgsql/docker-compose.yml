@@ -1,0 +1,35 @@
+# clash-party 配套 PostgreSQL — 流量/连接/日志入库（CP_DATABASE_URL 的后端）。
+#
+# 与主服务共享宿主 network 语义：本 compose 只把 5432 绑到 127.0.0.1，
+# clash-party 容器（network_mode: host）经 127.0.0.1:5432 直连，LAN 不可见。
+#
+# 用法:
+#   cp .env.example .env   # 填 POSTGRES_PASSWORD
+#   docker compose up -d
+# 密码通过同目录 .env 注入（不入库）; 连接串:
+#   postgres://<user>:<pass>@127.0.0.1:5432/<db>
+# 表结构由 clash-party 首连时自建（CREATE TABLE IF NOT EXISTS, 30 天自动清理）。
+# 数据 bind 在 /var/lib/pgdata, 备份/迁移直接拷目录。
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: clash-party-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clashparty}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-clashparty}
+      TZ: Asia/Shanghai
+      # 连接数留足: app 侧 Pool max=4, 再预留管理余量
+      # （postgres 默认 max_connections=100，无需调整）
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - /var/lib/pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-clashparty} -d ${POSTGRES_DB:-clashparty}']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
