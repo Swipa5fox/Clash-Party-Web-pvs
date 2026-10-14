@@ -24,13 +24,7 @@ import { FaLocationCrosshairs, FaRegTrashCan, FaEllipsisVertical } from 'react-i
 import { CgDetailsLess, CgDetailsMore } from 'react-icons/cg'
 import { TbCircleLetterD } from 'react-icons/tb'
 import { RxLetterCaseCapitalize } from 'react-icons/rx'
-import {
-  MdCheck,
-  MdDoubleArrow,
-  MdFilterAlt,
-  MdOutlineSpeed,
-  MdVisibilityOff
-} from 'react-icons/md'
+import { MdCheck, MdDoubleArrow, MdOutlineSpeed, MdVisibilityOff } from 'react-icons/md'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { GroupedVirtuoso, GroupedVirtuosoHandle } from 'react-virtuoso'
 import ProxyItem from '@renderer/components/proxies/proxy-item'
@@ -183,7 +177,7 @@ const Proxies: React.FC = () => {
   const { t } = useTranslation()
   const { controledMihomoConfig } = useControledMihomoConfig()
   const { mode = 'rule' } = controledMihomoConfig || {}
-  const { groups: groupData, mutate, showHidden, setShowHidden } = useGroups()
+  const { groups: groupData, mutate } = useGroups()
   const groups = groupData ?? EMPTY_GROUPS
   const { appConfig, patchAppConfig } = useAppConfig()
   const {
@@ -815,15 +809,13 @@ const Proxies: React.FC = () => {
       if (!row) {
         return <div>Never See This</div>
       }
-      // 子组区段头行: 展示 子组名/类型/当前选中; 自动类子组点头行折叠/展开节点
+      // 子组区段头行: 展示 子组名/当前选中; 自动类子组点头行折叠/展开节点
       if (row.sub) {
         const sub = row.sub
-        const isLastRow =
-          groupIndex === groupCounts.length - 1 && index === groupCounts[groupIndex] - 1
         const autoSub = isAutoSubGroup(sub)
         return (
           <div
-            className={`flex items-center gap-2 px-3 pt-3 mx-1 rounded-medium transition-colors duration-150 ${isLastRow ? 'pb-2' : ''} ${autoSub ? 'cursor-pointer select-none hover:bg-default-100' : ''}`}
+            className={`flex items-center gap-2 px-3 py-2 mx-1 rounded-medium transition-colors duration-150 ${autoSub ? 'cursor-pointer select-none hover:bg-default-100' : ''}`}
             onClick={autoSub ? () => toggleSub(sub.name) : undefined}
           >
             <Chip size="sm" variant="flat" color="primary" className="max-w-[40%]">
@@ -831,8 +823,7 @@ const Proxies: React.FC = () => {
                 {sub.name}
               </span>
             </Chip>
-            <span className="text-foreground-500 text-xs shrink-0">{sub.type}</span>
-            <span className="text-foreground-400 text-xs truncate" title={sub.now}>
+            <span className="flag-emoji text-foreground-400 text-xs truncate" title={sub.now}>
               → {sub.now}
             </span>
           </div>
@@ -907,9 +898,6 @@ const Proxies: React.FC = () => {
               className="min-w-64 p-1"
               onAction={(key) => {
                 switch (key) {
-                  case 'show-hidden':
-                    setShowHidden((prev) => !prev)
-                    break
                   case 'hide-unavailable':
                     void patchAppConfig({
                       hideUnavailableProxies: !appConfig?.hideUnavailableProxies
@@ -934,13 +922,6 @@ const Proxies: React.FC = () => {
               }}
             >
               <DropdownSection title={t('proxies.settings.visibility')} showDivider>
-                <DropdownItem
-                  key="show-hidden"
-                  startContent={<MdFilterAlt className="text-lg" />}
-                  endContent={showHidden ? <MdCheck className="text-lg text-primary" /> : null}
-                >
-                  {t(showHidden ? 'proxies.hiddenGroups.hide' : 'proxies.hiddenGroups.show')}
-                </DropdownItem>
                 <DropdownItem
                   key="hide-unavailable"
                   startContent={<MdVisibilityOff className="text-lg" />}

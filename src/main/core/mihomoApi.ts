@@ -334,7 +334,7 @@ async function resolveProviderProxies(
   return providerProxies
 }
 
-export const mihomoGroups = async (includeHidden = false): Promise<IMihomoMixedGroup[]> => {
+export const mihomoGroups = async (): Promise<IMihomoMixedGroup[]> => {
   const { mode = 'rule' } = await getControledMihomoConfig()
   if (mode === 'direct') return []
   const [proxies, runtime] = await Promise.all([mihomoProxies(), getRuntimeConfig()])
@@ -354,12 +354,12 @@ export const mihomoGroups = async (includeHidden = false): Promise<IMihomoMixedG
   const candidates: { group: IMihomoGroup; providers: string[] }[] = []
   runtime?.['proxy-groups']?.forEach((group: { name: string; url?: string; use?: string[] }) => {
     const proxy = proxies.proxies[group.name]
-    if (isMihomoGroup(proxy) && (includeHidden || !proxy.hidden)) {
+    if (isMihomoGroup(proxy) && !proxy.hidden) {
       candidates.push({ group: { ...proxy, testUrl: group.url }, providers: group.use || [] })
     }
   })
   // 顶层只保留「根组」: 未被其他组引用且非 GLOBAL(rule 模式下 GLOBAL 无操作意义);
-  // includeHidden 只恢复 hidden:true 的根组,被引用的收纳组不随 showHidden 平铺
+  // hidden 组与其收纳的子组都不在顶层展示
   // (否则 自动选择/故障转移 等在顶层与父组展开区渲染两份)
   const roots = candidates.filter(({ group }) => !isNested(group.name))
   // 兜底: 互引成环的异常配置会把所有组都判为"被引用"导致列表全空,此时退回平铺

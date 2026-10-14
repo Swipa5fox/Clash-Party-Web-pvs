@@ -5,17 +5,14 @@ import { mihomoGroups } from '@renderer/utils/ipc'
 interface GroupsContextType {
   groups: IMihomoMixedGroup[] | undefined
   mutate: KeyedMutator<IMihomoMixedGroup[]>
-  showHidden: boolean
-  setShowHidden: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 const GroupsContext = createContext<GroupsContextType | undefined>(undefined)
 
 export const GroupsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [showHidden, setShowHidden] = React.useState(false)
   const { data: groups, mutate } = useSWR<IMihomoMixedGroup[]>(
-    ['mihomoGroups', showHidden],
-    () => mihomoGroups(showHidden),
+    'mihomoGroups',
+    () => mihomoGroups(),
     {
       errorRetryInterval: 200,
       errorRetryCount: 10,
@@ -36,11 +33,7 @@ export const GroupsProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     }
   }, [mutate])
 
-  return (
-    <GroupsContext.Provider value={{ groups, mutate, showHidden, setShowHidden }}>
-      {children}
-    </GroupsContext.Provider>
-  )
+  return <GroupsContext.Provider value={{ groups, mutate }}>{children}</GroupsContext.Provider>
 }
 
 export const useGroups = (): GroupsContextType => {
