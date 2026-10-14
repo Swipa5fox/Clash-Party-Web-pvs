@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs/releases">
-    <img src="https://img.shields.io/badge/release-v1.4.1-blue">
+    <img src="https://img.shields.io/badge/release-v1.4.3-blue">
   </a>
   <a href="https://github.com/Swipa5fox/Clash-Party-Web-pvs">
     <img src="https://img.shields.io/badge/upstream-Clash%20Party%20v2.0.2-green">
@@ -24,15 +24,13 @@
 
 > ⚠️ 本项目面向**可信内网**自用：为支持内网直连，移除了传输加密、SSRF 防护与设备签名，凭据改为明文落盘。**不要暴露到公网，也不要对外分发。**
 
-## 当前版本 v1.4.1（2026-10-09）
+## 当前版本 v1.4.3（2026-10-14）
 
-自 v1.4.0 以来的核心更新（详见 [changelog.md](./changelog.md)）：
+自 v1.4.2 以来的核心更新（详见 [changelog.md](./changelog.md)）：
 
-- **流量用量接入 PostgreSQL（第一期）**：采集从浏览器 IndexedDB 搬到主进程——订阅内核连接流算增量、5 秒批量入库、30 天保留；查询走 SQL 聚合。未配置 `CP_DATABASE_URL` 时整体关闭，行为同旧版；存量 IndexedDB 数据首次打开「用量」页自动迁移
-- **日志接入 PostgreSQL（第二期）**：内核与应用日志双路入库（保留 7 天），logs 页新增「历史」tab，按来源/级别/关键字/时间窗筛选 + 分页查询
-- **修复渲染层 IPC 白名单漏登记**：第一期 9 个流量通道只加了主进程 handler 未同步浏览器 shim 白名单，用量页静默显示 0；白名单已抽到 `src/shared/ipcChannels.ts` 并用双向测试锁死，漏登记/残留项都会报红
-- **lint warning 全仓清零**（22 → 0，均为等价改写）
-- 自 v1.4.0 以历（继承）：gateway 网关栈移除、单容器收敛；线路工具走 WS 桥；`theme-init.js` 刷新首帧闪色修复
+- **线路口语义重定「本线路为主、内网/国内直连豁免」**：专属端口不再无条件出线——listener 改挂同名 `sub-rules` 子规则（豁免规则在前、`MATCH,<入口组>` 收尾），内网网段 / `GEOIP,CN` / `.cn` 兜底 + 抄用 profile 里已有的 `RULE-SET,*,DIRECT` 国内直连覆写（去重、改覆写即时跟随）
+- **代理组列表移除「显示隐藏代理组」开关**：hidden 组及其收纳子组都不在顶层展示；i18n 文案收敛为「代理组」
+- **发版脚本自动拉起配套 PostgreSQL**：新增 `deploy/pgsql/` 配套 compose，`release.sh` 在全新机器自动生成密码建库，已有容器整体沿用、绝不重置
 
 ## 重要功能
 
@@ -47,7 +45,7 @@
 
 - **纯 Node 服务器**：主进程无 Electron（express + WS 桥，esbuild 单文件打包），Linux x64 部署，账号密码登录（初始 admin/admin123，凭据哈希落盘）
 - **覆写模板库**（`tools/mihomo-lines`）：`ad-filter.js` 全量机场垃圾节点过滤（回环地址主判据 + 节点名兜底）、`cn-direct-rules.yaml` 国内直连（零订阅组名依赖，换订阅自动适配）；全部命令经 WS 桥远程下发，全程无需 ssh
-- **自定义线路组**：在界面上为「选定节点集合 + 专属端口」生成代理组与监听端口，平铺选线器（当前订阅节点多选、广告节点过滤），子组支持 url-test / fallback / select 独立开关，无需手写覆写
+- **自定义线路组**：在界面上为「选定节点集合 + 专属端口」生成代理组与监听端口，平铺选线器（当前订阅节点多选、广告节点过滤），子组支持 url-test / fallback / select 独立开关，无需手写覆写；端口默认全走本线路，内网/国内直连按子规则豁免
 - **内核/geo 资源离线化**：`deploy/opt/bootstrap.sh` 支持把 `/opt/cpx-core-assets` 预置资源同步进构建上下文，构建不依赖 github.com 可达性
 - **容器部署感知**：容器内点击系统代理 / TUN 时给出可操作提示（引导设备手动配置代理口），而非抛出底层错误
 - **发布链路本地化**：自动更新 / 更新说明 / Telegram 通知全部指向本仓库，不再被上游版本覆盖；移除内嵌 Sub-Store（容器场景不可用且拖慢构建）
@@ -108,7 +106,7 @@ LAN 设备 ─────:7890───► 服务器内核（HTTP + SOCKS5 共�
 5. **注入自定义线路组**（节点名与当前订阅求交集，失效名字剔除、整组空则跳过）
 6. 原子写盘，并按需更新运行时配置缓存
 
-自定义线路组的注入（`applyCustomLineGroups`）：每个线路组生成一个入口组，其成员为启用的子组（`url-test` 自动 / `fallback` 故障 / `select` 手动 / `select` 全局，可单独开关），每个子组挂载所选节点集合；同时创建名为 `<组名>·入口` 的 `mixed` 监听端口。组名冲突时跳过，同名监听端口则覆盖更新。
+自定义线路组的注入（`applyCustomLineGroups`）：每个线路组生成一个入口组，其成员为启用的子组（`url-test` 自动 / `fallback` 故障 / `select` 手动 / `select` 全局，可单独开关），每个子组挂载所选节点集合；同时创建名为 `<组名>·入口` 的 `mixed` 监听端口。**端口语义是「本线路为主、内网/国内直连豁免」**：入口按名挂一份 `sub-rules` 子规则（豁免规则 + `MATCH,<入口组>`），不绑 listener 的 `proxy:` 字段——`proxy:` 是「直接出站」，绑上后该口流量一律走线路，连内网也出线。豁免规则 = 订阅/覆写里已有的 `RULE-SET,*,DIRECT`（如 `cn-direct-rules`，改覆写即时跟随）+ 内网网段/`GEOIP,CN`/`.cn` 兜底（`LINE_GROUP_DIRECT_EXEMPTIONS`）。组名冲突时跳过，同名监听端口与子规则则覆盖更新。
 
 ### 流量用量与日志历史（PostgreSQL，可选）
 
@@ -118,7 +116,7 @@ LAN 设备 ─────:7890───► 服务器内核（HTTP + SOCKS5 共�
 - **日志双路入库**：内核日志流与应用自身日志（`logger.ts` 落盘时同步推送）写入 `logs` 表（来源/级别/模块/内容），保留 7 天；logs 页「历史」tab 按来源/级别/关键字/时间窗筛选并分页查询
 - **建表与保留**：首次连接自动 `CREATE TABLE IF NOT EXISTS`（`ts` 上建 BRIN 索引，适配追加型数据），按 `ts` 每日清理过期记录；不引入迁移框架
 - **查询走 SQL**：用量页的排行/趋势/下钻（按域名、代理、进程、来源 IP）由 `GROUP BY` 聚合，不再在浏览器本地存储
-- **接入**：设置环境变量 `CP_DATABASE_URL` 即可，格式为标准连接串，例如 `postgres://user:pass@127.0.0.1:5433/clash_party`。驱动为纯 JS 的 `pg`，已被 esbuild 内联进 `server.cjs`，部署物仍是单文件
+- **接入**：设置环境变量 `CP_DATABASE_URL` 即可，格式为标准连接串，例如 `postgres://clashparty:<密码>@127.0.0.1:5432/clashparty`。驱动为纯 JS 的 `pg`，已被 esbuild 内联进 `server.cjs`，部署物仍是单文件
 - **零风险回退**：连接失败只记 warning，不阻塞启动；缓冲封顶后丢弃最旧数据
 
 从旧版本升级：浏览器端的 IndexedDB 存量数据在首次打开「用量」页时自动导入 PG 并删除本地库（一次性）。
@@ -139,8 +137,9 @@ src/
   shared/       主进程与渲染层共用的类型、i18n 资源
 deploy/
   party/        Clash Party Web 容器镜像（Dockerfile + 独立 compose）
+  pgsql/        配套 PostgreSQL compose（用量/日志入库后端，PG 只绑回环）
   opt/          新机一键构筑脚本（bootstrap.sh）
-  release.sh    本机一键打包部署：源码 tar → scp → 服务器构建镜像 + 接管旧容器
+  release.sh    本机一键打包部署：源码 tar → scp → 服务器构建镜像 + 拉起 PG + 接管旧容器
   clash-party.service  systemd unit（TUN 用 AmbientCapabilities）
 tools/          mihomo-lines：国家双口线路管理（YAML 覆写 + WS 桥下发）
 scripts/        构建期资源准备、esbuild 打包、tarball 组装
@@ -168,27 +167,17 @@ bash deploy/release.sh 192.168.110.53
 
 - 镜像在旧容器仍在服务时**预构建**，停机窗口只有容器交接的几秒
 - 自动从现役旧部署捕获 `CP_DATABASE_URL` 写成 override（PG 用量/日志入库不断链），并 seed Linux 内核进构建上下文（构建不碰 GitHub）
+- **自动拉起配套 PostgreSQL**（`deploy/pgsql/`）：全新机器生成随机密码写 `/opt/pgsql/.env` 建库；已存在 `clash-party-pg` 容器则整体沿用，**绝不重置数据或端口**
 - 旧部署目录 `/opt/clash-party` 原样保留；回滚：`ssh <host> 'docker rm -f clash-party && cd /opt/clash-party && docker compose up -d --build'`
 
-**启用「用量」统计与「日志」历史查询（可选）**：加一个 PostgreSQL 服务并把连接串传给 party 容器即可（PG 只绑回环，不对 LAN 暴露）：
+**启用「用量」统计与「日志」历史查询（可选）**：仓库自带配套 compose `deploy/pgsql/docker-compose.yml`——`postgres:16-alpine`，容器名 `clash-party-pg`，PG 只绑 `127.0.0.1:5432` 不对 LAN 暴露，数据 bind 在 `/var/lib/pgdata`：
 
-```yaml
-services:
-  clash-party:
-    environment:
-      CP_DATABASE_URL: postgres://clash_party:改掉这个密码@127.0.0.1:5433/clash_party
-  postgres:
-    image: postgres:18
-    container_name: clash-party-pg
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: clash_party
-      POSTGRES_USER: clash_party
-      POSTGRES_PASSWORD: 改掉这个密码
-    volumes:
-      - /var/lib/clash-party-pg:/var/lib/postgresql
-    ports:
-      - 127.0.0.1:5433:5432
+```bash
+cd deploy/pgsql
+cp .env.example .env        # 填 POSTGRES_PASSWORD
+docker compose up -d
+# 再把连接串传给 party 容器（release.sh 会自动做这一步）
+#   CP_DATABASE_URL=postgres://clashparty:<密码>@127.0.0.1:5432/clashparty
 ```
 
 表结构、保留策略（流量 30 天 / 日志 7 天）由 party 首次连接时自动建立，无需手工执行 SQL。详见 [实现方式 → 流量用量与日志历史](#流量用量与日志历史postgresql可选)。
@@ -210,7 +199,7 @@ sudo systemctl enable --now clash-party
 
 - TUN 模式需要 `CAP_NET_ADMIN`（unit 已配置 `AmbientCapabilities`）与 `/dev/net/tun`
 - 数据目录默认 `CP_DATA_DIR`（unit 中为 `/var/lib/clash-party`）；本机开发默认 `~/.local/share/clash-party`
-- 需要用量统计时，在 unit 里加 `Environment=CP_DATABASE_URL=postgres://user:pass@127.0.0.1:5433/clash_party`
+- 需要用量统计时，在 unit 里加 `Environment=CP_DATABASE_URL=postgres://clashparty:<密码>@127.0.0.1:5432/clashparty`
 
 ### 本机开发
 
@@ -219,11 +208,11 @@ pnpm install
 pnpm run dev          # vite dev server + tsx 主进程，浏览器访问 :3999
 ```
 
-| 端口   | 用途                                                  |
-| ------ | ----------------------------------------------------- |
-| `3999` | Clash Party Web UI（账号密码登录，Cookie 会话鉴权）   |
-| `7890` | 局域网共享代理（HTTP + SOCKS5 混合口）                |
-| 任意   | 自定义线路组端口：Web UI 即写即生效（仅需放行防火墙） |
+| 端口   | 用途                                                                                             |
+| ------ | ------------------------------------------------------------------------------------------------ |
+| `3999` | Clash Party Web UI（账号密码登录，Cookie 会话鉴权）                                              |
+| `7890` | 局域网共享代理（HTTP + SOCKS5 混合口）                                                           |
+| 任意   | 自定义线路组端口：Web UI 即写即生效（仅需放行防火墙）；默认全走本线路，内网/国内直连由子规则豁免 |
 
 ## 文档
 

@@ -25,6 +25,10 @@ node_modules/.temp
 .codebuddy
 .codebelly
 .vscode
+.qoder
+
+# secrets (deploy/pgsql/.env 等，保留 .env.example)
+.env
 
 # mihomo-lines tool: personal host + party web token (keep the .example only)
 tools/mihomo-lines/scripts/lines.config.json

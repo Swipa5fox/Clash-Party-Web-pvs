@@ -2,6 +2,30 @@
 
 本文件集中记录版本变更。README 只描述当前的能力与实现方式，不写版本历史。最新版本必须排在最前，且内容只在发布时追加，不要随意重排历史条目。
 
+## v1.4.3（2026-10-14）
+
+线路口语义重定为「本线路为主、内网/国内直连豁免」——专属端口不再无条件出线；「显示隐藏代理组」开关移除；发版脚本自动拉起配套 PostgreSQL。
+
+### 线路口语义：本线路为主 + 内网/国内直连豁免
+
+- **listener 不再绑 `proxy:`**：`proxy:` 是「直接出站」语义，绑上后该口流量一律走线路、连内网也出线（`rules` / `sub-rules` 全不查）。改为按名挂一份与 listener 同名的 `sub-rules` 子规则（键名由 `lineGroupSubRuleKey` 生成）
+- **子规则形如**：豁免规则在前（内网网段 `192.168/10/172.16/169.254/127`、`IP-CIDR6,fe80::/10`，`DOMAIN-SUFFIX,cn` 与 `GEOIP,CN` 兜底），`MATCH,<入口组>` 收尾
+- **国内域名清单不重复维护**：注入时扫描 profile 里已有的 `RULE-SET,*,DIRECT`（国内直连覆写，如 `cn-direct-rules`）原样抄进豁免并去重，改覆写即时跟随；其余豁免集中在 `LINE_GROUP_DIRECT_EXEMPTIONS`
+- **停用清理同步**：停用组移除其子规则；只删自己注入的键，订阅自带的 `sub-rules` 保留，空 `sub-rules` 不留残键
+- `IMihomoConfig` 增补 `'sub-rules'` 类型；`factory.test.ts` 覆盖豁免顺序 / 去重 / 清理
+
+### 代理组列表：移除「显示隐藏代理组」开关
+
+- `mihomoGroups()` 去掉 `includeHidden` 参数（IPC 签名同步收窄），hidden 组及其收纳的子组都不在顶层展示
+- UI 移除菜单项与 `showHidden` 状态；i18n 文案收敛：「代理组/线路组」→「代理组」，删 `proxies.hiddenGroups.*`
+- 子组区段头行精简：去掉类型标签、统一行距，当前选中项带 `flag-emoji` 保持对齐
+
+### 部署：发版脚本自动拉起配套 PostgreSQL
+
+- **新增 `deploy/pgsql/`**：`postgres:16-alpine` 配套 compose（含 `.env.example`），容器名 `clash-party-pg`，只绑 `127.0.0.1:5432`，数据 bind `/var/lib/pgdata`，带 healthcheck
+- **`release.sh` Stage 3.5**：全新机器自动生成随机密码写 `/opt/pgsql/.env`（`chmod 600`）；已存在 `clash-party-pg` 容器则整体跳过、沿用现役后端（绝不重置其数据 / 端口）；`.env` 已存在则沿用旧密码
+- **`CP_DATABASE_URL` 捕获顺序**新增 `/opt/pgsql/.env`（在跑容器 env 之后、历史部署位置之前）；部署汇总新增 PG 容器状态行
+
 ## v1.4.2（2026-10-09）
 
 发版链路仓库化：新增 `deploy/release.sh` 一键打包部署——本机一条命令完成「打包源码 → scp → 服务器构建镜像 → 接管旧容器」，取代手工 vite build + scp + compose build 流程。
